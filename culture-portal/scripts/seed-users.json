@@ -1,0 +1,51 @@
+[
+ {
+  "email": "jon@horizonlinegroup.com",
+  "name": "Jon Strickler",
+  "super": true,
+  "org": null,
+  "role": "owner"
+ },
+ {
+  "email": "chair@mountainvistage.com",
+  "name": "Group Chair",
+  "org": "mv",
+  "role": "champion"
+ },
+ {
+  "email": "accountability@mountainvistage.com",
+  "name": "Accountability Role",
+  "org": "mv",
+  "role": "leader"
+ },
+ {
+  "email": "admin@mountainvistage.com",
+  "name": "Group Admin",
+  "org": "mv",
+  "role": "admin"
+ },
+ {
+  "email": "member@mountainvistage.com",
+  "name": "CE Team Member",
+  "org": "mv",
+  "role": "member"
+ },
+ {
+  "email": "editor@vaildaily.com",
+  "name": "Managing Editor",
+  "org": "vd",
+  "role": "champion"
+ },
+ {
+  "email": "desk@vaildaily.com",
+  "name": "Desk Editor",
+  "org": "vd",
+  "role": "leader"
+ },
+ {
+  "email": "reporter@vaildaily.com",
+  "name": "Staff Reporter",
+  "org": "vd",
+  "role": "member"
+ }
+]
