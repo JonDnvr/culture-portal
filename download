@@ -1,0 +1,11 @@
+# Rebuilt automatically; never upload these
+node_modules/
+dist/
+dist-single/
+
+# Your local settings, including the secret key. Never commit this.
+.env
+
+# Created on your machine by the Supabase CLI
+supabase/.temp/
+supabase/.branches/

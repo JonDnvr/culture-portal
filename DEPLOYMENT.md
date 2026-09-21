@@ -335,6 +335,30 @@ bought it from.
 2. Name it `culture-portal`, permission **Sending access**.
 3. Copy the key. It starts `re_` and is shown once. Put it in your note.
 
+### 7.4 Send Supabase's own sign-in emails through Resend
+
+Password resets are sent by Supabase itself, not by the app's functions, so they need their
+own setting. Supabase's built-in mailer is for testing only: it sends a handful an hour and,
+on new projects, only to addresses on your Supabase team. Without this step, password reset
+emails simply never arrive for anyone else.
+
+1. Supabase, **Authentication**, then **Emails** (in some layouts **Notifications**, then
+   **Email**), then the **SMTP Settings** tab.
+2. Turn on **Enable Custom SMTP** and fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Sender email | `culture@yourdomain.com`, on the domain you verified in 7.2 |
+   | Sender name | `Culture Portal` |
+   | Host | `smtp.resend.com` |
+   | Port | `465` |
+   | Username | `resend` |
+   | Password | your Resend API key, the one starting `re_` |
+
+3. **Save**.
+4. Still under Authentication, open **Rate Limits** and raise **emails sent per hour** from
+   the default to something like `30`.
+
 ---
 
 ## Part 8. Give the functions their secrets
@@ -492,8 +516,12 @@ see the sign-in page with four tabs. Don't sign up yet.
 Sign-in and password resets break without this.
 
 1. Supabase, **Authentication**, **URL Configuration**.
-2. **Site URL**: your Pages address.
-3. **Redirect URLs**: add that same address.
+2. **Site URL**: your site's address, replacing the `http://localhost:3000` every new
+   project starts with. Leave it as localhost and every password reset email sends people
+   to a page that doesn't exist.
+3. **Redirect URLs**: click **Add URL** and add your address followed by `/**`, for example
+   `https://culture-portal.example.workers.dev/**`. The two stars let Supabase return people
+   to any page on your site, including the one that asks for their new password.
 4. **Save**.
 
 Then match the function secret:
@@ -655,7 +683,9 @@ ready for a real client.
 | A blank white page on the site | The build worked, the app crashed | Right-click the page, **Inspect**, **Console**, read the red line |
 | "Invalid API key" on sign-in | The anon key in Cloudflare is wrong or truncated | Re-copy it from Supabase, then redeploy |
 | Sign-in works locally, not on the site | The address is not in Supabase's redirect list | Part 11.5 |
+| Reset email link opens `localhost` and fails | Supabase's Site URL is still the default | Part 11.5, then ask for a new link |
 | No emails at all | The Resend key or from-address is missing | Part 8, and check the domain verified |
+| Password reset says "Check your inbox" but nothing arrives | No account has that address yet, or Supabase's own mailer is still in use | Seed first (Part 12), then 7.4 |
 | Emails land in spam | The DNS records are incomplete | Part 7.2, all records green |
 | Stripe pays, nothing changes | The webhook secret does not match the mode | Part 9.3, redo it in the mode you are in |
 | Everything 404s except the home page | Single-page routing isn't on | Pages does this automatically; a Worker needs `wrangler.jsonc` in the repository |

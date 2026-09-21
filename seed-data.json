@@ -1,0 +1,1393 @@
+{
+ "mv": {
+  "name": "Mountain Vistage",
+  "sub": "CE Team",
+  "initials": "MV",
+  "accent": "#9C7A3C",
+  "plan": "Pilot",
+  "seats": "14 of 16 seats",
+  "champion": "Chair",
+  "vision": "A team of CEOs who make better decisions because of each other, and who would not trade this room for anything.",
+  "mission": "We work to build leadership excellence to maximize our impact on the lives we touch through high-performing, accountable, peer advisory.",
+  "creed": "High-performing teams have high-performing members practicing high-performing behaviors. We hold each other to these behaviors. The team reflects us. We are one team.",
+  "values": [
+   {
+    "n": "Trust",
+    "d": "What is said here is safe here, and what is promised here happens."
+   },
+   {
+    "n": "Care",
+    "d": "Full attention, real regard, and a room that is good to be in."
+   },
+   {
+    "n": "Challenge",
+    "d": "The hard question nobody else in your life will ask you."
+   },
+   {
+    "n": "Growth",
+    "d": "Keep raising the bar, on ourselves and for the people who depend on us."
+   },
+   {
+    "n": "Commitment",
+    "d": "Do what you say when you say it, and protect the time you gave this team."
+   },
+   {
+    "n": "Humility",
+    "d": "Share the failure, take the feedback, credit the other person."
+   },
+   {
+    "n": "Vulnerability",
+    "d": "Bring the issue you would rather not say out loud."
+   },
+   {
+    "n": "Leadership Excellence",
+    "d": "The standard we hold, and the reason this team exists."
+   }
+  ],
+  "sysCats": [
+   "Selection",
+   "Onboarding",
+   "Meetings",
+   "1:1s",
+   "Accountability",
+   "Recognition",
+   "Reviews"
+  ],
+  "profile": {
+   "Clan": 38,
+   "Adhocracy": 16,
+   "Market": 24,
+   "Hierarchy": 22
+  },
+  "trust": {
+   "Logic": 4,
+   "Empathy": 4.3,
+   "Authenticity": 3.6
+  },
+  "results": [
+   {
+    "m": "Meeting attendance",
+    "now": "91%",
+    "trend": "up from 84%"
+   },
+   {
+    "m": "Issues processed per meeting",
+    "now": "3.2",
+    "trend": "flat"
+   },
+   {
+    "m": "Action commitments closed on time",
+    "now": "64%",
+    "trend": "down 5 points"
+   },
+   {
+    "m": "Member retention, rolling 12 months",
+    "now": "94%",
+    "trend": "up"
+   }
+  ],
+  "weekly": "b13",
+  "rituals": [
+   {
+    "id": "r1",
+    "n": "Arrival and open networking",
+    "when": "8:00 to 8:30, every meeting",
+    "owner": "Host",
+    "d": "The half hour before the work is where the team forms. It does not get cut when the agenda is full.",
+    "tmpl": "Arrival block\n\nCoffee, no agenda, no devices. The host greets every member by name.\n\nWhen the day runs long, the overrun comes out of the close, never out of arrival."
+   },
+   {
+    "id": "r2",
+    "n": "Full day, protected",
+    "when": "8:30 to 5:00, monthly",
+    "owner": "Members",
+    "d": "On the calendar as unavailable, not as a meeting.",
+    "tmpl": "Calendar standard\n\nThe meeting day is blocked as unavailable for the full year, set each December.\n\nHalf a day is not attendance. If the day cannot be protected, that is a conversation with the chair, not a quiet early exit."
+   },
+   {
+    "id": "r3",
+    "n": "Rotating roles",
+    "when": "Assigned quarterly",
+    "owner": "Chair",
+    "d": "Accountability, Time Keeper, Historian and Penalty Flag. Nobody holds the same role twice in a row.",
+    "tmpl": "Role cards\n\nACCOUNTABILITY: capture every action commitment with its date; send the binder after the meeting; read the prior list at the next open.\n\nTIME KEEPER: call the start on time regardless of who is in the room; two-minute warnings; name overruns out loud.\n\nHISTORIAN: keep the attendance and issue log; flag patterns, not incidents.\n\nPENALTY FLAG: anyone may throw it for devices, side conversations, or a second conversation running under the first. Work stops ten seconds, then resumes. No defense, no apology speech."
+   },
+   {
+    "id": "r4",
+    "n": "Prepare significant issues to benefit all",
+    "when": "Before every meeting",
+    "owner": "Member",
+    "d": "Real topics, challenges and decisions, brought vulnerable and open.",
+    "tmpl": "Issue prep\n\n1. The decision I am facing, in one sentence.\n2. What I have already tried.\n3. What I think the answer is, and why I might be wrong.\n4. What I want from the group: perspective, challenge, or a decision.\n5. What it costs me if I get this wrong.\n\nAn issue that benefits only the presenter is a smaller issue than the room deserves. Name who else in the group faces the same thing."
+   },
+   {
+    "id": "r5",
+    "n": "Notify all if missing, late or leaving early",
+    "when": "As soon as you know",
+    "owner": "Member",
+    "d": "The whole team, not the chair alone.",
+    "tmpl": "Notification standard\n\nMessage the full team, not the chair privately, as soon as you know.\n\nInclude what you will miss and how you will catch up. Absence with notice is respect. Absence without it is the behavior we are naming."
+   },
+   {
+    "id": "r6",
+    "n": "Hosts share logistics two weeks prior",
+    "when": "At least 2 weeks before",
+    "owner": "Host",
+    "d": "Location, parking, timing and anything a member needs to plan around.",
+    "tmpl": "Host logistics note\n\nSend at least two weeks out: address, parking, start and end times, meals, dress, and anything unusual about the space.\n\nHosting is one of the ways a member gives as much as they get."
+   },
+   {
+    "id": "r7",
+    "n": "RSVP on MyVistage, five days before",
+    "when": "5 days before each meeting",
+    "owner": "Member",
+    "d": "The chair builds the day around who is in the room.",
+    "tmpl": "RSVP standard\n\nRSVP at least five days out so the chair can build the agenda around who is present and which issues get processed."
+   },
+   {
+    "id": "r8",
+    "n": "Check in on MyVistage, one day before",
+    "when": "1 day before each meeting",
+    "owner": "Member",
+    "d": "Final confirmation and what you are bringing.",
+    "tmpl": "Check-in standard\n\nOne day out: confirm attendance and name the issue you are bringing.\n\nA check-in with no issue named is a signal to the chair that a 1:1 is needed before the meeting."
+   },
+   {
+    "id": "r9",
+    "n": "Complete speaker and feedback surveys",
+    "when": "After every session",
+    "owner": "Member",
+    "d": "Feedback is the mechanism of our growth, and it only works if everyone completes it.",
+    "tmpl": "Survey standard\n\nWithin 48 hours:\n1. What will you do differently because of this session? If nothing, say nothing.\n2. What did the speaker get wrong or leave out?\n3. Would you recommend this speaker to another team? Why or why not.\n\nThe chair reports completion rate at the next meeting."
+   },
+   {
+    "id": "r10",
+    "n": "Accountability binder",
+    "when": "Every meeting, sent after",
+    "owner": "Accountability role",
+    "d": "Tracks action commitments. Members own them. The binder goes out after the meeting.",
+    "tmpl": "Accountability binder entry\n\nMember / Commitment / Where it lands (company, community, family) / Date committed / Due date / Status at next meeting / Reset in advance?\n\nSent to all members after the meeting. The reset column is read out loud, because resetting early is the behavior we want and silence is the one we do not."
+   },
+   {
+    "id": "r11",
+    "n": "Ask for help, don't wait until struggling",
+    "when": "Ongoing",
+    "owner": "Members",
+    "d": "The ask comes early, while the problem is still small enough to be interesting.",
+    "tmpl": "Between-meeting ask\n\nMessage the group or any member directly. Name what you need: perspective, an introduction, or someone who has done this before.\n\nIf you are rehearsing whether to ask, you have already waited too long."
+   },
+   {
+    "id": "r12",
+    "n": "Retreat for team building",
+    "when": "Yearly",
+    "owner": "Host",
+    "d": "Time together away from the agenda.",
+    "tmpl": "Retreat design\n\nOne day minimum, off site, no processing slots. Half the time unstructured.\n\nThe retreat exists to make the hard rounds possible for the next twelve months."
+   },
+   {
+    "id": "r13",
+    "n": "Annual and quarterly goal review",
+    "when": "Quarterly, deep review yearly",
+    "owner": "Chair",
+    "d": "Goals and the member agreement reviewed on a fixed cycle rather than when something goes wrong.",
+    "tmpl": "Goal review\n\n1. The annual goal, restated by the member.\n2. The number, as of today.\n3. What changed since last quarter.\n4. What I am asking the group for.\n5. Agreement check: am I holding up my end?"
+   }
+  ],
+  "foundations": [
+   {
+    "id": "b1",
+    "n": 1,
+    "t": "Maintain strict confidentiality",
+    "c": "Character",
+    "v": [
+     "Trust"
+    ],
+    "d": "What happens here stays here. We share learning, not details or stories.",
+    "tip": "Before you repeat something outside the room, ask whether you are sharing the lesson or the person.",
+    "coach": [
+     "Restate the standard at the open of every meeting, not just at onboarding.",
+     "When a story leaks, address it directly and privately the same week."
+    ],
+    "teach": [
+     "Confidentiality is the price of depth. Without it, members bring safe issues.",
+     "The line is the difference between a lesson and a story with a name attached."
+    ],
+    "qs": [
+     "What have you not brought to this room because you were unsure it would stay here?",
+     "Where is the line between sharing a lesson and telling someone's story?"
+    ],
+    "miss": "Someone hears their issue repeated outside the room, and the group never learns why members stopped going deep.",
+    "rule": "Any breach is named to the group, once, and the member owns it out loud.",
+    "score": 4.5,
+    "spread": 0.6,
+    "r": [],
+    "p": [
+     {
+      "s": "Onboarding",
+      "owner": "Chair",
+      "cadence": "At join",
+      "artifact": "Member agreement signed",
+      "tmpl": "Onboarding step 2 of 7\n\nRead aloud with the new member, then sign:\n\n\"What happens here stays here. I will share what I learned, never what someone said or who said it. If I am unsure which side of that line I am on, I ask before I speak.\"\n\nChair keeps the signed copy. Reread at the annual agreement review."
+     },
+     {
+      "s": "Selection",
+      "owner": "Chair",
+      "cadence": "Each candidate",
+      "artifact": "Interview question",
+      "tmpl": "Candidate interview, question 4\n\n\"Tell me about a time you held something in confidence when repeating it would have helped you. What made that hard?\"\n\nListen for: a real instance, discomfort named, no hedging."
+     }
+    ]
+   },
+   {
+    "id": "b2",
+    "n": 2,
+    "t": "Guard and respect time",
+    "c": "Character",
+    "v": [
+     "Commitment",
+     "Care"
+    ],
+    "d": "Attend, be on time, stay in the room. We all lose when someone is not present. If you cannot attend, let the team know.",
+    "tip": "Put the full day on your calendar as unavailable, not as a meeting.",
+    "coach": [
+     "Start on time even when the room is half full. Waiting punishes the people who came.",
+     "Ask the chronically late member what the meeting is competing with. It is usually a real answer."
+    ],
+    "teach": [
+     "Lateness is a message about relative value, whether or not it is meant that way.",
+     "The group's ceiling is set by who is in the room, not who is on the roster."
+    ],
+    "qs": [
+     "What does the group lose when a seat is empty?",
+     "What would have to be true for you to protect this day completely?"
+    ],
+    "miss": "People drift in, the first issue restarts twice, and the day loses an hour it never gets back.",
+    "rule": "Notify the whole team if missing, arriving late or leaving early. Not the chair alone, the team.",
+    "score": 3.4,
+    "spread": 1.5,
+    "r": [
+     "r2",
+     "r5",
+     "r7",
+     "r8"
+    ],
+    "p": [
+     {
+      "s": "Accountability",
+      "owner": "Historian",
+      "cadence": "Monthly",
+      "artifact": "Attendance log",
+      "tmpl": "Attendance log fields\n\nMember / Present / Arrived late / Left early / Notified team in advance\n\nThe notified column is the one that matters. Absence with notice is respect. Absence without it is the behavior we are tracking."
+     },
+     {
+      "s": "Onboarding",
+      "owner": "Chair",
+      "cadence": "At join",
+      "artifact": "Expectation set"
+     }
+    ]
+   },
+   {
+    "id": "b3",
+    "n": 3,
+    "t": "Be present, focused and intentional",
+    "c": "Connection",
+    "v": [
+     "Care",
+     "Trust"
+    ],
+    "d": "Your full attention is the most valuable gift you give. Distraction free. One conversation at a time. Devices only at breaks or an emergency.",
+    "tip": "Phone in the basket, not face down on the table. Face down is still in the conversation.",
+    "coach": [
+     "Model it first. A chair checking email ends the norm permanently.",
+     "Use the penalty flag with humor. The norm survives on lightness, not enforcement."
+    ],
+    "teach": [
+     "Partial attention produces partial advice, and the member can tell.",
+     "One conversation at a time is what makes the room different from every other meeting they attend."
+    ],
+    "qs": [
+     "When did you last feel fully heard here?",
+     "What pulls you out of the room, and what would it take to leave it outside?"
+    ],
+    "miss": "Side conversations start, the presenting member shortens their issue, and the depth never comes back that day.",
+    "rule": "Devices at breaks only. The penalty flag can be thrown by anyone, at anyone.",
+    "score": 3.8,
+    "spread": 1.2,
+    "r": [
+     "r3",
+     "r2"
+    ],
+    "p": [
+     {
+      "s": "Onboarding",
+      "owner": "Chair",
+      "cadence": "At join",
+      "artifact": "Norm walkthrough"
+     },
+     {
+      "s": "Meetings",
+      "owner": "Penalty flag",
+      "cadence": "Every meeting",
+      "artifact": "Device basket at the door"
+     }
+    ]
+   },
+   {
+    "id": "b4",
+    "n": 4,
+    "t": "Prepare significant issues",
+    "c": "Craft",
+    "v": [
+     "Commitment",
+     "Vulnerability"
+    ],
+    "d": "Come with real topics, challenges, and decisions to benefit you and the group. Stay vulnerable and open. The depth of what you bring determines the depth of what you and others get.",
+    "tip": "Bring the issue you would rather not say out loud. That is the one worth the room's time.",
+    "coach": [
+     "Ask what they almost brought instead. The discarded issue is usually the real one.",
+     "Never let an unprepared issue take a full processing slot."
+    ],
+    "teach": [
+     "A vague issue produces vague advice, and then the member concludes the group is not useful.",
+     "Preparation is how a member repays the room for the time it is about to spend on them."
+    ],
+    "qs": [
+     "What issue are you avoiding bringing here?",
+     "What would make this issue sharper before you present it?"
+    ],
+    "miss": "Someone opens with a topic they thought of in the car, and fourteen executives spend an hour on it.",
+    "rule": "Issues submitted at least five days before the meeting, in writing, with the decision named.",
+    "score": 3.3,
+    "spread": 1.6,
+    "r": [
+     "r4",
+     "r8"
+    ],
+    "p": [
+     {
+      "s": "Accountability",
+      "owner": "Accountability",
+      "cadence": "Monthly",
+      "artifact": "Issues processed log"
+     }
+    ]
+   },
+   {
+    "id": "b5",
+    "n": 5,
+    "t": "Challenge assumptions and uncover blind spots",
+    "c": "Character",
+    "v": [
+     "Challenge",
+     "Care"
+    ],
+    "d": "Use carefrontation. Ask the hard question. Point out the blind spot. Embrace the challenge you do not get anywhere else. Be kind, not nice.",
+    "tip": "Ask the question you are hoping someone else will ask.",
+    "coach": [
+     "Thank the challenger in the moment, especially when the challenge lands badly.",
+     "Watch for the room agreeing too quickly. Consensus in under five minutes usually means politeness."
+    ],
+    "teach": [
+     "Nice protects the speaker. Kind protects the member.",
+     "The challenge nobody else in their life will give them is the entire product."
+    ],
+    "qs": [
+     "What question did you hold back in the last meeting?",
+     "When has this group been too easy on you?"
+    ],
+    "miss": "The room is warm, everyone agrees, and the member leaves with the blind spot they arrived with.",
+    "rule": "Every processed issue gets at least two challenges before any advice is offered.",
+    "score": 3.6,
+    "spread": 1.8,
+    "r": [],
+    "p": [
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Half-yearly",
+      "artifact": "Feedback survey"
+     },
+     {
+      "s": "Selection",
+      "owner": "Chair",
+      "cadence": "Each candidate",
+      "artifact": "Carefrontation screen",
+      "tmpl": "Candidate interview, question 6\n\n\"Tell me about the last time someone told you something about yourself that you did not want to hear. What did you do with it?\"\n\nListen for: specifics, no deflection, evidence they changed something. A candidate who cannot take a challenge will make the room safer and worse."
+     }
+    ]
+   },
+   {
+    "id": "b6",
+    "n": 6,
+    "t": "Set goals and own accountability",
+    "c": "Character",
+    "v": [
+     "Commitment",
+     "Leadership Excellence"
+    ],
+    "d": "Do what you say when you say it. Push to excellence. Reset early if needed and don't wait to be policed.",
+    "tip": "Say the date out loud when you make the commitment, and reset it out loud the moment you know it will move.",
+    "coach": [
+     "Ask for the date, not the intent.",
+     "Recognize an early reset publicly. Resetting is the behavior; going quiet is the failure."
+    ],
+    "teach": [
+     "Resetting early is honoring the commitment. Going silent is breaking it.",
+     "Waiting to be policed turns a peer team into a supervisor."
+    ],
+    "qs": [
+     "What commitment do you already know needs a reset?",
+     "Where in your business are you waiting to be policed?"
+    ],
+    "miss": "Commitments are reported as in progress for three consecutive meetings and nobody resets anything.",
+    "rule": "Every commitment is entered with a date, and any date that moves is reset before it passes.",
+    "score": 3.1,
+    "spread": 1.7,
+    "r": [
+     "r10",
+     "r13"
+    ],
+    "p": [
+     {
+      "s": "Accountability",
+      "owner": "Accountability",
+      "cadence": "Every meeting",
+      "artifact": "Commitment log"
+     },
+     {
+      "s": "1:1s",
+      "owner": "Chair",
+      "cadence": "Monthly",
+      "artifact": "Goal review"
+     },
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Quarterly",
+      "artifact": "Annual goal review"
+     }
+    ]
+   },
+   {
+    "id": "b7",
+    "n": 7,
+    "t": "Give as much as you get",
+    "c": "Cause",
+    "v": [
+     "Care",
+     "Commitment"
+    ],
+    "d": "Work to make our team stronger. Shared fate. The team belongs to members, not the chair.",
+    "tip": "Before you leave a meeting, ask what you contributed that was not about your own issue.",
+    "coach": [
+     "Name the quiet contributors. Members who take more than they give usually do not know it.",
+     "Hand real ownership to members. A team the chair carries is a team that never becomes theirs."
+    ],
+    "teach": [
+     "This is not a service someone delivers to you. It is a team you are on.",
+     "What each member brings sets the ceiling for what everyone gets."
+    ],
+    "qs": [
+     "What did you give the group this quarter?",
+     "Which member has helped you most, and do they know it?"
+    ],
+    "miss": "Members arrive to collect and leave when their issue is done, and the chair becomes the only one holding it.",
+    "rule": "Every member owns at least one team responsibility per year.",
+    "score": 3,
+    "spread": 1.4,
+    "r": [
+     "r6",
+     "r11"
+    ],
+    "p": [
+     {
+      "s": "Recognition",
+      "owner": "Members",
+      "cadence": "Ongoing",
+      "artifact": "Peer recognition"
+     }
+    ]
+   },
+   {
+    "id": "b8",
+    "n": 8,
+    "t": "Celebrate wins and share lessons",
+    "c": "Change",
+    "v": [
+     "Growth",
+     "Humility"
+    ],
+    "d": "Acknowledge each other's progress. Recognize personal and professional milestones. Share lessons from mistakes and failures.",
+    "tip": "Bring one failure per quarter. The group learns more from it than from your best month.",
+    "coach": [
+     "Go first with your own failure. Nobody else will until you do.",
+     "Ask for the lesson, not the story."
+    ],
+    "teach": [
+     "A group that only hears wins learns nothing and trusts less.",
+     "Naming a win out loud is how the group keeps its own scoreboard."
+    ],
+    "qs": [
+     "What did you get wrong this quarter, and what did it teach you?",
+     "Whose progress here has gone unmentioned?"
+    ],
+    "miss": "Wins go unmentioned and failures stay private, and the group only sees the polished version of each other.",
+    "rule": "Every meeting opens with wins and closes with one lesson from something that did not work.",
+    "score": 3.7,
+    "spread": 1.1,
+    "r": [],
+    "p": [
+     {
+      "s": "Recognition",
+      "owner": "Members",
+      "cadence": "Ongoing",
+      "artifact": "Milestone posts"
+     },
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Yearly",
+      "artifact": "Year in review"
+     }
+    ]
+   },
+   {
+    "id": "b9",
+    "n": 9,
+    "t": "Invest in yourself and others",
+    "c": "Change",
+    "v": [
+     "Growth",
+     "Leadership Excellence"
+    ],
+    "d": "Keep raising the bar. Investing in ourselves makes us better leaders for the people who depend on us. Investing in others compounds our impact.",
+    "tip": "Name the one capability you are building this year, and tell the group what it is.",
+    "coach": [
+     "Ask what they are learning, not what they are doing.",
+     "Connect members working on the same capability. That is free value the chair can create."
+    ],
+    "teach": [
+     "The people who depend on us inherit the ceiling we stop raising.",
+     "Investment compounds. So does its absence, quietly."
+    ],
+    "qs": [
+     "What are you actively getting better at right now?",
+     "Who in this room have you invested in this year?"
+    ],
+    "miss": "Members stop growing and the room becomes a place to report rather than a place to develop.",
+    "rule": "Every member names a development goal at the annual review and reports on it at the half year.",
+    "score": 3.9,
+    "spread": 0.9,
+    "r": [
+     "r13"
+    ],
+    "p": [
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Yearly",
+      "artifact": "Development goal"
+     }
+    ]
+   },
+   {
+    "id": "b10",
+    "n": 10,
+    "t": "Express gratitude",
+    "c": "Connection",
+    "v": [
+     "Care",
+     "Humility"
+    ],
+    "d": "Express thanks for what someone's insight, challenge, or support meant to you.",
+    "tip": "Name what it changed. \"Thanks\" is nice. \"That question changed my decision\" is useful.",
+    "coach": [
+     "Close every meeting with gratitude, by name.",
+     "Gratitude for a challenge is the highest-value version. Ask for that one specifically."
+    ],
+    "teach": [
+     "Gratitude tells the group which contributions mattered, which is how members learn what to contribute.",
+     "Unspoken appreciation does no work."
+    ],
+    "qs": [
+     "Whose challenge helped you most this year?",
+     "Who have you been meaning to thank and have not?"
+    ],
+    "miss": "People give hard, generous input and never learn whether it mattered.",
+    "rule": "The meeting closes with each member naming one person and what their contribution changed.",
+    "score": 4.1,
+    "spread": 0.8,
+    "r": [],
+    "p": [
+     {
+      "s": "Recognition",
+      "owner": "Members",
+      "cadence": "Ongoing",
+      "artifact": "Gratitude posts"
+     }
+    ]
+   },
+   {
+    "id": "b11",
+    "n": 11,
+    "t": "Embrace feedback",
+    "c": "Change",
+    "v": [
+     "Growth",
+     "Humility",
+     "Vulnerability"
+    ],
+    "d": "Use inquiry and seek understanding before responding. Feedback is the mechanism of our growth. Give and receive it fully with kindness.",
+    "tip": "Ask one question before you respond to any of it.",
+    "coach": [
+     "Ask for feedback on yourself in front of the group, then take it without defending.",
+     "Model inquiry: when a challenge lands, your first move is a question, not an explanation."
+    ],
+    "teach": [
+     "Defending is the fastest way to stop receiving feedback permanently.",
+     "Inquiry before response is what makes kindness and candor compatible."
+    ],
+    "qs": [
+     "What feedback have you received and not acted on?",
+     "How do you react when it lands badly?"
+    ],
+    "miss": "Feedback gets softened to nothing, or it gets met with an explanation instead of a question.",
+    "rule": "Inquiry comes before response. You ask at least one question before you answer any feedback.",
+    "score": 3.2,
+    "spread": 1.3,
+    "r": [
+     "r9"
+    ],
+    "p": [
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Each speaker",
+      "artifact": "Speaker survey",
+      "tmpl": "Speaker survey, sent within an hour of the session\n\n1. What will you do differently because of today? (If nothing, say nothing.)\n2. What did the speaker get wrong or leave out?\n3. Would you recommend this speaker to another team? Why or why not.\n\nDue in 48 hours. The chair reports completion rate at the next meeting, by name."
+     },
+     {
+      "s": "1:1s",
+      "owner": "Chair",
+      "cadence": "Monthly",
+      "artifact": "Two-way feedback"
+     }
+    ]
+   },
+   {
+    "id": "b12",
+    "n": 12,
+    "t": "Maximize 1:1 value",
+    "c": "Craft",
+    "v": [
+     "Vulnerability",
+     "Growth"
+    ],
+    "d": "This time is yours to use productively. Prepare issues. Review goals. Stay vulnerable and growth minded. Reschedule early if needed.",
+    "tip": "Send your agenda the day before. An unprepared 1:1 becomes a status update.",
+    "coach": [
+     "Open with their agenda, not yours.",
+     "If a member reschedules repeatedly, that is the topic for the next one."
+    ],
+    "teach": [
+     "The 1:1 is where the issue gets sharp enough for the room.",
+     "Vulnerability here is what makes the group session useful rather than performative."
+    ],
+    "qs": [
+     "What do you want from your next 1:1?",
+     "What are you not saying in that room either?"
+    ],
+    "miss": "The hour becomes a business update, and nothing said there changes anything.",
+    "rule": "Agenda sent the day before, or the session is rescheduled.",
+    "score": 3.5,
+    "spread": 1.2,
+    "r": [],
+    "p": [
+     {
+      "s": "1:1s",
+      "owner": "Member",
+      "cadence": "Monthly",
+      "artifact": "Agenda sent day before"
+     },
+     {
+      "s": "Accountability",
+      "owner": "Chair",
+      "cadence": "Monthly",
+      "artifact": "Goals reviewed"
+     }
+    ]
+   },
+   {
+    "id": "b13",
+    "n": 13,
+    "t": "Speak your truth",
+    "c": "Character",
+    "v": [
+     "Challenge",
+     "Trust",
+     "Vulnerability"
+    ],
+    "d": "If something is not working, raise it in our group. Have hard conversations. No un-named elephants.",
+    "tip": "If you are rehearsing it in the car, it is already late. Say it in the room.",
+    "coach": [
+     "Thank the person for raising it before you respond to the content.",
+     "Ask directly: what is not being said here? Then wait through the silence."
+    ],
+    "teach": [
+     "An un-named elephant does not leave. It just takes up the seats.",
+     "Silence is a decision, and it is usually the expensive one."
+    ],
+    "qs": [
+     "What is not being said in this group right now?",
+     "What would you raise if you knew it would be received well?"
+    ],
+    "miss": "Members talk about the problem in the parking lot, and the group never gets the chance to fix it.",
+    "rule": "Anything raised in good faith is heard without consequence, and the person who raised it hears what happened next.",
+    "score": 3.3,
+    "spread": 1.9,
+    "r": [
+     "r11"
+    ],
+    "p": [
+     {
+      "s": "1:1s",
+      "owner": "Chair",
+      "cadence": "Monthly",
+      "artifact": "What are you not telling me"
+     },
+     {
+      "s": "Onboarding",
+      "owner": "Chair",
+      "cadence": "At join",
+      "artifact": "Norm set at join"
+     }
+    ]
+   },
+   {
+    "id": "b14",
+    "n": 14,
+    "t": "Take focused action",
+    "c": "Craft",
+    "v": [
+     "Commitment",
+     "Leadership Excellence"
+    ],
+    "d": "Take what you learn here back to your company, community, and family.",
+    "tip": "Before you leave, name the one thing that leaves this room with you and where it lands.",
+    "coach": [
+     "Build the transfer into the close. It does not happen in the hallway.",
+     "Ask where it will land: company, community, or family. The answer is usually the one they avoid."
+    ],
+    "teach": [
+     "Insight that stays in the room is entertainment that took a full day.",
+     "The team's value shows up in three places, and only one of them is work."
+    ],
+    "qs": [
+     "What are you taking back, and to whom?",
+     "What did you learn here last month that never left the room?"
+    ],
+    "miss": "Everyone leaves energized, nothing changes, and the next meeting covers the same ground.",
+    "rule": "The meeting does not close until every member names what they are taking back and where it lands.",
+    "score": 3.4,
+    "spread": 1.3,
+    "r": [
+     "r10"
+    ],
+    "p": [
+     {
+      "s": "Accountability",
+      "owner": "Accountability",
+      "cadence": "Within 48 hours",
+      "artifact": "Commitments sent"
+     }
+    ]
+   },
+   {
+    "id": "b15",
+    "n": 15,
+    "t": "Be a strong ambassador",
+    "c": "Cause",
+    "v": [
+     "Leadership Excellence",
+     "Commitment"
+    ],
+    "d": "Advocate for high-quality candidates who share our values and can strengthen our team.",
+    "tip": "Ask yourself who you would want in the room when your hardest decision comes.",
+    "coach": [
+     "Set a referral expectation in the annual agreement, not as an occasional ask.",
+     "Let members interview candidates. Ownership of who joins is ownership of the team."
+    ],
+    "teach": [
+     "The next member changes the room for everyone in it.",
+     "A team that does not recruit slowly becomes a team that cannot be selective."
+    ],
+    "qs": [
+     "Who do you know who belongs in this room?",
+     "What would you tell them this group is?"
+    ],
+    "miss": "Seats stay empty or get filled by whoever is available, and the standard drops without a decision being made.",
+    "rule": "Every member brings at least one qualified referral per year.",
+    "score": 2.9,
+    "spread": 1.5,
+    "r": [],
+    "p": [
+     {
+      "s": "Selection",
+      "owner": "Members",
+      "cadence": "Yearly",
+      "artifact": "Referral expectation",
+      "tmpl": "Referral standard\n\nEvery member brings at least one qualified referral per year, named at the annual agreement review.\n\nQualified means: runs a real P&L, will take a challenge, and would give as much as they get.\n\nTwo members interview each candidate separately, then compare before the chair decides."
+     },
+     {
+      "s": "Reviews",
+      "owner": "Chair",
+      "cadence": "Yearly",
+      "artifact": "Agreement review"
+     }
+    ]
+   },
+   {
+    "id": "b16",
+    "n": 16,
+    "t": "Have fun",
+    "c": "Connection",
+    "v": [
+     "Care",
+     "Trust"
+    ],
+    "d": "This work is serious, and it should be energizing. Joy and performance are not opposites.",
+    "tip": "Protect the arrival block. The half hour before the meeting is where the team actually forms.",
+    "coach": [
+     "Do not cut the social block when the agenda is full. That block makes the hard rounds possible.",
+     "Notice when the room stops laughing. It usually means something is unsaid."
+    ],
+    "teach": [
+     "Members stay for the room, not the agenda.",
+     "Joy is a leading indicator. It disappears before attendance does."
+    ],
+    "qs": [
+     "When did this group last feel energizing?",
+     "What would make you look forward to the next meeting?"
+    ],
+    "miss": "The day becomes an obligation on the calendar, and attendance erodes before anyone says why.",
+    "rule": "Arrival and networking time is protected, and the retreat happens every year regardless of the calendar.",
+    "score": 3.8,
+    "spread": 1,
+    "r": [
+     "r1",
+     "r12"
+    ],
+    "p": [
+     {
+      "s": "Recognition",
+      "owner": "Members",
+      "cadence": "Ongoing",
+      "artifact": "Milestone celebrations"
+     }
+    ]
+   }
+  ],
+  "stories": [
+   {
+    "who": "Chair",
+    "f": "b13",
+    "when": "last meeting",
+    "txt": "Someone finally named that two members were processing the same issue in different rooms for six months. Ten seconds of silence after the elephant check, then it came out."
+   },
+   {
+    "who": "Marta",
+    "f": "b5",
+    "when": "2 meetings ago",
+    "txt": "The challenge round reframed my issue completely. I came in asking how to fire someone and left knowing I had never actually set the expectation."
+   }
+  ],
+  "recognition": [
+   {
+    "who": "Dave",
+    "to": "Renee",
+    "f": "b10",
+    "when": "Tuesday",
+    "txt": "Renee's question about my board's incentives changed my decision. I have thought about it every week since."
+   },
+   {
+    "who": "Chair",
+    "to": "Luis",
+    "f": "b6",
+    "when": "last month",
+    "txt": "Luis renegotiated his commitment eight days before it was due, in front of everyone, without being asked."
+   }
+  ]
+ },
+ "vd": {
+  "name": "Vail Daily",
+  "sub": "Eagle County, Colorado",
+  "initials": "VD",
+  "accent": "#B0741A",
+  "plan": "Pilot",
+  "seats": "38 of 50 seats",
+  "champion": "Managing editor",
+  "vision": "Every person in this valley knows what is happening here, and trusts how they learned it.",
+  "mission": "Report the Eagle Valley with speed, accuracy and care, and build a business that keeps a newsroom here for the next generation.",
+  "creed": "We name the behavior, practice it weekly, and build it into how we meet, hire, onboard, track and recognize.",
+  "values": [
+   {
+    "n": "Trust",
+    "d": "Readers and colleagues can rely on what we tell them."
+   },
+   {
+    "n": "Care",
+    "d": "Treat each other as the reason the work is possible."
+   },
+   {
+    "n": "Challenge",
+    "d": "Say the hard thing to the person who can fix it."
+   },
+   {
+    "n": "Growth",
+    "d": "Get better at the craft, deliberately."
+   },
+   {
+    "n": "Commitment",
+    "d": "The date you gave is the date it lands."
+   },
+   {
+    "n": "Humility",
+    "d": "Correct fast, credit others, assume you might be wrong."
+   }
+  ],
+  "sysCats": [
+   "Hiring",
+   "Onboarding",
+   "Meetings",
+   "Tracking",
+   "Recognition"
+  ],
+  "profile": {
+   "Clan": 34,
+   "Adhocracy": 14,
+   "Market": 22,
+   "Hierarchy": 30
+  },
+  "trust": {
+   "Logic": 3.9,
+   "Empathy": 4.2,
+   "Authenticity": 3.4
+  },
+  "results": [
+   {
+    "m": "Corrections published per month",
+    "now": "6",
+    "trend": "down from 11"
+   },
+   {
+    "m": "Advertiser renewal rate",
+    "now": "81%",
+    "trend": "up 4 points"
+   },
+   {
+    "m": "Voluntary turnover, rolling 12 months",
+    "now": "19%",
+    "trend": "flat"
+   }
+  ],
+  "weekly": "honor",
+  "rituals": [
+   {
+    "id": "v1",
+    "n": "Daily budget meeting",
+    "when": "Every morning",
+    "owner": "Managing editor",
+    "d": "Assignments, dates and who is verifying what.",
+    "tmpl": "Budget meeting, 15 minutes\n\n1. What runs today, and who verified it.\n2. What slipped, and the renegotiated date.\n3. One credit, by name."
+   },
+   {
+    "id": "v2",
+    "n": "Behavior of the week huddle",
+    "when": "Mondays",
+    "owner": "Managers",
+    "d": "Eight minutes on the week's behavior at the start of the staff meeting.",
+    "tmpl": "Huddle script\n\n1. Read the behavior out loud. 1 min.\n2. The week's question. 3 min.\n3. Who saw someone do this? 2 min.\n4. One place each person will practice it. 2 min."
+   },
+   {
+    "id": "v3",
+    "n": "Monthly postmortem",
+    "when": "First Thursday",
+    "owner": "Publisher",
+    "d": "Timeline first, names never.",
+    "tmpl": "Postmortem format\n\n1. The timeline, minute by minute. No names.\n2. What changed in the conditions.\n3. Where the process assumed someone else checked.\n4. One change we will make, with an owner."
+   }
+  ],
+  "foundations": [
+   {
+    "id": "honor",
+    "n": 1,
+    "t": "Honor commitments",
+    "c": "Character",
+    "v": [
+     "Commitment",
+     "Trust"
+    ],
+    "d": "If you say you will do it, it gets done on the date you said. If the date changes, you say so before it passes.",
+    "tip": "Before you agree to anything, say the date out loud.",
+    "coach": [
+     "Ask for the date, not the intent.",
+     "Thank early renegotiation publicly."
+    ],
+    "teach": [
+     "A commitment has three parts: what, who and when.",
+     "Small broken promises cost more because there are more of them."
+    ],
+    "qs": [
+     "What commitment are you carrying that will slip?",
+     "Where do dates get assumed instead of stated?"
+    ],
+    "miss": "The date passes and nobody mentions it.",
+    "rule": "Any date that will be missed gets renegotiated before the deadline, in writing.",
+    "score": 3.4,
+    "spread": 1.6,
+    "r": [
+     "v1"
+    ],
+    "p": [
+     {
+      "s": "Tracking",
+      "owner": "Managing editor",
+      "cadence": "Weekly",
+      "artifact": "Assignment board"
+     },
+     {
+      "s": "Hiring",
+      "owner": "Managing editor",
+      "cadence": "Each hire",
+      "artifact": "Interview question"
+     }
+    ]
+   },
+   {
+    "id": "record",
+    "n": 2,
+    "t": "Set the record straight",
+    "c": "Character",
+    "v": [
+     "Humility",
+     "Trust"
+    ],
+    "d": "When we get something wrong, we address it directly and correct it quickly, in the same place the mistake appeared.",
+    "tip": "Correct it in the channel where the error ran.",
+    "coach": [
+     "Fix the record before the blame conversation.",
+     "A correction that argues is not a correction."
+    ],
+    "teach": [
+     "Speed of correction is what readers judge us on.",
+     "A quiet correction damages trust twice."
+    ],
+    "qs": [
+     "How did readers find out we knew?",
+     "Where do we still correct quietly?"
+    ],
+    "miss": "The error stands, or it gets fixed with nobody told.",
+    "rule": "Corrections run within 24 hours, same channel, no argument attached.",
+    "score": 4,
+    "spread": 0.8,
+    "r": [
+     "v1"
+    ],
+    "p": [
+     {
+      "s": "Onboarding",
+      "owner": "Desk editors",
+      "cadence": "At hire",
+      "artifact": "Corrections policy"
+     },
+     {
+      "s": "Tracking",
+      "owner": "Managing editor",
+      "cadence": "Monthly",
+      "artifact": "Corrections count"
+     }
+    ]
+   },
+   {
+    "id": "early",
+    "n": 3,
+    "t": "Say the hard thing early",
+    "c": "Character",
+    "v": [
+     "Challenge",
+     "Trust"
+    ],
+    "d": "Raise the problem while it is small, to the person who can do something about it.",
+    "tip": "If you are rehearsing it in the car, send the message today.",
+    "coach": [
+     "Thank the person before responding to the content.",
+     "Ask in one-on-ones: what are you not telling me?"
+    ],
+    "teach": [
+     "Problems raised early are cheap.",
+     "Care and challenge are not opposites."
+    ],
+    "qs": [
+     "What are you sitting on right now?",
+     "What would make it safer to speak up?"
+    ],
+    "miss": "It comes out in a resignation or a meeting where it is too late.",
+    "rule": "Anything raised in good faith is heard without consequence.",
+    "score": 3.1,
+    "spread": 1.9,
+    "r": [
+     "v2"
+    ],
+    "p": [
+     {
+      "s": "Meetings",
+      "owner": "Publisher",
+      "cadence": "Weekly",
+      "artifact": "Open block"
+     }
+    ]
+   },
+   {
+    "id": "handoff",
+    "n": 4,
+    "t": "Make the handoff clean",
+    "c": "Craft",
+    "v": [
+     "Care",
+     "Commitment"
+    ],
+    "d": "Work passes complete, labeled and on time, with anything unusual flagged.",
+    "tip": "Ask what the next person will have to guess.",
+    "coach": [
+     "Watch handoffs rather than asking about them.",
+     "Recognize the person who receives well."
+    ],
+    "teach": [
+     "Most delays happen between people, not inside their work.",
+     "Done means usable by the next person."
+    ],
+    "qs": [
+     "What is the messiest handoff you are part of?",
+     "What do you routinely chase down?"
+    ],
+    "miss": "Files land without context and someone rebuilds finished work.",
+    "rule": "No handoff without the checklist attached.",
+    "score": 3.6,
+    "spread": 1.1,
+    "r": [
+     "v1"
+    ],
+    "p": [
+     {
+      "s": "Onboarding",
+      "owner": "Production",
+      "cadence": "At hire",
+      "artifact": "Handoff standard"
+     },
+     {
+      "s": "Tracking",
+      "owner": "Production",
+      "cadence": "Weekly",
+      "artifact": "Late page log"
+     }
+    ]
+   },
+   {
+    "id": "valley",
+    "n": 5,
+    "t": "Show up for the valley",
+    "c": "Cause",
+    "v": [
+     "Care"
+    ],
+    "d": "Treat readers, advertisers and neighbors as people we will see at the grocery store.",
+    "tip": "Use the person's name and the town they live in.",
+    "coach": [
+     "Ask about the relationship before the number.",
+     "Notice when a decision treats a reader as traffic."
+    ],
+    "teach": [
+     "The relationship is the product.",
+     "Presence is the advantage a national competitor cannot copy."
+    ],
+    "qs": [
+     "Who would notice first if we disappeared?",
+     "What community commitment are we behind on?"
+    ],
+    "miss": "We talk about readers as traffic and advertisers as accounts.",
+    "rule": "Every account plan names a person and a relationship.",
+    "score": 4.3,
+    "spread": 0.7,
+    "r": [],
+    "p": [
+     {
+      "s": "Hiring",
+      "owner": "Publisher",
+      "cadence": "Each hire",
+      "artifact": "Community question"
+     },
+     {
+      "s": "Recognition",
+      "owner": "All",
+      "cadence": "Ongoing",
+      "artifact": "Callouts"
+     }
+    ]
+   },
+   {
+    "id": "check",
+    "n": 6,
+    "t": "Check it before you send it",
+    "c": "Craft",
+    "v": [
+     "Growth",
+     "Trust"
+    ],
+    "d": "Verify names, numbers and sources yourself before anything leaves your hands, including when you are late.",
+    "tip": "Read once for facts alone, phone face down.",
+    "coach": [
+     "Ask what was verified, not whether it was.",
+     "Praise the catch."
+    ],
+    "teach": [
+     "Accuracy is a habit under pressure.",
+     "Speed without verification is a correction with a delay."
+    ],
+    "qs": [
+     "What do you skip when you are behind?",
+     "Where does our process assume someone else checked?"
+    ],
+    "miss": "It ships unverified and we hear it from the person whose name we got wrong.",
+    "rule": "Nothing publishes without a named verifier.",
+    "score": 3.8,
+    "spread": 1.2,
+    "r": [
+     "v1"
+    ],
+    "p": [
+     {
+      "s": "Hiring",
+      "owner": "Managing editor",
+      "cadence": "Each hire",
+      "artifact": "Editing test"
+     },
+     {
+      "s": "Tracking",
+      "owner": "Managing editor",
+      "cadence": "Monthly",
+      "artifact": "Error log"
+     },
+     {
+      "s": "Onboarding",
+      "owner": "Desk editors",
+      "cadence": "At hire",
+      "artifact": "Standards training"
+     }
+    ]
+   },
+   {
+    "id": "credit",
+    "n": 7,
+    "t": "Credit people out loud",
+    "c": "Connection",
+    "v": [
+     "Care",
+     "Humility"
+    ],
+    "d": "Say specifically who did the work, in front of others, close to when it happened.",
+    "tip": "Name the person, the behavior and the effect.",
+    "coach": [
+     "Start meetings with a credit rather than ending with one.",
+     "Make sure credit reaches press, circulation and production."
+    ],
+    "teach": [
+     "Recognition is information about what matters here.",
+     "People repeat what gets named."
+    ],
+    "qs": [
+     "Whose work went unnamed this month?",
+     "Which roles get thanked least?"
+    ],
+    "miss": "Good work disappears into the paper.",
+    "rule": "Every weekly meeting names at least one person and what they did.",
+    "score": 3.3,
+    "spread": 1.4,
+    "r": [
+     "v1",
+     "v2"
+    ],
+    "p": [
+     {
+      "s": "Recognition",
+      "owner": "All",
+      "cadence": "Ongoing",
+      "artifact": "Recognition feed"
+     },
+     {
+      "s": "Onboarding",
+      "owner": "Managers",
+      "cadence": "At hire",
+      "artifact": "First-week credit"
+     }
+    ]
+   },
+   {
+    "id": "changed",
+    "n": 8,
+    "t": "Ask what changed",
+    "c": "Change",
+    "v": [
+     "Growth",
+     "Humility"
+    ],
+    "d": "When the result is not what you expected, get curious before you get certain.",
+    "tip": "Ask three questions before you offer one conclusion.",
+    "coach": [
+     "Model changing your mind out loud.",
+     "Interrupt blame with a question about the system."
+    ],
+    "teach": [
+     "Most bad outcomes come from changed conditions, not bad people.",
+     "Certainty arrives faster than understanding."
+    ],
+    "qs": [
+     "What surprised you this month?",
+     "Where did we assign fault before we knew what happened?"
+    ],
+    "miss": "We assign fault fast and the same result arrives next quarter.",
+    "rule": "No postmortem starts with a name. It starts with the timeline.",
+    "score": 3,
+    "spread": 1.5,
+    "r": [
+     "v3"
+    ],
+    "p": [
+     {
+      "s": "Meetings",
+      "owner": "Publisher",
+      "cadence": "Monthly",
+      "artifact": "Postmortem format"
+     }
+    ]
+   }
+  ],
+  "stories": [
+   {
+    "who": "Dana R.",
+    "f": "record",
+    "when": "last week",
+    "txt": "We got a school board member's title wrong Tuesday. Correction ran that afternoon, and Dana called her before it went out."
+   }
+  ],
+  "recognition": [
+   {
+    "who": "Priya",
+    "to": "Sam",
+    "f": "valley",
+    "when": "Monday",
+    "txt": "Sam drove the Minturn route himself when the truck broke down, then called the four subscribers who were still going to be late."
+   }
+  ]
+ }
+}
