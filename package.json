@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "seed": "node scripts/seed.mjs",
     "build:single": "SINGLE_FILE=1 vite build && node scripts/bundle-single.mjs",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name culture-portal",
-    "preview:dist": "npx wrangler pages dev dist"
+    "deploy": "npm run build && npx wrangler deploy",
+    "preview:dist": "npm run build && npx wrangler dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

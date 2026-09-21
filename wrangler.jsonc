@@ -1,0 +1,14 @@
+// Cloudflare configuration for deploying the built site as a Worker with
+// static assets. A Pages project ignores this file, so the repository works
+// either way.
+{
+  "name": "culture-portal",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    // Any path that is not a real file serves index.html, because the app
+    // routes in the browser. This replaces the old _redirects rule, which
+    // Workers rejects as a redirect loop.
+    "not_found_handling": "single-page-application"
+  }
+}
