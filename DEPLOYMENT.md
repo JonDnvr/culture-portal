@@ -435,6 +435,10 @@ the browser.
 1. Go to **cloudflare.com**, sign up, sign in.
 2. Left sidebar, **Workers & Pages**.
 3. **Create**, then the **Pages** tab, then **Connect to Git**.
+
+   The repository works as either a **Pages** site or a **Worker**, which is what the
+   default first screen creates. If you ended up with a Worker, that's fine; its settings
+   are slightly different and are in 11.7.
 4. Click **Connect GitHub**, authorize it, choose your `culture-portal` repository, and
    click **Begin setup**.
 
@@ -453,7 +457,14 @@ Fill the form in exactly like this:
 
 ### 11.3 Environment variables
 
-Still on that page, expand **Environment variables** and add two, from your note:
+**For your own deployment you can skip this step.** Your project's URL and publishable key
+are already written into `vite.config.js`, so the build finds them without any Cloudflare
+variables. Both are public by design, which is why that is safe; the secret key is never in
+there.
+
+You only need these variables if you set up a *second* copy pointing at a different
+Supabase project, since anything set here overrides the values in `vite.config.js`.
+Expand **Environment variables** and add two:
 
 | Variable name | Value |
 |---|---|
@@ -500,6 +511,34 @@ supabase secrets set PUBLIC_APP_URL=https://culture-portal-abc.pages.dev
 4. Wait for the certificate, five to twenty minutes.
 5. Then **redo 11.5** with the new address, adding both addresses to Redirect URLs. In that
    order, or sign-in breaks.
+
+### 11.7 If Cloudflare created a Worker instead
+
+You can tell from the build log: a Worker's log mentions `wrangler deploy` and a
+`/workers/scripts/` address. The repository includes a `wrangler.jsonc` file for exactly
+this case, so no code changes are needed, only three settings.
+
+1. Open the project, then **Settings**, then **Build**.
+2. Under **Build configuration**, click the pencil and set:
+
+   | Field | Value |
+   |---|---|
+   | Build command | `npm run build` |
+   | Deploy command | `npx wrangler deploy` |
+   | Root directory | leave empty |
+
+3. **Variables: none needed.** The Supabase values are in `vite.config.js`.
+
+   If Cloudflare offers to add a `vars` section to your `wrangler.jsonc` "to keep
+   deployments in sync", decline it, and delete any `VITE_` variables you added under the
+   Worker's runtime **Variables and secrets**. Those are runtime values, used while the
+   Worker runs, and this app reads its settings while it is being *built*. They do nothing
+   useful there, and they are what triggers that prompt.
+
+4. Go to **Deployments** and click **Retry deployment**, or push any change to GitHub.
+
+The address ends in `.workers.dev` instead of `.pages.dev`. Everything else in this guide,
+including 11.5 and 11.6, is the same.
 
 ---
 
@@ -575,6 +614,8 @@ Work through this in order. Each line has caught a real problem at some point.
 **The site**
 - [ ] The sign-in page loads with four tabs.
 - [ ] Open a behavior, then reload the page. It loads again rather than showing a 404.
+- [ ] The sign-in page shows four tabs and asks for a password. If it offers to let you in
+      with just a name, the build did not get the Supabase values.
 
 **Keeping clients apart**
 - [ ] Sign in as `editor@vaildaily.com` with the demo password. You see Vail Daily, no trace
@@ -617,7 +658,10 @@ ready for a real client.
 | No emails at all | The Resend key or from-address is missing | Part 8, and check the domain verified |
 | Emails land in spam | The DNS records are incomplete | Part 7.2, all records green |
 | Stripe pays, nothing changes | The webhook secret does not match the mode | Part 9.3, redo it in the mode you are in |
-| Everything 404s except the home page | `_redirects` did not ship | Confirm `public/_redirects` is in GitHub |
+| Everything 404s except the home page | Single-page routing isn't on | Pages does this automatically; a Worker needs `wrangler.jsonc` in the repository |
+| `Invalid _redirects configuration`, infinite loop | An old `public/_redirects` file is still in GitHub | Delete it from the repository; `wrangler.jsonc` does that job now |
+| Site works but nothing saves, and sign-in accepts any name | The build did not get the Supabase values | Check `vite.config.js` has your URL and publishable key, then redeploy |
+| Cloudflare offers to add `vars` to `wrangler.jsonc` | A `VITE_` value was added as a runtime variable | Decline, and delete that runtime variable; see 11.7 |
 
 **Reading the function logs**, which is where email and Stripe problems show up: Supabase,
 **Edge Functions**, click the function, then the **Logs** tab. Each call is a line; click one

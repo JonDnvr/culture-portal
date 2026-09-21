@@ -507,7 +507,6 @@ alter table stories          enable row level security;
 alter table story_attachments enable row level security;
 alter table story_shares     enable row level security;
 alter table recognitions     enable row level security;
-alter table ritual_logs      enable row level security;
 alter table iterations       enable row level security;
 alter table iteration_attachments enable row level security;
 alter table recognition_attachments enable row level security;
