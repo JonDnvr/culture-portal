@@ -157,16 +157,42 @@ export async function listMembers(orgId) {
 /* -------------------------------------------------- administration of users */
 
 /**
+ * Calls an edge function and, when it fails, surfaces the function's own
+ * explanation. On an error the library leaves `data` empty and puts the reply
+ * in `error.context`; reading `data` alone only ever yields "Edge Function
+ * returned a non-2xx status code", which says nothing useful.
+ */
+async function invokeFunction(name, body) {
+  const { data, error } = await supabase.functions.invoke(name, { body });
+  if (!error) return data;
+
+  let message = error.message;
+  const reply = error.context;
+  if (reply && typeof reply.clone === 'function') {
+    try {
+      const parsed = await reply.clone().json();
+      message = parsed?.error || parsed?.message || message;
+      if (parsed?.detail) message += ` (${parsed.detail})`;
+    } catch {
+      try {
+        const text = await reply.text();
+        if (text) message = text;
+      } catch { /* keep the library's message */ }
+    }
+    if (reply.status === 404) {
+      message = `The ${name} function is not deployed. Run: supabase functions deploy ${name}`;
+    }
+  }
+  throw new Error(message);
+}
+
+/**
  * Creating an account needs the admin API, which never belongs in a browser,
  * so these go through the manage-users edge function. It re-checks the
  * caller's role with their own token before doing anything.
  */
 async function manageUsers(action, payload) {
-  const { data, error } = await supabase.functions.invoke('manage-users', {
-    body: { action, ...payload }
-  });
-  if (error) throw new Error(data?.error || error.message);
-  return data;
+  return invokeFunction('manage-users', { action, ...payload });
 }
 
 export const createUser = (orgId, { email, name, role, password, sendWelcome = true }) =>
@@ -567,10 +593,7 @@ export async function updateSystemCategory(id, fields) {
  * it runs in the signup function, which also seeds the example content.
  */
 export async function createPortal(fields) {
-  const { data, error } = await supabase.functions.invoke('signup', {
-    body: { action: 'create-portal', ...fields }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('signup', { action: 'create-portal', ...fields });
   // The function returns a session the browser can adopt.
   if (data?.session) await supabase.auth.setSession(data.session);
   return data;
@@ -583,10 +606,7 @@ export async function listOrganizationNames() {
 }
 
 export async function requestAccess(fields) {
-  const { data, error } = await supabase.functions.invoke('signup', {
-    body: { action: 'request-access', ...fields }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('signup', { action: 'request-access', ...fields });
   return data;
 }
 
@@ -599,10 +619,7 @@ export async function listAccessRequests(orgId) {
 }
 
 export async function approveRequest(requestId, role = 'member') {
-  const { data, error } = await supabase.functions.invoke('manage-users', {
-    body: { action: 'approve-request', requestId, role }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('manage-users', { action: 'approve-request', requestId, role });
   return data;
 }
 
@@ -689,10 +706,7 @@ export async function setBillingStatus(orgId, fields) {
 
 /** Hands off to Stripe Checkout; the webhook writes the result back. */
 export async function startCheckout(orgId, { plan, cycle }) {
-  const { data, error } = await supabase.functions.invoke('billing', {
-    body: { action: 'checkout', orgId, plan, cycle, returnUrl: window.location.href }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('billing', { action: 'checkout', orgId, plan, cycle, returnUrl: window.location.href });
   if (data?.url) window.location.href = data.url;
   return data;
 }
@@ -706,18 +720,12 @@ export async function listBillingEvents(orgId) {
 }
 
 export async function resumeSubscription(orgId) {
-  const { data, error } = await supabase.functions.invoke('billing', {
-    body: { action: 'resume', orgId }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('billing', { action: 'resume', orgId });
   return data;
 }
 
 export async function cancelSubscription(orgId) {
-  const { data, error } = await supabase.functions.invoke('billing', {
-    body: { action: 'cancel', orgId }
-  });
-  if (error) throw new Error(data?.error || error.message);
+  const data = await invokeFunction('billing', { action: 'cancel', orgId });
   return data;
 }
 
@@ -811,10 +819,7 @@ export async function signAttachment(path, seconds = 3600) {
  * attachments for seven days and records the send in story_shares.
  */
 export async function shareStoryByEmail(storyId, recipients, note) {
-  const { data, error } = await supabase.functions.invoke('share-story', {
-    body: { storyId, recipients, note }
-  });
-  if (error) throw error;
+  const data = await invokeFunction('share-story', { storyId, recipients, note });
   return data;
 }
 
