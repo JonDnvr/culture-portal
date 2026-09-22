@@ -3,7 +3,7 @@ import {
   getSession, onAuthChange, signOut,
   listMyOrganizations, listValues, listSystemCategories,
   listBehaviors, listRituals, listCategories,
-  IS_LOCAL, resetLocalData
+  IS_LOCAL, resetLocalData, ARRIVED_FROM_RESET, onPasswordRecovery
 } from './lib/api.js';
 import Home from './views/Home.jsx';
 import Clarity from './views/Clarity.jsx';
@@ -14,7 +14,7 @@ import Conviction from './views/Conviction.jsx';
 import Admin from './views/Admin.jsx';
 import { StoryPage, RecognitionPage, IterationPage, RitualPage } from './views/Details.jsx';
 import PulseCheck from './views/PulseCheck.jsx';
-import SignIn from './views/SignIn.jsx';
+import SignIn, { SetNewPassword } from './views/SignIn.jsx';
 
 const ALL_ROLES = ['member', 'leader', 'admin', 'champion', 'owner'];
 const EDITORS = ['admin', 'champion', 'owner'];
@@ -71,6 +71,18 @@ function App() {
   const [behaviorId, setBehaviorId] = useState(null);
   const [detail, setDetail] = useState(null); // { kind, id } for a record's own page
   const [history, setHistory] = useState([]); // where Back should return to
+  // Arriving from a password reset email: the link says ?reset=1, and Supabase
+  // adds its own marker. Either way the person must choose a password first.
+  const [recovering, setRecovering] = useState(() => {
+    const url = window.location.search + window.location.hash;
+    return ARRIVED_FROM_RESET || /[?&]reset=1/.test(url) || /type=recovery/.test(url);
+  });
+
+  // Supabase's own signal, which arrives however the return address was formed.
+  useEffect(() => {
+    const sub = onPasswordRecovery(() => setRecovering(true));
+    return () => sub.unsubscribe();
+  }, []);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -112,6 +124,13 @@ function App() {
   useEffect(() => { load(); }, [load]);
 
   if (!session) return <SignIn />;
+  if (recovering) return (
+    <SetNewPassword onDone={() => {
+      setRecovering(false);
+      // Drop the reset markers so a reload does not ask again.
+      window.history.replaceState(null, '', window.location.pathname);
+    }} />
+  );
   if (error) return (
     <div className="pad">
       <p className="empty">{error}</p>

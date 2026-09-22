@@ -104,7 +104,7 @@ section{margin-top:36px}
 .btn.small{padding:6px 11px;font-size:12.5px}
 .btn:disabled{opacity:.55;cursor:default}
 .btnrow{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
-textarea,input[type=text],select.field{width:100%;background:var(--card);border:1px solid var(--line);
+textarea,input[type=text],input[type=password],input[type=email],input[type=date],input[type=datetime-local],select.field{width:100%;background:var(--card);border:1px solid var(--line);
   border-radius:4px;padding:10px 11px;font-family:"Newsreader",Georgia,serif;font-size:16px;resize:vertical}
 label.fl{display:block;font-family:"Archivo";font-size:12px;color:var(--muted);margin:14px 0 5px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}

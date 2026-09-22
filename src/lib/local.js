@@ -249,6 +249,9 @@ export async function getSession() {
   return u ? { user: publicUser(u) } : null;
 }
 
+export const ARRIVED_FROM_RESET = false;
+export function onPasswordRecovery() { return { unsubscribe() {} }; }
+
 export function onAuthChange() {
   return { data: { subscription: { unsubscribe() {} } } };
 }

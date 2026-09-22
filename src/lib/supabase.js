@@ -3,6 +3,14 @@ import { createClient } from '@supabase/supabase-js';
 const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+/**
+ * Did this page load come from a password reset email? Worked out here, before
+ * the client below is created, because the client removes the reset tokens
+ * from the address bar as soon as it has read them.
+ */
+export const ARRIVED_FROM_RESET = typeof window !== 'undefined' &&
+  /type=recovery|[?&]reset=1/.test(window.location.search + window.location.hash);
+
 /** Null when the app is running in local mode; api.js routes around it. */
 export const supabase = URL && KEY
   ? createClient(URL, KEY, { auth: { persistSession: true, autoRefreshToken: true } })
@@ -604,10 +612,21 @@ export async function declineRequest(requestId) {
 /** Supabase sends its own reset mail; the app just asks for it. */
 export async function requestPasswordReset(email) {
   const { error } = await supabase.auth.resetPasswordForEmail(String(email).trim().toLowerCase(), {
-    redirectTo: `${window.location.origin}?reset=1`
+    // The slash matters: Supabase only returns people to addresses on its
+    // allow list, and https://site/** does not match https://site?reset=1.
+    redirectTo: `${window.location.origin}/?reset=1`
   });
   if (error) throw error;
   return { sent: true, hosted: true };
+}
+
+/** Supabase announces a recovery sign-in; this passes that on to the app. */
+export function onPasswordRecovery(callback) {
+  if (!supabase) return { unsubscribe() {} };
+  const { data } = supabase.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') callback();
+  });
+  return data.subscription;
 }
 
 export async function resetPassword({ password }) {

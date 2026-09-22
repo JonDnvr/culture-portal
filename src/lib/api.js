@@ -17,6 +17,8 @@ export const onAuthChange = (...a) => impl.onAuthChange(...a);
 export const signIn = (...a) => impl.signIn(...a);
 export const signOut = (...a) => impl.signOut(...a);
 export const changeOwnPassword = (...a) => impl.changeOwnPassword(...a);
+export const ARRIVED_FROM_RESET = impl.ARRIVED_FROM_RESET;
+export const onPasswordRecovery = (...a) => impl.onPasswordRecovery(...a);
 
 /* administration: roles are assigned, never chosen by the person holding them */
 export const createUser = (...a) => impl.createUser(...a);

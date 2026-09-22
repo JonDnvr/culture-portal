@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  signIn, createPortal, requestAccess, requestPasswordReset, resetPassword,
+  signIn, signOut, createPortal, requestAccess, requestPasswordReset, resetPassword,
   listOrganizationNames, IS_LOCAL
 } from '../lib/api.js';
 
@@ -268,5 +268,52 @@ function ForgotPassword({ onDone }) {
         {err && <p className="err">{err}</p>}
       </div>
     </>
+  );
+}
+
+
+/**
+ * Where a password reset email lands. The link has already signed the person
+ * in, so this only has to take the new password. Until they set one, the
+ * portal stays out of reach.
+ */
+export function SetNewPassword({ onDone }) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (password.length < 8) return setErr('Use at least eight characters.');
+    if (password !== confirm) return setErr('Those two passwords do not match.');
+    setBusy(true); setErr(null);
+    try { await resetPassword({ password }); onDone(); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="signin">
+      <h1 className="pagetitle">Choose a new password</h1>
+      <p className="lede">You followed a reset link. Set your new password to continue.</p>
+      <div className="panel" style={{ maxWidth: 420 }}>
+        <label className="fl">New password</label>
+        <input type="password" autoComplete="new-password" value={password}
+          onChange={(e) => setPassword(e.target.value)} />
+        <label className="fl">Type it again</label>
+        <input type="password" autoComplete="new-password" value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <div className="btnrow">
+          <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Set the password'}</button>
+          <button className="btn ghost" onClick={() => signOut()}>Cancel</button>
+        </div>
+        {err && <p className="err">{err}</p>}
+      </div>
+      <p className="meta" style={{ maxWidth: 420, marginTop: 16 }}>
+        If this page says the link has expired, go back to Forgot password and ask for a new one.
+        Links work once and last about an hour.
+      </p>
+    </div>
   );
 }
