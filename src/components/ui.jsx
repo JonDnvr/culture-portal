@@ -78,13 +78,13 @@ export function Modal({ title, children, footer, onClose, wide }) {
 
 /** Minimal toast: no dependency, no provider, disappears on its own. */
 export function useToast() {
-  return useCallback((message) => {
+  return useCallback((message, ms = 3500) => {
     document.querySelector('.toast')?.remove();
     const el = document.createElement('div');
     el.className = 'toast';
     el.textContent = message;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2800);
+    setTimeout(() => el.remove(), ms);
   }, []);
 }
 

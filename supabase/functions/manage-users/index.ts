@@ -18,9 +18,18 @@ const json = (body: unknown, status = 200) =>
 const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
 
 /** The welcome note, sent whenever someone gains access. */
-async function sendWelcome(orgName: string, to: string, name: string, role: string, password?: string) {
+type Delivery = { sent: boolean; reason?: string };
+
+/**
+ * The welcome note, sent whenever someone gains access. Returns what happened
+ * rather than failing silently, so the admin who added the person is told
+ * when an email did not go out and why.
+ */
+async function sendWelcome(orgName: string, to: string, name: string, role: string, password?: string): Promise<Delivery> {
   const key = Deno.env.get('RESEND_API_KEY');
-  if (!key) return;
+  if (!key) return { sent: false, reason: 'RESEND_API_KEY is not set in Supabase secrets' };
+  const from = Deno.env.get('STORY_FROM_EMAIL');
+  if (!from) return { sent: false, reason: 'STORY_FROM_EMAIL is not set in Supabase secrets' };
   const appUrl = Deno.env.get('PUBLIC_APP_URL') ?? '';
   const html = `
 <div style="font-family:Georgia,serif;max-width:600px;line-height:1.55;color:#151A18">
@@ -29,7 +38,9 @@ async function sendWelcome(orgName: string, to: string, name: string, role: stri
   <p style="font-family:Arial,sans-serif;font-size:13px;color:#3E4A46">
     <strong>Signing in</strong><br>
     Email: ${to}<br>
-    ${password ? `Starting password: ${password}<br>` : 'Use the password you chose when you asked for access.<br>'}
+    ${password
+      ? `Starting password: ${password}<br>`
+      : 'Use your existing password. If you do not have one, choose Forgot password on the sign-in page to set it.<br>'}
     ${appUrl ? `<a href="${appUrl}">Open the portal</a><br>` : ''}
     Change your password after the first sign-in.
   </p>
@@ -46,14 +57,22 @@ async function sendWelcome(orgName: string, to: string, name: string, role: stri
   </p>
   <p style="font-family:Arial,sans-serif;font-size:12px;color:#5F6C67">— ${orgName}</p>
 </div>`;
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from: Deno.env.get('STORY_FROM_EMAIL') ?? 'culture@example.com',
-      to: [to], subject: `Welcome to the ${orgName} culture portal`, html
-    })
-  });
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject: `Welcome to the ${orgName} culture portal`, html })
+    });
+    if (!res.ok) {
+      // Resend explains itself, e.g. "The horizonlinegroup.com domain is not verified".
+      let reason = `Resend refused it (${res.status})`;
+      try { reason = (await res.json())?.message ?? reason; } catch { /* keep the status */ }
+      return { sent: false, reason };
+    }
+    return { sent: true };
+  } catch (e) {
+    return { sent: false, reason: `Could not reach Resend: ${e instanceof Error ? e.message : e}` };
+  }
 }
 
 Deno.serve(async (req) => {
@@ -98,6 +117,7 @@ Deno.serve(async (req) => {
 
     if (action === 'create') {
       const { orgId, email, name, role, password } = body;
+      const wantWelcome = body.sendWelcome !== false;   // defaults to yes
       assertCanManage(orgId);
       if (!isEmail(String(email ?? ''))) return json({ error: 'That email address does not look right' }, 400);
       if (!password || String(password).length < 8) return json({ error: 'Set a starting password of at least eight characters' }, 400);
@@ -124,8 +144,10 @@ Deno.serve(async (req) => {
         return json({ error: memErr.message }, 400);
       }
       const { data: org } = await admin.from('organizations').select('name').eq('id', orgId).single();
-      await sendWelcome(org?.name ?? 'the', clean, name ?? clean.split('@')[0], role ?? 'member', password);
-      return json({ id: created.user.id, email: clean, role });
+      const welcome = wantWelcome
+        ? await sendWelcome(org?.name ?? 'the', clean, name ?? clean.split('@')[0], role ?? 'member', password)
+        : { sent: false, reason: 'not requested' };
+      return json({ id: created.user.id, email: clean, role, welcome });
     }
 
     if (action === 'approve-request') {
@@ -153,8 +175,19 @@ Deno.serve(async (req) => {
       await admin.from('access_requests').update({ status: 'approved' }).eq('id', requestId);
 
       const { data: org } = await admin.from('organizations').select('name').eq('id', reqRow.org_id).single();
-      await sendWelcome(org?.name ?? 'the', reqRow.email, reqRow.name, role ?? 'member');
-      return json({ ok: true, id: userId });
+      const welcome = await sendWelcome(org?.name ?? 'the', reqRow.email, reqRow.name, role ?? 'member');
+      return json({ ok: true, id: userId, welcome });
+    }
+
+    if (action === 'send-welcome') {
+      const { userId } = body;
+      const { data: target } = await admin
+        .from('memberships').select('org_id, role, display_name, email').eq('user_id', userId).maybeSingle();
+      if (!target) return json({ error: 'No such person' }, 404);
+      assertCanManage(target.org_id);
+      const { data: org } = await admin.from('organizations').select('name').eq('id', target.org_id).single();
+      const welcome = await sendWelcome(org?.name ?? 'the', target.email, target.display_name, target.role);
+      return json({ ok: true, welcome });
     }
 
     if (action === 'set-role') {

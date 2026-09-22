@@ -22,6 +22,7 @@ export const onPasswordRecovery = (...a) => impl.onPasswordRecovery(...a);
 
 /* administration: roles are assigned, never chosen by the person holding them */
 export const createUser = (...a) => impl.createUser(...a);
+export const sendWelcomeEmail = (...a) => impl.sendWelcomeEmail(...a);
 export const updateUserRole = (...a) => impl.updateUserRole(...a);
 export const removeUser = (...a) => impl.removeUser(...a);
 export const resetUserPassword = (...a) => impl.resetUserPassword(...a);

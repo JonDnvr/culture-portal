@@ -169,8 +169,11 @@ async function manageUsers(action, payload) {
   return data;
 }
 
-export const createUser = (orgId, { email, name, role, password }) =>
-  manageUsers('create', { orgId, email, name, role, password });
+export const createUser = (orgId, { email, name, role, password, sendWelcome = true }) =>
+  manageUsers('create', { orgId, email, name, role, password, sendWelcome });
+
+/** Sends, or re-sends, the welcome note to someone already in the organization. */
+export const sendWelcomeEmail = (userId) => manageUsers('send-welcome', { userId });
 
 export const updateUserRole = (userId, role) => manageUsers('set-role', { userId, role });
 export const removeUser = (userId) => manageUsers('remove', { userId });

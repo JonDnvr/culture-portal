@@ -522,7 +522,7 @@ export async function approveRequest(requestId, role = 'member') {
   req.status = 'approved';
   queueMail(org.id, user.email, `Welcome to the ${org.name} culture portal`, welcomeBody(org, user, null));
   persist();
-  return user.id;
+  return { ok: true, id: user.id, welcome: { sent: true, local: true } };
 }
 
 export async function declineRequest(requestId) {
@@ -942,7 +942,7 @@ function championOf(orgId) {
   return db.users.find((u) => u.org_id === orgId && u.role === 'champion') ?? null;
 }
 
-export async function createUser(orgId, { email, name, role, password }) {
+export async function createUser(orgId, { email, name, role, password, sendWelcome = true }) {
   const me = requireEditor(orgId);
   const clean = String(email).trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) throw new Error('That email address does not look right.');
@@ -968,10 +968,25 @@ export async function createUser(orgId, { email, name, role, password }) {
     passwordHash: await hash(password), is_super: false, org_id: orgId, role
   };
   db.users.push(user);
-  queueMail(orgId, user.email,
-    `Welcome to the ${org.name} culture portal`, welcomeBody(org, user, password));
+  if (sendWelcome) {
+    queueMail(orgId, user.email,
+      `Welcome to the ${org.name} culture portal`, welcomeBody(org, user, password));
+  }
   persist();
-  return publicUser(user);
+  return {
+    ...publicUser(user),
+    welcome: sendWelcome ? { sent: true, local: true } : { sent: false, reason: 'not requested' }
+  };
+}
+
+export async function sendWelcomeEmail(userId) {
+  const target = db.users.find((u) => u.id === userId);
+  if (!target) throw new Error('No such person.');
+  requireEditor(target.org_id);
+  const org = db.orgs.find((o) => o.id === target.org_id);
+  queueMail(org.id, target.email, `Welcome to the ${org.name} culture portal`, welcomeBody(org, target, null));
+  persist();
+  return { ok: true, welcome: { sent: true, local: true } };
 }
 
 export async function updateUserRole(userId, role) {

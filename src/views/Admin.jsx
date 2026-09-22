@@ -7,6 +7,7 @@ import {
   createValue, updateValue, deleteValue,
   listMeasures, createMeasure, updateMeasure, deleteMeasure,
   getBilling, setBillingRates, setBillingStatus, startCheckout, cancelSubscription, resumeSubscription,
+  sendWelcomeEmail,
   listBillingEvents, listAccessRequests, approveRequest, declineRequest,
   clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL
 } from '../lib/api.js';
@@ -223,8 +224,11 @@ export default function Admin({ ctx }) {
                   <button className="btn small" onClick={async () => {
                     const role = document.getElementById(`role-${r.id}`)?.value ?? 'member';
                     try {
-                      await approveRequest(r.id, role);
-                      toast(`${r.name} is active, and has the welcome email.`);
+                      const res = await approveRequest(r.id, role);
+                      const w = res?.welcome;
+                      toast(!w || w.sent
+                        ? `${r.name} is active, and the welcome email is on its way.`
+                        : `${r.name} is active, but the welcome email did not go out: ${w.reason}`, w && !w.sent ? 9000 : 3500);
                       loadMembers();
                     } catch (e) { toast(e.message); }
                   }}>Make active</button>
@@ -259,6 +263,17 @@ export default function Admin({ ctx }) {
                   {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                   {m.role === 'owner' && <option value="owner">Super user</option>}
                 </select>
+                <button className="btn ghost small" onClick={async () => {
+                  if (!window.confirm(`Send ${m.display_name} the welcome email now?`)) return;
+                  try {
+                    const res = await sendWelcomeEmail(m.user_id);
+                    const w = res?.welcome;
+                    toast(w?.sent
+                      ? `Welcome email sent to ${m.email}.`
+                      : `The welcome email did not go out: ${w?.reason ?? 'unknown reason'}`, w?.sent ? 3500 : 9000);
+                    loadMembers();
+                  } catch (e) { toast(e.message, 9000); }
+                }}>Send welcome</button>
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'password', m })}>Password</button>
                 <button className="btn ghost small" onClick={() => drop(m.user_id, m.display_name)}>Remove</button>
               </div>
@@ -971,15 +986,24 @@ function ValueForm({ value, onSave, onClose, toast }) {
   );
 }
 
+/** Turns what the server reported into one plain sentence for the admin. */
+export function welcomeMessage(who, welcome) {
+  if (!welcome) return `${who} was added.`;
+  if (welcome.sent) return `${who} was added, and the welcome email is on its way.`;
+  if (welcome.reason === 'not requested') return `${who} was added. No welcome email was sent.`;
+  return `${who} was added, but the welcome email did not go out: ${welcome.reason}`;
+}
+
 function AddPerson({ ctx, onClose, onDone, toast }) {
-  const [f, setF] = useState({ email: '', name: '', role: 'member', password: '' });
+  const [f, setF] = useState({ email: '', name: '', role: 'member', password: '', sendWelcome: true });
   const [busy, setBusy] = useState(false);
 
   async function save() {
     setBusy(true);
     try {
-      await createUser(ctx.org.id, f);
-      toast(`${f.name || f.email} added as ${f.role}.`);
+      const res = await createUser(ctx.org.id, f);
+      // Held a little longer when something went wrong, so it can be read.
+      toast(welcomeMessage(f.name || f.email, res?.welcome), res?.welcome && !res.welcome.sent && res.welcome.reason !== 'not requested' ? 9000 : 3500);
       onDone();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
@@ -1003,7 +1027,16 @@ function AddPerson({ ctx, onClose, onDone, toast }) {
       <label className="fl">Starting password</label>
       <input type="text" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })}
         placeholder="At least eight characters" />
-      <p className="meta" style={{ marginTop: 6 }}>Send it to them yourself and have them change it after the first sign-in.</p>
+      <label className="checkrow">
+        <input type="checkbox" checked={f.sendWelcome}
+          onChange={(e) => setF({ ...f, sendWelcome: e.target.checked })} />
+        <span>Send a welcome email when I save</span>
+      </label>
+      <p className="meta" style={{ marginTop: 4 }}>
+        {f.sendWelcome
+          ? 'It includes their email, this starting password, a link to the portal, and a short tour of each section.'
+          : 'They will not be told. Send the starting password to them yourself.'}
+      </p>
     </Modal>
   );
 }

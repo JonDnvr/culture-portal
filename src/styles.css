@@ -506,3 +506,7 @@ html,body{overflow-x:hidden;max-width:100%}
 
 /* the foot switch sits below the last section, set apart by a rule */
 .tabs.foot{margin-top:34px;padding-top:18px;border-top:1px solid var(--line)}
+
+.checkrow{display:flex;gap:9px;align-items:center;margin-top:16px;font-family:"Archivo";font-size:13.5px;cursor:pointer}
+.checkrow input{width:17px;height:17px;accent-color:var(--accent)}
+.toast{max-width:min(560px,92vw);text-align:center;line-height:1.45}
