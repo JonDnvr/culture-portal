@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 export const pad = (n) => String(n).padStart(2, '0');
 
@@ -111,14 +111,21 @@ export function BehaviorTags({ behavior, rituals = [], showCounts = true, onSyst
 }
 
 export function Modal({ title, children, footer, onClose, wide }) {
+  const scrim = useRef(null);
   useEffect(() => {
-    const esc = (e) => e.key === 'Escape' && onClose();
+    // Escape closes only the dialog on top, so a confirmation over a form
+    // does not take the form with it.
+    const esc = (e) => {
+      if (e.key !== 'Escape') return;
+      const all = document.querySelectorAll('.scrim');
+      if (all[all.length - 1] === scrim.current) onClose();
+    };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, [onClose]);
 
   return (
-    <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="scrim" ref={scrim} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" aria-label={title}>
         <div className="form">
           {title && <h3>{title}</h3>}
@@ -127,6 +134,40 @@ export function Modal({ title, children, footer, onClose, wide }) {
         {footer && <div className="modalfoot">{footer}</div>}
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------ confirmation */
+
+let showConfirm = null;
+
+/**
+ * Asks before anything is removed. Resolves true only when the person presses
+ * the action button; Cancel, Escape or a click outside all mean no.
+ *
+ *   if (!(await confirmAction({ title: 'Delete this story?', body: '…' }))) return;
+ */
+export function confirmAction({ title, body = 'This cannot be undone.', action = 'Delete', danger = true }) {
+  return new Promise((resolve) => {
+    if (showConfirm) showConfirm({ title, body, action, danger, resolve });
+    else resolve(window.confirm(`${title}\n\n${body}`));
+  });
+}
+
+/** Mounted once, in the app shell. */
+export function ConfirmHost() {
+  const [c, setC] = useState(null);
+  useEffect(() => { showConfirm = setC; return () => { showConfirm = null; }; }, []);
+  if (!c) return null;
+  const done = (yes) => { setC(null); c.resolve(yes); };
+  return (
+    <Modal title={c.title} onClose={() => done(false)}
+      footer={<>
+        <button className="btn ghost" onClick={() => done(false)} autoFocus>Cancel</button>
+        <button className={c.danger ? 'btn danger' : 'btn'} onClick={() => done(true)}>{c.action}</button>
+      </>}>
+      <p className="confirmbody">{c.body}</p>
+    </Modal>
   );
 }
 

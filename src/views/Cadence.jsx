@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
-  createRitual, updateRitual, setRitualBehaviors, recordIteration, listIterations,
+  createRitual, updateRitual, deleteRitual, setRitualBehaviors, recordIteration, updateIteration, listIterations,
   reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency
 } from '../lib/api.js';
-import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
+import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
+import { DraftsPanel, RecordEditor } from './RecordEditor.jsx';
 import { BehaviorForm } from './Behavior.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
@@ -24,10 +26,10 @@ export default function Cadence({ ctx }) {
       <p className="lede">One {term.one} at a time, carried by practices nobody has to remember.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>This week</button>
-        <button className="tab" aria-pressed={tab === 'sessions'} onClick={() => setTab('sessions')}>Sessions</button>
         <button className="tab" aria-pressed={tab === 'rotation'} onClick={() => setTab('rotation')}>Rotation</button>
         <button className="tab" aria-pressed={tab === 'rituals'} onClick={() => setTab('rituals')}>Rituals</button>
         <button className="tab" aria-pressed={tab === 'systems'} onClick={() => setTab('systems')}>Systems</button>
+        <button className="tab" aria-pressed={tab === 'sessions'} onClick={() => setTab('sessions')}>Sessions</button>
       </div>
       {tab === 'week' && <ThisWeek ctx={ctx} />}
       {tab === 'sessions' && <Sessions ctx={ctx} />}
@@ -187,9 +189,11 @@ function ThisWeek({ ctx }) {
  * and "See more" that Recognition and Stories use.
  */
 function Sessions({ ctx }) {
-  const { org, behaviors, values, teams, activity, openRecord, openBehavior, term } = ctx;
+  const { behaviors, values, teams, activity, openRecord, openBehavior, term } = ctx;
   const [value, setValue] = useState(ALL);
   const [behavior, setBehavior] = useState(ALL);
+  const [editing, setEditing] = useState(null);
+  const toast = useToast();
   const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
 
@@ -216,6 +220,7 @@ function Sessions({ ctx }) {
         <h2>Sessions</h2>
         <span className="note">Every ritual and system run that has been recorded</span>
       </div>
+      <DraftsPanel ctx={ctx} kind="iteration" title="Your draft sessions" />
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
         value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
       <ListBar ctx={ctx} tools={tools} placeholder={`Search sessions: a ritual, a person, a ${term.one}, a note`} />
@@ -242,12 +247,19 @@ function Sessions({ ctx }) {
               {it.notes && <p className="quiet" style={{ margin: '6px 0 0' }}>{it.notes}</p>}
               {(it.attachments ?? []).length > 0 && <Attachments files={it.attachments} compact />}
             </div>
-            <button className="btn ghost small" onClick={() => openRecord('iteration', it.id)}>Open</button>
+            <div className="rowactions">
+              <button className="btn ghost small" onClick={() => openRecord('iteration', it.id)}>Open</button>
+              <RecordActions ctx={ctx} kind="iteration" row={it} toast={toast} onEdit={setEditing} />
+            </div>
           </div>
         ))}
         {!tools.shown.length && <div className="row"><div className="s">Nothing matches.</div></div>}
       </div>
       <MoreButton tools={tools} />
+      {editing && (
+        <RecordEditor ctx={ctx} kind="iteration" row={editing} toast={toast}
+          onClose={() => setEditing(null)} onDone={() => setEditing(null)} />
+      )}
     </section>
   );
 }
@@ -461,6 +473,9 @@ function Rituals({ ctx }) {
               {canEdit && (
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'edit', ritual: r })}>Edit</button>
               )}
+              {canEdit && !r.applies_to_all && (
+                <button className="btn ghost small danger" onClick={() => dropRitual(ctx, r, toast)}>Delete</button>
+              )}
             </div>
           </div>
         );
@@ -490,6 +505,21 @@ function Rituals({ ctx }) {
       )}
     </section>
   );
+}
+
+/**
+ * Removes a ritual from the organization, after asking. Its recorded
+ * iterations stay in the record; the practice session is never deleted,
+ * because This Week depends on it.
+ */
+export async function dropRitual(ctx, r, toast) {
+  const ok = await confirmAction({
+    title: `Delete the ritual "${r.name}"?`,
+    body: `It comes off every ${ctx.term.one} it is applied to. Iterations already recorded stay in the record. This cannot be undone.`
+  });
+  if (!ok) return false;
+  try { await deleteRitual(r.id); toast('Ritual deleted.'); await ctx.reload(); return true; }
+  catch (e) { toast(e.message); return false; }
 }
 
 /* ------------------------------------------------------------------ systems */
@@ -756,25 +786,33 @@ export function connectedBehaviors(behaviors, { ritual, system }) {
  * actually covered. Members see the practice and template without the form,
  * since recording is a leader's job.
  */
-export function RecordIteration({ ctx, ritual, system, placement, readFor = [], preselect = [], onClose, onDone, toast }) {
+export function RecordIteration({ ctx, ritual, system, placement, readFor = [], preselect = [], initial = null, onClose, onDone, toast }) {
   const { org, behaviors, teams, myTeamId, term } = ctx;
-  const options = connectedBehaviors(behaviors, { ritual, system })
+  const mode = formMode(initial);
+  const connected = connectedBehaviors(behaviors, { ritual, system });
+  // Editing keeps whatever the run already covered, even if a ritual has
+  // since been taken off one of them.
+  const extra = initial ? behaviors.filter((b) => (initial.behavior_ids ?? []).includes(b.id) && !connected.includes(b)) : [];
+  const options = [...connected, ...extra]
     .slice()
     .sort((a, b) => (b.id === org.weekly_behavior_id) - (a.id === org.weekly_behavior_id) || a.number - b.number);
   // Only This Week pre-selects, and only the behavior of the week.
-  const [ids, setIds] = useState(() => preselect.filter((id) => options.some((b) => b.id === id)));
-  const [teamId, setTeamId] = useState(myTeamId ?? '');
+  const [ids, setIds] = useState(() => initial ? [...(initial.behavior_ids ?? [])]
+    : preselect.filter((id) => options.some((b) => b.id === id)));
+  const [teamId, setTeamId] = useState(initial ? (initial.team_id ?? '') : (myTeamId ?? ''));
   const [when, setWhen] = useState(() => {
-    const d = new Date();
+    const d = initial ? new Date(initial.held_at) : new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
   });
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState(initial?.notes ?? '');
   const [files, setFiles] = useState([]);
+  const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
 
   // Opening the practice or the template is the reading step of fluency.
   useEffect(() => {
+    if (initial) return;
     Promise.all(readFor.map((id) => markFluency(org.id, id, 'template').catch(() => {})))
       .then(() => ctx.refreshActivity());
   }, []);
@@ -783,25 +821,36 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
   const name = ritual?.name ?? system?.name;
   const script = ritual ? ritual.practice : placement?.template;
 
-  async function save() {
+  async function save(asDraft) {
     if (!ids.length) return toast(`Pick the ${term.many} this run covered.`);
     setBusy(true);
     try {
-      await recordIteration(org.id, {
-        ritualId: ritual?.id ?? null, systemId: system?.id ?? null, teamId: teamId || null,
-        behaviorIds: ids, heldAt: new Date(when).toISOString(), notes: notes.trim(), files
-      });
-      toast(ritual ? 'Iteration recorded.' : 'System run recorded.');
+      if (initial) {
+        await updateIteration(initial.id, {
+          behaviorIds: ids, teamId: teamId || null, heldAt: new Date(when).toISOString(), notes: notes.trim(),
+          isDraft: mode === 'published' ? undefined : asDraft, addFiles: files, removeFileIds: removeIds
+        });
+      } else {
+        await recordIteration(org.id, {
+          ritualId: ritual?.id ?? null, systemId: system?.id ?? null, teamId: teamId || null,
+          behaviorIds: ids, heldAt: new Date(when).toISOString(), notes: notes.trim(), files, isDraft: asDraft
+        });
+      }
+      toast(mode === 'published' ? 'Changes saved.'
+        : asDraft ? 'Saved as a draft. It counts once you publish it.'
+          : ritual ? 'Iteration recorded.' : 'System run recorded.');
+      await ctx.refreshActivity();
       onDone();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
+  const heading = initial
+    ? `${mode === 'draft' ? 'Draft' : 'Edit'}: ${name ?? 'session'}`
+    : ritual ? `Practice It: ${name}` : `Run the system: ${name}`;
+
   return (
-    <Modal title={ritual ? `Practice It: ${name}` : `Run the system: ${name}`} onClose={onClose} wide
-      footer={<>
-        <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Mark it done'}</button>
-      </>}>
+    <Modal title={heading} onClose={onClose} wide
+      footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save} publishLabel="Mark it done" />}>
       {ritual && <p className="meta">{ritual.owner} / {ritual.cadence}</p>}
       {placement && <p className="meta">{placement.artifact} / {placement.owner} / {placement.cadence}</p>}
       {script
@@ -825,7 +874,7 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
             </div>
           </div>
           <p className="meta" style={{ marginTop: 6 }}>
-            Recorded by {org.displayName}. The team gets the credit toward its streaks.
+            Recorded by {initial ? initial.recorded_by_name : org.displayName}. The team gets the credit toward its streaks.
           </p>
 
           <label className="fl">{term.Many} this run covered</label>
@@ -845,14 +894,8 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
 
           <label className="fl">What happened, optional</label>
           <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <label className="fl">Photo, video or file, optional</label>
-          <input type="file" multiple accept="image/*,video/*,.pdf,.docx"
-            onChange={(e) => setFiles(Array.from(e.target.files))} />
-          {files.length > 0 && (
-            <div className="tagrow" style={{ marginTop: 8 }}>
-              {files.map((f) => <span key={f.name} className="tag">{f.name}</span>)}
-            </div>
-          )}
+          <FileEditor id="runFiles" existing={initial?.attachments ?? []} removeIds={removeIds}
+            setRemoveIds={setRemoveIds} files={files} setFiles={setFiles} />
         </>
       )}
     </Modal>

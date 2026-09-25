@@ -86,10 +86,22 @@ export const recordMeasureEntry = (...a) => impl.recordMeasureEntry(...a);
 
 /* iterations: one recorded run of a ritual */
 export const recordIteration = (...a) => impl.recordIteration(...a);
-export const listIterations = (...a) => impl.listIterations(...a);
+/**
+ * Lists return published records only. The app shell asks for drafts too
+ * ({ includeDrafts: true }), which the database has already limited to the
+ * person's own, and keeps them apart from everything that counts.
+ */
+const published = (p, opts) => p.then((rows) => (opts?.includeDrafts ? rows : rows.filter((r) => !r.is_draft)));
+export const listIterations = (orgId, opts) => published(impl.listIterations(orgId, opts), opts);
 export const getIteration = (...a) => impl.getIteration(...a);
 export const deleteIteration = (...a) => impl.deleteIteration(...a);
 export const deleteStory = (...a) => impl.deleteStory(...a);
+/* R3: edit, publish a draft, delete */
+export const updateStory = (...a) => impl.updateStory(...a);
+export const updateRecognition = (...a) => impl.updateRecognition(...a);
+export const updateIteration = (...a) => impl.updateIteration(...a);
+export const updateAwardGrant = (...a) => impl.updateAwardGrant(...a);
+export const deleteAwardGrant = (...a) => impl.deleteAwardGrant(...a);
 export const deleteRecognition = (...a) => impl.deleteRecognition(...a);
 
 /* single records for their own pages */
@@ -123,13 +135,13 @@ export const applyRitual = (...a) => impl.applyRitual(...a);
 export const unapplyRitual = (...a) => impl.unapplyRitual(...a);
 
 /* stories and recognition */
-export const listStories = (...a) => impl.listStories(...a);
+export const listStories = (orgId, opts) => published(impl.listStories(orgId, opts), opts);
 export const createStory = (...a) => impl.createStory(...a);
 export const signAttachment = (...a) => impl.signAttachment(...a);
 export const shareStoryByEmail = (...a) => impl.shareStoryByEmail(...a);
 export const shareRecognitionByEmail = (...a) => impl.shareRecognitionByEmail(...a);
 export const shareAwardByEmail = (...a) => impl.shareAwardByEmail(...a);
-export const listRecognitions = (...a) => impl.listRecognitions(...a);
+export const listRecognitions = (orgId, opts) => published(impl.listRecognitions(orgId, opts), opts);
 export const createRecognition = (...a) => impl.createRecognition(...a);
 
 /* measurement */
@@ -152,7 +164,7 @@ export const setMemberTeam = (...a) => impl.setMemberTeam(...a);
 /* value awards: an organization's catalog, and the grants leaders make from it */
 export const listAwardTypes = (...a) => impl.listAwardTypes(...a);
 export const saveAwardType = (...a) => impl.saveAwardType(...a);
-export const listAwardGrants = (...a) => impl.listAwardGrants(...a);
+export const listAwardGrants = (orgId, opts) => published(impl.listAwardGrants(orgId, opts), opts);
 export const grantAward = (...a) => impl.grantAward(...a);
 
 /* fluency: the reading steps, private to each person */

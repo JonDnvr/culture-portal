@@ -487,7 +487,7 @@ input[type=file]{font-family:"Archivo";font-size:13px}
 .switchrow input{width:16px;height:16px}
 
 /* --- the landing page fits a phone without scrolling sideways --- */
-html,body{overflow-x:hidden;max-width:100%}
+html,body{overflow-x:clip;max-width:100%}
 .signin{max-width:560px;margin:6vh auto;padding:0 20px}
 .signin .tabs{gap:6px}
 .signin .panel{width:100%}
@@ -724,3 +724,85 @@ html,body{overflow-x:hidden;max-width:100%}
 .trofiles .attachgrid.compact .attachitem{width:auto}
 .trofiles .attachgrid.compact img,.trofiles .attachgrid.compact video{width:84px;height:60px}
 .sessrow .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* =================================================================== R3 */
+/* --- header: the organization, then Awards, Admin and you, all in one line --- */
+.shell{display:block;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;
+  padding:0 14px 0 16px;background:var(--rail);color:var(--rail-ink);border-bottom:1px solid rgba(255,255,255,.08)}
+.topbar .brandmark{margin:0;background:none;border:0;color:inherit;cursor:pointer;display:flex;align-items:center;
+  gap:10px;min-width:0;padding:0;text-align:left}
+.topbar .orgname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topnav{margin-left:auto;display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.topbtn{display:flex;align-items:center;gap:7px;background:none;border:0;color:#C2D3CC;font-family:"Archivo";
+  font-size:14px;padding:7px 10px;border-radius:4px;cursor:pointer;position:relative;line-height:1.2}
+.topbtn:hover{background:rgba(255,255,255,.08);color:#fff}
+.topbtn[aria-current="page"]{background:rgba(255,255,255,.13);color:#fff;font-weight:600}
+.topbtn .navicon{margin-top:0}
+.mebtn{margin:0 0 0 4px;padding:4px 8px 4px 4px}
+.countchip{min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;
+  font-weight:700;display:inline-grid;place-items:center;padding:0 5px}
+.memenu{position:relative}
+.menupop{position:absolute;right:0;top:calc(100% + 6px);min-width:230px;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:6px;box-shadow:0 12px 32px rgba(0,0,0,.2);padding:6px;z-index:40}
+.menuhead{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;font-family:"Archivo";
+  font-size:13.5px;font-weight:600}
+.mi{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 10px;border-radius:4px;
+  font-family:"Archivo";font-size:14px;cursor:pointer;color:inherit}
+.mi:hover{background:var(--accent-soft)}
+.quietmi{color:var(--muted);font-size:12.5px}
+.misel{cursor:default;display:flex;flex-direction:column;gap:4px}
+.misel:hover{background:none}
+.misel span{font-size:11.5px;color:var(--muted)}
+.misel select{width:100%;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--card);color:var(--ink)}
+
+/* --- the working sections: a rail on a wide screen --- */
+.frame{display:flex;min-height:calc(100vh - 56px)}
+.rail{top:56px;height:calc(100vh - 56px);padding:16px 12px}
+.mainnav{display:flex;flex-direction:column;gap:2px}
+.navitem .short{display:none}
+.navitem .navtext small{display:block;margin-top:1px}
+
+/* --- records you can change: drafts, edit and delete --- */
+.tag.tg-draft{color:var(--flag);border-color:currentColor;background:transparent;font-weight:600}
+.btn.danger{background:var(--flag);border-color:var(--flag);color:#fff}
+.btn.danger:hover{filter:brightness(1.1);background:var(--flag);border-color:var(--flag)}
+.btn.ghost.danger{background:transparent;color:var(--flag);border-color:var(--line)}
+.btn.ghost.danger:hover{border-color:var(--flag)}
+.confirmbody{margin:4px 0 0;color:var(--ink-soft);font-size:15.5px}
+.draftspanel{border:1px dashed var(--flag);border-radius:6px;padding:12px 14px;margin:14px 0 6px;background:var(--card)}
+.draftspanel .sectionhead{margin-top:0}
+.draftrow .t{font-size:15px}
+.draftgroup + .draftgroup{margin-top:14px}
+.rowactions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+.recordtools{margin-top:0;justify-content:flex-end}
+.fileedit{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.filechip{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:4px;
+  padding:4px 8px;font-family:"Archivo";font-size:12.5px}
+.filechip.gone .fname{text-decoration:line-through;color:var(--muted)}
+.modalfoot{flex-wrap:wrap}
+
+/* --- a phone: header on top, sections along the bottom, nothing to scroll --- */
+@media (max-width:880px){
+  .topbar{height:52px;padding:0 8px 0 12px;gap:8px}
+  .topbar .chip{width:30px;height:30px;flex-basis:30px;font-size:12px}
+  .topbar .orgname{font-size:14px}
+  .topbtn{flex-direction:column;gap:2px;font-size:10.5px;padding:4px 7px}
+  .mebtn{flex-direction:row;padding:4px}
+  .mebtn .tlabel{display:none}
+  .countchip{position:absolute;top:0;right:-2px;min-width:16px;height:16px;font-size:10px}
+  .frame{display:block;min-height:0}
+  .rail{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;height:auto;flex:none;z-index:30;
+    padding:4px 2px calc(4px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.12)}
+  .rail .mainnav{flex-direction:row;flex-wrap:nowrap;overflow:visible;justify-content:space-around;gap:0;padding:0}
+  .rail .navitem{flex:1 1 0;min-width:0;flex-direction:column;align-items:center;gap:2px;padding:6px 1px;
+    font-size:10.5px;white-space:nowrap;text-align:center}
+  .rail .navitem .navicon{margin:0}
+  .rail .navitem .full,.rail .navitem small{display:none}
+  .rail .navitem .short{display:block}
+  main{padding:18px 16px calc(80px + env(safe-area-inset-bottom))}
+  .detailhead{align-items:flex-start}
+  .rowactions{justify-content:flex-start}
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom));z-index:60}
+}
+@media print{.topbar{display:none !important}}

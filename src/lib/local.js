@@ -1406,7 +1406,7 @@ async function storeFiles(orgId, folder, files = []) {
   return out;
 }
 
-export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [] }) {
+export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [], isDraft = false }) {
   const me = currentUser();
   if (!!ritualId === !!systemId) throw new Error('An iteration is a run of one ritual or one system.');
   if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
@@ -1416,7 +1416,7 @@ export async function recordIteration(orgId, { ritualId = null, systemId = null,
     id, org_id: orgId, ritual_id: ritualId, system_category_id: systemId, team_id: teamId,
     behavior_ids: behaviorIds,
     recorded_by: me?.id ?? null, recorded_by_name: me?.name ?? 'Member',
-    held_at: heldAt || now(), notes: notes ?? '',
+    held_at: heldAt || now(), notes: notes ?? '', is_draft: !!isDraft,
     attachments: await storeFiles(orgId, `iterations/${id}`, files)
   });
   persist();
@@ -1443,7 +1443,7 @@ function withSource(it, orgId, full = false) {
 export async function listIterations(orgId, { behaviorId, ritualId, systemId, days } = {}) {
   const cutoff = days ? Date.now() - days * 86400000 : null;
   return db.iterations
-    .filter((it) => it.org_id === orgId)
+    .filter((it) => it.org_id === orgId && visible(it, it.recorded_by))
     .filter((it) => !behaviorId || (it.behavior_ids ?? []).includes(behaviorId))
     .filter((it) => !ritualId || it.ritual_id === ritualId)
     .filter((it) => !systemId || it.system_category_id === systemId)
@@ -1454,7 +1454,7 @@ export async function listIterations(orgId, { behaviorId, ritualId, systemId, da
 
 export async function getIteration(id) {
   const it = db.iterations.find((x) => x.id === id);
-  if (!it) return null;
+  if (!it || !visible(it, it.recorded_by)) return null;
   const out = withSource(it, it.org_id, true);
   // A system run shows the template it followed, from the first behavior it covered.
   if (out.system) {
@@ -1470,7 +1470,8 @@ export async function getIteration(id) {
 export async function deleteIteration(id) {
   const it = db.iterations.find((x) => x.id === id);
   if (!it) return;
-  requireEditor(it.org_id);
+  requireModify(it.org_id, it.recorded_by, 'that run');
+  for (const a of it.attachments ?? []) delete db.files[a.storage_path];
   db.iterations = db.iterations.filter((x) => x.id !== id);
   persist();
 }
@@ -1480,14 +1481,14 @@ export async function deleteIteration(id) {
 
 export async function getStory(id) {
   const s = db.stories.find((x) => x.id === id);
-  if (!s) return null;
+  if (!s || !visible(s, s.author_id)) return null;
   const b = findBehavior(s.behavior_id);
   return { ...s, story_attachments: s.attachments, behavior: b ? { ...b } : null };
 }
 
 export async function getRecognition(id) {
   const r = db.recognitions.find((x) => x.id === id);
-  if (!r) return null;
+  if (!r || !visible(r, r.author_id)) return null;
   const b = findBehavior(r.behavior_id);
   return { ...r, behavior: b ? { ...b } : null };
 }
@@ -1634,7 +1635,7 @@ function withBehavior(row, orgId) {
 
 export async function listStories(orgId, { behaviorId } = {}) {
   return db.stories
-    .filter((s) => s.org_id === orgId && (!behaviorId || s.behavior_id === behaviorId))
+    .filter((s) => s.org_id === orgId && (!behaviorId || s.behavior_id === behaviorId) && visible(s, s.author_id))
     .map((s) => ({ ...withBehavior(s, orgId), story_attachments: s.attachments }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -1654,11 +1655,11 @@ function kindOf(file) {
   return 'file';
 }
 
-export async function createStory(orgId, { behaviorId, body, authorName, files = [] }) {
+export async function createStory(orgId, { behaviorId, body, authorName, files = [], isDraft = false }) {
   const story = {
     id: uid(), org_id: orgId, behavior_id: behaviorId, author_id: currentUser()?.id ?? null,
     author_name: authorName || currentUser()?.name || 'Member',
-    body, created_at: now(), attachments: []
+    body, created_at: now(), attachments: [], is_draft: !!isDraft
   };
 
   for (const file of files) {
@@ -1728,7 +1729,7 @@ export async function shareStoryByEmail(storyId, recipients, note) {
 
   const to = Array.isArray(recipients) ? recipients.join(',') : recipients;
   const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(`${org.name}: ${num}. ${b.title}`)}&body=${encodeURIComponent(lines)}`;
-  window.open(href, '_self');
+  allowLeave(); window.open(href, '_self');
 
   db.shares.push({ id: uid(), story_id: storyId, recipients: to.split(/[,;\s]+/).filter(Boolean), note, sent_at: now() });
   persist();
@@ -1739,12 +1740,12 @@ export async function shareStoryByEmail(storyId, recipients, note) {
 
 export async function listRecognitions(orgId, { behaviorId } = {}) {
   return db.recognitions
-    .filter((r) => r.org_id === orgId && (!behaviorId || r.behavior_id === behaviorId))
+    .filter((r) => r.org_id === orgId && (!behaviorId || r.behavior_id === behaviorId) && visible(r, r.author_id))
     .map((r) => ({ ...withBehavior(r, orgId), attachments: r.attachments ?? [] }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [] }) {
+export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [], isDraft = false }) {
   const me = currentUser();
   if (recipientUserId) {
     const target = db.users.find((u) => u.id === recipientUserId);
@@ -1756,7 +1757,7 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
   db.recognitions.unshift({
     id, org_id: orgId, behavior_id: behaviorId, recipient, recipient_user_id: recipientUserId,
     title: title || null, body, author_id: me?.id ?? null,
-    author_name: authorName || me?.name || 'Member', created_at: now(),
+    author_name: authorName || me?.name || 'Member', created_at: now(), is_draft: !!isDraft,
     attachments: await storeFiles(orgId, `recognitions/${id}`, files)
   });
   persist();
@@ -1920,7 +1921,7 @@ export async function saveAwardType(orgId, fields) {
 export async function listAwardGrants(orgId) {
   const types = db.awardTypes[orgId] ?? [];
   return db.awardGrants
-    .filter((g) => g.org_id === orgId)
+    .filter((g) => g.org_id === orgId && visible(g, g.granted_by))
     .map((g) => ({ ...g, attachments: g.attachments ?? [], award: types.find((t) => t.id === g.award_type_id) ?? null }))
     .sort((a, b) => b.granted_at.localeCompare(a.granted_at));
 }
@@ -1932,7 +1933,7 @@ function periodStart(period) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, files = [] }) {
+export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, files = [], isDraft = false }) {
   const me = requireLeader(orgId);
   const t = (db.awardTypes[orgId] ?? []).find((x) => x.id === awardTypeId);
   if (!t || !t.active) throw new Error('That award is not available.');
@@ -1941,11 +1942,7 @@ export async function grantAward(orgId, { awardTypeId, recipientUserId = null, t
   if (t.grantable_to === 'team' && recipientUserId) throw new Error(`${t.name} goes to a team, not a person.`);
   if (recipientUserId === me.id) throw new Error('A Value award goes to someone else.');
   if (!String(citation ?? '').trim()) throw new Error('Write the citation: what they did.');
-  if (t.grant_cap && t.cap_period) {
-    const since = periodStart(t.cap_period).toISOString();
-    const used = db.awardGrants.filter((g) => g.award_type_id === t.id && g.granted_by === me.id && g.granted_at >= since).length;
-    if (used >= t.grant_cap) throw new Error(`You have given ${used} ${t.name} this ${t.cap_period}, the limit for this award.`);
-  }
+  if (!isDraft) checkAwardCap(t, me.id);
   let recipient_name, recipients;
   if (teamId) {
     const team = (db.teams[orgId] ?? []).find((x) => x.id === teamId);
@@ -1962,7 +1959,7 @@ export async function grantAward(orgId, { awardTypeId, recipientUserId = null, t
   const g = {
     id, org_id: orgId, award_type_id: t.id, recipient_user_id: recipientUserId, team_id: teamId,
     recipient_name, granted_by: me.id, granted_by_name: me.name, citation: citation.trim(),
-    granted_at: now(), recipients, attachments: await storeFiles(orgId, `awards/${id}`, files)
+    granted_at: now(), recipients, attachments: await storeFiles(orgId, `awards/${id}`, files), is_draft: !!isDraft
   };
   db.awardGrants.push(g);
   persist();
@@ -2009,7 +2006,7 @@ export async function getPulseSpreadByRound(orgId) {
 /** Opens the person's own mail client; hosted mode sends a formatted email. */
 function openMail(to, subject, lines) {
   const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.filter(Boolean).join('\n'))}`;
-  window.open(href, '_self');
+  allowLeave(); window.open(href, '_self');
   return { sent: to.split(/[,;\s]+/).filter(Boolean).length, mode: 'mailto' };
 }
 
@@ -2043,4 +2040,143 @@ export async function shareAwardByEmail(grantId, recipients, note) {
     (g.attachments ?? []).length ? '\nAttachments (shared separately in local mode): ' + g.attachments.map((a) => a.file_name).join(', ') : '',
     `\n— ${org.name} culture portal`
   ]);
+}
+
+
+/* ================================================================== R3 */
+/* Drafts, and who may change or remove a record. The hosted database
+   enforces the same rules in row level security and a trigger.            */
+
+/** A draft is visible only to the person who wrote it. */
+function visible(row, ownerId) {
+  return !row.is_draft || ownerId === currentUser()?.id;
+}
+
+function canModifyLocal(orgId, ownerId) {
+  const me = currentUser();
+  if (!me) return false;
+  if (ownerId && me.id === ownerId) return true;
+  return !!me.is_super || (me.org_id === orgId && EDITOR_ROLES.includes(me.role));
+}
+
+function requireModify(orgId, ownerId, what = 'that') {
+  if (!canModifyLocal(orgId, ownerId)) {
+    throw new Error(`Only the person who made ${what}, the culture champion or an admin can change it.`);
+  }
+}
+
+/** Publishing is one way; it stamps the time so the record reads as new. */
+function applyDraft(row, isDraft, stampField) {
+  if (isDraft === undefined) return;
+  if (!row.is_draft && isDraft) throw new Error('A published record cannot go back to draft.');
+  if (row.is_draft && !isDraft && stampField) row[stampField] = now();
+  row.is_draft = !!isDraft;
+}
+
+async function editFiles(row, orgId, folder, addFiles = [], removeFileIds = []) {
+  const keep = (row.attachments ?? []).filter((a) => {
+    if (!removeFileIds.includes(a.id)) return true;
+    delete db.files[a.storage_path];
+    return false;
+  });
+  row.attachments = [...keep, ...(await storeFiles(orgId, folder, addFiles))];
+}
+
+function checkAwardCap(t, giverId, exceptId = null) {
+  if (!t.grant_cap || !t.cap_period) return;
+  const since = periodStart(t.cap_period).toISOString();
+  const used = db.awardGrants.filter((g) => g.award_type_id === t.id && g.granted_by === giverId
+    && !g.is_draft && g.id !== exceptId && g.granted_at >= since).length;
+  if (used >= t.grant_cap) throw new Error(`You have given ${used} ${t.name} this ${t.cap_period}, the limit for this award.`);
+}
+
+export async function updateStory(id, { behaviorId, body, isDraft, addFiles = [], removeFileIds = [] }) {
+  const st = db.stories.find((x) => x.id === id);
+  if (!st || !visible(st, st.author_id)) throw new Error('That story is no longer here.');
+  requireModify(st.org_id, st.author_id, 'that story');
+  if (behaviorId !== undefined) st.behavior_id = behaviorId;
+  if (body !== undefined) st.body = body;
+  applyDraft(st, isDraft, 'created_at');
+  await editFiles(st, st.org_id, st.id, addFiles, removeFileIds);
+  st.updated_at = now();
+  persist();
+  return st;
+}
+
+export async function updateRecognition(id, { behaviorId, recipientUserId, title, body, isDraft, addFiles = [], removeFileIds = [] }) {
+  const r = db.recognitions.find((x) => x.id === id);
+  if (!r || !visible(r, r.author_id)) throw new Error('That recognition is no longer here.');
+  requireModify(r.org_id, r.author_id, 'that recognition');
+  if (recipientUserId !== undefined && recipientUserId !== r.recipient_user_id) {
+    const target = db.users.find((u) => u.id === recipientUserId);
+    if (!target || target.org_id !== r.org_id) throw new Error('That person is not in this organization.');
+    if (target.id === r.author_id) throw new Error('Recognition goes to someone else.');
+    r.recipient_user_id = target.id;
+    r.recipient = target.name;
+  }
+  if (behaviorId !== undefined) r.behavior_id = behaviorId;
+  if (title !== undefined) r.title = title || null;
+  if (body !== undefined) r.body = body;
+  applyDraft(r, isDraft, 'created_at');
+  await editFiles(r, r.org_id, `recognitions/${r.id}`, addFiles, removeFileIds);
+  r.updated_at = now();
+  persist();
+  return r;
+}
+
+export async function updateIteration(id, { behaviorIds, teamId, heldAt, notes, isDraft, addFiles = [], removeFileIds = [] }) {
+  const it = db.iterations.find((x) => x.id === id);
+  if (!it || !visible(it, it.recorded_by)) throw new Error('That run is no longer here.');
+  requireModify(it.org_id, it.recorded_by, 'that run');
+  if (behaviorIds !== undefined) {
+    if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
+    it.behavior_ids = behaviorIds;
+  }
+  if (teamId !== undefined) {
+    if (teamId && !(db.teams[it.org_id] ?? []).some((t) => t.id === teamId)) throw new Error('That team is not in this organization.');
+    it.team_id = teamId || null;
+  }
+  if (heldAt !== undefined) it.held_at = heldAt;
+  if (notes !== undefined) it.notes = notes;
+  applyDraft(it, isDraft, null);
+  await editFiles(it, it.org_id, `iterations/${it.id}`, addFiles, removeFileIds);
+  it.updated_at = now();
+  persist();
+  return it;
+}
+
+export async function updateAwardGrant(id, { citation, isDraft, addFiles = [], removeFileIds = [] }) {
+  const g = db.awardGrants.find((x) => x.id === id);
+  if (!g || !visible(g, g.granted_by)) throw new Error('That award is no longer here.');
+  requireModify(g.org_id, g.granted_by, 'that award');
+  if (citation !== undefined) {
+    if (!String(citation).trim()) throw new Error('Write the citation: what they did.');
+    g.citation = citation.trim();
+  }
+  if (g.is_draft && isDraft === false) {
+    const t = (db.awardTypes[g.org_id] ?? []).find((x) => x.id === g.award_type_id);
+    if (!t || !t.active) throw new Error('That award is retired.');
+    checkAwardCap(t, g.granted_by, g.id);
+    if (g.team_id) g.recipients = db.users.filter((u) => u.org_id === g.org_id && u.team_id === g.team_id).map((u) => u.id);
+  }
+  applyDraft(g, isDraft, 'granted_at');
+  await editFiles(g, g.org_id, `awards/${g.id}`, addFiles, removeFileIds);
+  g.updated_at = now();
+  persist();
+  return g;
+}
+
+export async function deleteAwardGrant(id) {
+  const g = db.awardGrants.find((x) => x.id === id);
+  if (!g) return;
+  requireModify(g.org_id, g.granted_by, 'that award');
+  for (const a of g.attachments ?? []) delete db.files[a.storage_path];
+  db.awardGrants = db.awardGrants.filter((x) => x.id !== id);
+  persist();
+}
+
+/** A mailto link is not leaving the portal; let it through the unload check. */
+function allowLeave() {
+  window.__cpAllowUnload = true;
+  setTimeout(() => { window.__cpAllowUnload = false; }, 1500);
 }

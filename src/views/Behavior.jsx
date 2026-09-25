@@ -4,7 +4,7 @@ import {
   applyRitual, unapplyRitual, createRitual, updateRitual, saveRitualPractice,
   updateBehavior, deleteBehavior, listRecognitions, listStories, listIterations, markFluency
 } from '../lib/api.js';
-import { pad, NumList, Tag, BNum, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { pad, NumList, Tag, BNum, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
 import { RecordIteration } from './Cadence.jsx';
 import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
 import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
@@ -50,13 +50,13 @@ export default function Behavior({ ctx, id }) {
   const appliedRituals = [...universal, ...b.rituals.filter((r) => !r.applies_to_all)];
 
   async function drop() {
-    if (!window.confirm(`Delete ${pad(b.number)}. ${b.title}? Its stories and recognition go with it.`)) return;
+    if (!(await confirmAction({ title: `Delete ${pad(b.number)}. ${b.title}?`, body: 'Its stories and recognition go with it. This cannot be undone.' }))) return;
     try { await deleteBehavior(b.id); toast('Behavior deleted.'); await reload(); goto('clarity'); }
     catch (e) { toast(e.message); }
   }
 
   async function detachRitual(ritualId, name) {
-    if (!window.confirm(`Remove "${name}" from this ${term.one}? The ritual stays available to others.`)) return;
+    if (!(await confirmAction({ title: `Remove "${name}" from this ${term.one}?`, body: 'The ritual stays available to others.', action: 'Remove' }))) return;
     try { await unapplyRitual(b.id, ritualId); toast(`Ritual removed from this ${term.one}.`); reload(); }
     catch (e) { toast(e.message); }
   }
@@ -198,7 +198,7 @@ export default function Behavior({ ctx, id }) {
               )}
               {canEdit && (
                 <button className="btn ghost small" onClick={async () => {
-                  if (!window.confirm(`Remove this ${term.one} from ${p.system}?`)) return;
+                  if (!(await confirmAction({ title: `Remove this ${term.one} from ${p.system}?`, body: 'Its template for this system goes with it.', action: 'Remove' }))) return;
                   await removePlacement(p.id); toast('System removed.'); reload();
                 }}>Remove</button>
               )}

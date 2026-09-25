@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { uploadMyAvatar, removeMyAvatar } from '../lib/api.js';
-import { Modal, Avatar, useToast } from '../components/ui.jsx';
+import { Modal, Avatar, useToast, confirmAction } from '../components/ui.jsx';
 
 /**
  * Crops the middle square of a photo and shrinks it to 256 pixels, so a phone
@@ -58,6 +58,7 @@ export default function ProfileDialog({ ctx, onClose }) {
   }
 
   async function remove() {
+    if (!(await confirmAction({ title: 'Remove your picture?', body: 'Your initials show in its place.', action: 'Remove' }))) return;
     setBusy(true);
     try { await removeMyAvatar(org.id); toast('Picture removed.'); await reload(); onClose(); }
     catch (e) { toast(e.message); } finally { setBusy(false); }

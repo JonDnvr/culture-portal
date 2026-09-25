@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   createStory, createRecognition, shareStoryByEmail, shareRecognitionByEmail, shareAwardByEmail,
-  deleteStory, deleteRecognition, listMemberEmails
+  updateStory, updateRecognition, listMemberEmails
 } from '../lib/api.js';
+import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
+import { DraftsPanel, RecordEditor } from './RecordEditor.jsx';
 import { pad, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
 import { GoldStar } from '../components/badges.jsx';
 import { Attachments } from './Details.jsx';
@@ -85,7 +87,7 @@ function useFilter(ctx, rows) {
 const teamOfPerson = (ctx, id, name) => findPerson(ctx.people, { id, name })?.team_id ?? null;
 
 export function Stories({ ctx }) {
-  const { openBehavior, openRecord, canEdit, activity, term } = ctx;
+  const { openBehavior, openRecord, activity, term } = ctx;
   const [modal, setModal] = useState(null);
   const toast = useToast();
   const f = useFilter(ctx, activity.stories);
@@ -104,6 +106,7 @@ export function Stories({ ctx }) {
           <button className="btn small" onClick={() => setModal({ kind: 'add' })}>Add a story</button>
         </span>
       </div>
+      <DraftsPanel ctx={ctx} kind="story" title="Your draft stories" />
       <Filters ctx={ctx} {...f} />
       <ListBar ctx={ctx} tools={tools} placeholder={`Search stories: a name, a word, a ${term.one}`} />
 
@@ -127,12 +130,7 @@ export function Stories({ ctx }) {
               <div className="btnrow">
                 <button className="btn ghost small" onClick={() => openRecord('story', s.id)}>Open</button>
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'share', story: s })}>Share by email</button>
-                {canEdit && (
-                  <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm('Delete this story? It cannot be undone.')) return;
-                    try { await deleteStory(s.id); toast('Story deleted.'); ctx.refreshActivity(); } catch (e) { toast(e.message); }
-                  }}>Delete</button>
-                )}
+                <RecordActions ctx={ctx} kind="story" row={s} toast={toast} onEdit={(row) => setModal({ kind: 'edit', row })} />
               </div>
             </div>
           );
@@ -143,7 +141,11 @@ export function Stories({ ctx }) {
 
       {modal?.kind === 'add' && (
         <PostForm ctx={ctx} kind="story" onClose={() => setModal(null)} toast={toast}
-          onDone={() => { setModal(null); ctx.reload(); }} />
+          onDone={() => setModal(null)} />
+      )}
+      {modal?.kind === 'edit' && (
+        <RecordEditor ctx={ctx} kind="story" row={modal.row} toast={toast}
+          onClose={() => setModal(null)} onDone={() => setModal(null)} />
       )}
       {modal?.kind === 'share' && (
         <ShareStory story={modal.story} orgId={ctx.org.id} ctx={ctx} onClose={() => setModal(null)} toast={toast} />
@@ -155,8 +157,9 @@ export function Stories({ ctx }) {
 /* ------------------------------------------------------------- recognition */
 
 function Recognition({ ctx }) {
-  const { openBehavior, openRecord, canEdit, activity, term } = ctx;
+  const { openBehavior, openRecord, activity, term } = ctx;
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [sharing, setSharing] = useState(null);
   const toast = useToast();
   const f = useFilter(ctx, activity.recognitions);
@@ -176,6 +179,7 @@ function Recognition({ ctx }) {
           <button className="btn small" onClick={() => setAdding(true)}>Recognize someone</button>
         </span>
       </div>
+      <DraftsPanel ctx={ctx} kind="recognition" title="Your draft recognition" />
       <Filters ctx={ctx} {...f} />
       <ListBar ctx={ctx} tools={tools} placeholder={`Search recognition: a name, a title, a ${term.one}`} />
 
@@ -204,12 +208,7 @@ function Recognition({ ctx }) {
               <div className="btnrow">
                 <button className="btn ghost small" onClick={() => openRecord('recognition', r.id)}>Open</button>
                 <button className="btn ghost small" onClick={() => setSharing(r)}>Share by email</button>
-                {canEdit && (
-                  <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm('Delete this recognition? It cannot be undone.')) return;
-                    try { await deleteRecognition(r.id); toast('Recognition deleted.'); ctx.refreshActivity(); } catch (e) { toast(e.message); }
-                  }}>Delete</button>
-                )}
+                <RecordActions ctx={ctx} kind="recognition" row={r} toast={toast} onEdit={setEditing} />
               </div>
             </div>
           );
@@ -220,7 +219,11 @@ function Recognition({ ctx }) {
 
       {adding && (
         <PostForm ctx={ctx} kind="recognition" onClose={() => setAdding(false)} toast={toast}
-          onDone={() => { setAdding(false); ctx.reload(); }} />
+          onDone={() => setAdding(false)} />
+      )}
+      {editing && (
+        <RecordEditor ctx={ctx} kind="recognition" row={editing} toast={toast}
+          onClose={() => setEditing(null)} onDone={() => setEditing(null)} />
       )}
       {sharing && (
         <ShareRecord kind="recognition" id={sharing.id} onClose={() => setSharing(null)} toast={toast}
@@ -233,56 +236,86 @@ function Recognition({ ctx }) {
   );
 }
 
-/* One form for both, since they differ only by the recipient field. */
-export function PostForm({ ctx, kind, onClose, onDone, toast }) {
+/*
+ * One form for both, since they differ only by the recipient field. With
+ * `initial` it edits that record; a draft can be saved again or published.
+ */
+export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) {
   const { org, behaviors, people, teams, userId, term } = ctx;
-  const isRec = kind === 'recognition';
+  const isRecognition = kind === 'recognition';
+  const mode = formMode(initial);
   // Recognition starts with no behavior chosen, so nobody posts to the
   // first one on the list by accident.
-  const [f, setF] = useState({ behaviorId: isRec ? '' : behaviors[0]?.id, recipientId: '', title: '', body: '', files: [] });
+  const [f, setF] = useState(() => initial
+    ? { behaviorId: initial.behavior_id ?? '', recipientId: initial.recipient_user_id ?? '', title: initial.title ?? '', body: initial.body ?? '', files: [] }
+    : { behaviorId: isRecognition ? '' : behaviors[0]?.id, recipientId: '', title: '', body: '', files: [] });
+  const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
-  const isRecognition = kind === 'recognition';
-  // Anyone in the organization except yourself. The gold star lands on their wall.
+  const existing = initial ? (initial.story_attachments ?? initial.attachments ?? []) : [];
+  // Anyone in the organization except whoever wrote it. The gold star lands on their wall.
+  const author = initial?.author_id ?? userId;
   const candidates = (people ?? [])
-    .filter((p) => p.in_org !== false && p.user_id !== userId)
+    .filter((p) => p.in_org !== false && p.user_id !== author)
     .slice().sort((a, b) => (a.display_name ?? '').localeCompare(b.display_name ?? ''));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
+  // Older recognition named someone by typing; editing it keeps that name
+  // unless a person is chosen.
+  const typedOnly = !!initial && isRecognition && !initial.recipient_user_id;
 
-  async function save() {
-    if (isRecognition && !f.recipientId) return toast('Choose the person you are recognizing.');
+  async function save(asDraft) {
+    if (isRecognition && !f.recipientId && !typedOnly) return toast('Choose the person you are recognizing.');
     if (isRecognition && !f.title.trim()) return toast('Give it a title: a short line saying what they did.');
     if (!f.behaviorId) return toast(`Choose the ${term.one} this was.`);
     if (!f.body.trim()) return toast('Describe what happened first.');
     setBusy(true);
+    const isDraft = mode === 'published' ? undefined : asDraft;
     try {
-      if (isRecognition) {
-        const who = candidates.find((p) => p.user_id === f.recipientId);
+      const who = candidates.find((p) => p.user_id === f.recipientId);
+      if (initial && isRecognition) {
+        await updateRecognition(initial.id, {
+          behaviorId: f.behaviorId, title: f.title.trim(), body: f.body.trim(), isDraft,
+          ...(f.recipientId ? { recipientUserId: f.recipientId, recipient: who?.display_name ?? initial.recipient } : {}),
+          addFiles: f.files, removeFileIds: removeIds
+        });
+      } else if (initial) {
+        await updateStory(initial.id, {
+          behaviorId: f.behaviorId, body: f.body.trim(), isDraft, addFiles: f.files, removeFileIds: removeIds
+        });
+      } else if (isRecognition) {
         await createRecognition(org.id, {
           behaviorId: f.behaviorId, recipientUserId: f.recipientId, recipient: who?.display_name ?? '',
-          title: f.title.trim(), body: f.body.trim(), authorName: org.displayName, files: f.files
+          title: f.title.trim(), body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft
         });
-        toast('Recognition posted.');
       } else {
         await createStory(org.id, {
-          behaviorId: f.behaviorId, body: f.body.trim(), authorName: org.displayName, files: f.files
+          behaviorId: f.behaviorId, body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft
         });
-        toast('Story added.');
       }
+      const noun = isRecognition ? 'Recognition' : 'Story';
+      toast(mode === 'published' ? 'Changes saved.'
+        : asDraft ? 'Saved as a draft. Only you can see it until you publish.'
+          : isRecognition ? 'Recognition posted.' : mode === 'draft' ? `${noun} published.` : 'Story added.');
+      await ctx.refreshActivity();
       onDone();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
+  const title = initial
+    ? (isRecognition ? (mode === 'draft' ? 'Draft recognition' : 'Edit recognition') : (mode === 'draft' ? 'Draft story' : 'Edit story'))
+    : (isRecognition ? 'Recognize someone' : 'Add a story');
+
   return (
-    <Modal title={isRecognition ? 'Recognize someone' : 'Add a story'} onClose={onClose} wide
-      footer={<>
-        <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : isRecognition ? 'Post recognition' : 'Add the story'}</button>
-      </>}>
+    <Modal title={title} onClose={onClose} wide
+      footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save}
+        publishLabel={isRecognition ? 'Post recognition' : 'Add the story'} />}>
+      {initial && initial.author_id !== userId && (
+        <p className="notice">You are editing {initial.author_name}'s {isRecognition ? 'recognition' : 'story'}.</p>
+      )}
       {isRecognition && (
         <>
           <label className="fl">Who are you recognizing?</label>
           <select className="field" value={f.recipientId} onChange={(e) => setF({ ...f, recipientId: e.target.value })}>
-            <option value="">Choose a person</option>
+            <option value="">{typedOnly ? `${initial.recipient} (as typed)` : 'Choose a person'}</option>
             {candidates.map((p) => (
               <option key={p.user_id} value={p.user_id}>
                 {p.display_name}{teamName(p.team_id) ? ` (${teamName(p.team_id)})` : ''}
@@ -292,7 +325,7 @@ export function PostForm({ ctx, kind, onClose, onDone, toast }) {
           {f.recipientId && (
             <div className="who2 pickedwho">
               <Avatar person={candidates.find((p) => p.user_id === f.recipientId)} size={28} />
-              <span className="meta">A gold star goes on their trophy wall.</span>
+              <span className="meta">A gold star goes on their Awards page{mode === 'new' ? '' : ' once it is published'}.</span>
             </div>
           )}
           <label className="fl">Title, a short line for the gold star</label>
@@ -302,7 +335,7 @@ export function PostForm({ ctx, kind, onClose, onDone, toast }) {
       )}
       <label className="fl">Which {term.one}?</label>
       <select className="field" value={f.behaviorId} onChange={(e) => setF({ ...f, behaviorId: e.target.value })}>
-        {isRec && <option value="">Choose a {term.one}</option>}
+        {isRecognition && <option value="">Choose a {term.one}</option>}
         {behaviors.map((b) => (
           <option key={b.id} value={b.id}>
             {pad(b.number)}. {b.title}{b.is_example ? ' (example)' : ''}
@@ -311,14 +344,9 @@ export function PostForm({ ctx, kind, onClose, onDone, toast }) {
       </select>
       <label className="fl">{isRecognition ? 'What did they do, and what did it change?' : 'What happened, and who did it?'}</label>
       <textarea rows={4} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
-      <label className="fl">Photo, video or file, optional</label>
-      <input type="file" multiple accept="image/*,video/*,.pdf,.docx"
-        onChange={(e) => setF({ ...f, files: Array.from(e.target.files) })} />
-      {f.files.length > 0 && (
-        <div className="tagrow" style={{ marginTop: 8 }}>
-          {f.files.map((x) => <span key={x.name} className="tag">{x.name}</span>)}
-        </div>
-      )}
+      <FileEditor id={isRecognition ? 'recFiles' : 'storyFiles'} existing={existing} removeIds={removeIds}
+        setRemoveIds={setRemoveIds} files={f.files} setFiles={(files) => setF({ ...f, files })} />
+      {mode === 'new' && <p className="meta" style={{ marginTop: 10 }}>Save as draft to finish it later. Only you see a draft.</p>}
     </Modal>
   );
 }

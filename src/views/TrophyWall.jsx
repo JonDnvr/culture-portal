@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { grantAward } from '../lib/api.js';
+import { grantAward, updateAwardGrant } from '../lib/api.js';
 import { Modal, N, Avatar, Who, findPerson, useToast } from '../components/ui.jsx';
 import {
   GoldStar, Crest, Seal, CairnDone, Medal, Lens, Nodes, Converge, FluencyBadge
 } from '../components/badges.jsx';
 import { useBehaviorBadges, FluencyDetail } from '../components/badgeDetails.jsx';
 import { PostForm, ShareRecord } from './Connection.jsx';
+import { RecordActions, FormButtons, FileEditor, formMode, DraftTag } from '../components/records.jsx';
+import { DraftsPanel } from './RecordEditor.jsx';
 import { Attachments } from './Details.jsx';
 import {
   sessionRitualId, recentWeeks, botwStreak, fullSet, cairnFor, gapClosed, weeklyEvents
@@ -28,7 +30,7 @@ export default function TrophyWall({ ctx }) {
     <>
       <div className="dateline">Recognition, awards and badges</div>
       <div className="detailhead">
-        <h1 className="pagetitle">Trophy Wall</h1>
+        <h1 className="pagetitle">Awards</h1>
         <div className="btnrow" style={{ marginTop: 0 }}>
           <button className="btn small" onClick={() => setModal({ kind: 'recognize' })}>Recognize someone</button>
           {canLead && (
@@ -37,6 +39,7 @@ export default function TrophyWall({ ctx }) {
         </div>
       </div>
       <p className="lede">What has been earned. Streaks and practice counts live on the home page.</p>
+      <DraftsPanel ctx={ctx} kind="award" title="Your draft Value awards" />
 
       <div className="tabs">
         <button className="tab" aria-pressed={scope === 'me'} onClick={() => setScope('me')}>Me</button>
@@ -50,9 +53,13 @@ export default function TrophyWall({ ctx }) {
       {modal?.kind === 'give' && <GiveAward ctx={ctx} onClose={() => setModal(null)} />}
       {modal?.kind === 'recognize' && (
         <PostForm ctx={ctx} kind="recognition" onClose={() => setModal(null)} toast={toast}
-          onDone={() => { setModal(null); ctx.reload(); }} />
+          onDone={() => setModal(null)} />
       )}
-      {modal?.kind === 'grant' && <GrantDetail ctx={ctx} grant={modal.grant} onClose={() => setModal(null)} />}
+      {modal?.kind === 'grant' && (
+        <GrantDetail ctx={ctx} grant={modal.grant} onClose={() => setModal(null)}
+          onEdit={(g) => setModal({ kind: 'edit', grant: g })} />
+      )}
+      {modal?.kind === 'edit' && <GiveAward ctx={ctx} initial={modal.grant} onClose={() => setModal(null)} />}
       {modal?.kind === 'given' && <GivenList ctx={ctx} onClose={() => setModal(null)} />}
       {modal?.kind === 'fluency' && (
         <FluencyDetail ctx={ctx} behavior={modal.b} f={modal.f} onClose={() => setModal(null)} />
@@ -318,7 +325,7 @@ function EventsChart({ events }) {
 
 /* ------------------------------------------------------------------ modals */
 
-function GrantDetail({ ctx, grant, onClose }) {
+function GrantDetail({ ctx, grant, onClose, onEdit }) {
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
   const names = valueNames(ctx, grant.award);
@@ -337,9 +344,12 @@ function GrantDetail({ ctx, grant, onClose }) {
   return (
     <Modal title={grant.award?.name ?? 'Value award'} onClose={onClose}
       footer={<>
-        <button className="btn ghost" onClick={() => setSharing(true)}>Share by email</button>
+        <RecordActions ctx={ctx} kind="award" row={grant} toast={toast}
+          onEdit={onEdit} onDeleted={onClose} onChanged={onClose} />
+        {!grant.is_draft && <button className="btn ghost" onClick={() => setSharing(true)}>Share by email</button>}
         <button className="btn ghost" onClick={onClose}>Close</button>
       </>}>
+      {grant.is_draft && <div className="tagrow"><DraftTag /></div>}
       <div className="badgehead">
         <span className="badgeart"><Crest height={64} pips={Math.max(1, names.length)} /></span>
         <span>
@@ -391,20 +401,43 @@ function GivenList({ ctx, onClose }) {
  * own rules decide which, and how many a leader may give per period; the
  * database enforces both.
  */
-function GiveAward({ ctx, onClose }) {
+export function GiveAward({ ctx, initial = null, onClose, onDone }) {
   const { org, awardTypes, people, teams, userId, reload } = ctx;
-  const active = awardTypes.filter((a) => a.active !== false);
-  const [f, setF] = useState({ awardId: active[0]?.id ?? '', to: 'member', recipientId: '', teamId: '', citation: '', files: [] });
+  const mode = formMode(initial);
+  const active = awardTypes.filter((a) => a.active !== false || a.id === initial?.award_type_id);
+  const [f, setF] = useState(initial
+    ? { awardId: initial.award_type_id, to: initial.team_id ? 'team' : 'member', recipientId: initial.recipient_user_id ?? '', teamId: initial.team_id ?? '', citation: initial.citation ?? '', files: [] }
+    : { awardId: active[0]?.id ?? '', to: 'member', recipientId: '', teamId: '', citation: '', files: [] });
+  const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
-  const award = active.find((a) => a.id === f.awardId);
+  const award = active.find((a) => a.id === f.awardId) ?? initial?.award;
   const kinds = !award ? [] : award.grantable_to === 'both' ? ['member', 'team'] : [award.grantable_to];
   const to = kinds.includes(f.to) ? f.to : kinds[0];
   const members = people.filter((p) => p.in_org !== false && p.user_id !== userId)
     .slice().sort((a, b) => (a.display_name ?? '').localeCompare(b.display_name ?? ''));
   const names = valueNames(ctx, award);
 
-  async function save() {
+  const finish = async (message) => {
+    toast(message);
+    await reload();
+    (onDone ?? onClose)();
+  };
+
+  async function save(asDraft) {
+    if (initial) {
+      if (!f.citation.trim()) return toast('Write the citation: what they did.');
+      setBusy(true);
+      try {
+        await updateAwardGrant(initial.id, {
+          citation: f.citation, isDraft: mode === 'published' ? undefined : asDraft,
+          addFiles: f.files, removeFileIds: removeIds
+        });
+        await finish(mode === 'published' ? 'Changes saved.' : asDraft ? 'Draft saved.'
+          : `${award?.name ?? 'The award'} conferred on ${initial.recipient_name}.`);
+      } catch (e) { toast(e.message); } finally { setBusy(false); }
+      return;
+    }
     if (!award) return toast('Choose an award.');
     if (to === 'member' && !f.recipientId) return toast('Choose who receives it.');
     if (to === 'team' && !f.teamId) return toast('Choose the team.');
@@ -415,13 +448,37 @@ function GiveAward({ ctx, onClose }) {
         ? teams.find((t) => t.id === f.teamId)?.name
         : members.find((p) => p.user_id === f.recipientId)?.display_name;
       await grantAward(org.id, {
-        awardTypeId: award.id, citation: f.citation, recipientName, files: f.files,
+        awardTypeId: award.id, citation: f.citation, recipientName, files: f.files, isDraft: asDraft,
         recipientUserId: to === 'member' ? f.recipientId : null, teamId: to === 'team' ? f.teamId : null
       });
-      toast(`${award.name} conferred on ${recipientName}.`);
-      await reload();
-      onClose();
+      await finish(asDraft
+        ? 'Saved as a draft. It does not count toward your limit until you publish it.'
+        : `${award.name} conferred on ${recipientName}.`);
     } catch (e) { toast(e.message); } finally { setBusy(false); }
+  }
+
+  if (initial) {
+    const names0 = valueNames(ctx, award);
+    return (
+      <Modal title={mode === 'draft' ? 'Draft Value award' : 'Edit Value award'} onClose={onClose} wide
+        footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save} publishLabel="Confer the award" />}>
+        {initial.granted_by !== userId && (
+          <p className="notice">You are editing an award {initial.granted_by_name} gave.</p>
+        )}
+        <div className="badgehead">
+          <span className="badgeart"><Crest height={46} pips={Math.max(1, names0.length)} /></span>
+          <span>
+            <span className="kicker2">{names0.join(' · ')}</span>
+            <span className="badgestatus">{award?.name ?? 'Value award'} for {initial.recipient_name}</span>
+          </span>
+        </div>
+        <p className="meta">The award and who receives it stay as they are. To change either, delete this one and give a new one.</p>
+        <label className="fl">Citation: what they did</label>
+        <textarea rows={4} value={f.citation} onChange={(e) => setF({ ...f, citation: e.target.value })} />
+        <FileEditor id="awardFiles" existing={initial.attachments ?? []} removeIds={removeIds} setRemoveIds={setRemoveIds}
+          files={f.files} setFiles={(files) => setF({ ...f, files })} />
+      </Modal>
+    );
   }
 
   if (!active.length) {
@@ -435,10 +492,7 @@ function GiveAward({ ctx, onClose }) {
 
   return (
     <Modal title="Give a Value award" onClose={onClose} wide
-      footer={<>
-        <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Confer the award'}</button>
-      </>}>
+      footer={<FormButtons mode="new" busy={busy} onCancel={onClose} onSave={save} publishLabel="Confer the award" />}>
       <label className="fl">Award</label>
       <select className="field" value={f.awardId} onChange={(e) => setF({ ...f, awardId: e.target.value })}>
         {active.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -483,14 +537,9 @@ function GiveAward({ ctx, onClose }) {
       <label className="fl">Citation: what they did</label>
       <textarea rows={4} value={f.citation} onChange={(e) => setF({ ...f, citation: e.target.value })}
         placeholder="A season of doing the right thing when nobody was checking" />
-      <label className="fl" htmlFor="awardFiles">Photo, video or file, optional</label>
-      <input id="awardFiles" type="file" multiple accept="image/*,video/*,.pdf,.docx"
-        onChange={(e) => setF({ ...f, files: Array.from(e.target.files) })} />
-      {f.files.length > 0 && (
-        <div className="tagrow" style={{ marginTop: 8 }}>
-          {f.files.map((x) => <span key={x.name} className="tag">{x.name}</span>)}
-        </div>
-      )}
+      <FileEditor id="awardFiles" existing={[]} removeIds={removeIds} setRemoveIds={setRemoveIds}
+        files={f.files} setFiles={(files) => setF({ ...f, files })} />
+      <p className="meta" style={{ marginTop: 10 }}>A draft waits for you here and does not count toward your limit until it is published.</p>
     </Modal>
   );
 }

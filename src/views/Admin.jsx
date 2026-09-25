@@ -12,7 +12,7 @@ import {
   clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL,
   createTeam, setMemberTeam, saveAwardType
 } from '../lib/api.js';
-import { pad, N, Tag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { pad, N, Tag, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
 import { Crest, GoldStar } from '../components/badges.jsx';
 import { recentWeeks } from '../lib/gamify.js';
 import { termFor } from '../lib/term.js';
@@ -131,7 +131,7 @@ export default function Admin({ ctx }) {
   }
 
   async function drop(userId, who) {
-    if (!window.confirm(`Remove ${who}? Their stories and recognition stay in the record.`)) return;
+    if (!(await confirmAction({ title: `Remove ${who}?`, body: 'They lose access. Their stories and recognition stay in the record.', action: 'Remove' }))) return;
     try { await removeUser(userId); toast('Person removed.'); loadMembers(); }
     catch (e) { toast(e.message); }
   }
@@ -229,7 +229,7 @@ export default function Admin({ ctx }) {
                   <span className={carried ? 'tag' : 'tag warn'}>{term.count(carried)}</span>
                   <button className="btn ghost small" onClick={() => setModal({ kind: 'value', v })}>Edit</button>
                   <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm(`Delete the value "${v.name}"? ${term.Many} keep their other values.`)) return;
+                    if (!(await confirmAction({ title: `Delete the value "${v.name}"?`, body: `${term.Many} keep their other values. This cannot be undone.` }))) return;
                     try { await deleteValue(v.id); toast('Value deleted.'); reload(); } catch (e) { toast(e.message); }
                   }}>Delete</button>
                 </div>
@@ -280,7 +280,7 @@ export default function Admin({ ctx }) {
             <h2>Example content</h2>
             <span className="note">
               <button className="btn small" onClick={async () => {
-                if (!window.confirm('Delete everything still marked as an example?')) return;
+                if (!(await confirmAction({ title: 'Delete everything still marked as an example?', body: 'Example values, ' + term.many + ' and their records go. This cannot be undone.' }))) return;
                 try { await clearExampleContent(org.id); toast('Example content cleared.'); await refreshOrgs(); reload(); }
                 catch (e) { toast(e.message); }
               }}>Clear example content</button>
@@ -327,7 +327,7 @@ export default function Admin({ ctx }) {
                     } catch (e) { toast(e.message); }
                   }}>Make active</button>
                   <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm(`Decline ${r.name}?`)) return;
+                    if (!(await confirmAction({ title: `Decline ${r.name}?`, body: 'Their request is removed.', action: 'Decline' }))) return;
                     try { await declineRequest(r.id); toast('Request declined.'); loadMembers(); }
                     catch (e) { toast(e.message); }
                   }}>Decline</button>
@@ -368,7 +368,7 @@ export default function Admin({ ctx }) {
                   {m.role === 'owner' && <option value="owner">Super user</option>}
                 </select>
                 <button className="btn ghost small" onClick={async () => {
-                  if (!window.confirm(`Send ${m.display_name} the welcome email now?`)) return;
+                  if (!(await confirmAction({ title: `Send ${m.display_name} the welcome email now?`, body: 'It includes a link to set their password.', action: 'Send', danger: false }))) return;
                   try {
                     const res = await sendWelcomeEmail(m.user_id);
                     const w = res?.welcome;
@@ -412,7 +412,10 @@ export default function Admin({ ctx }) {
               <div className="rowactions">
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'system', s })}>Rename</button>
                 <button className="btn ghost small" disabled={usage(s) > 0}
-                  onClick={async () => { await deleteSystemCategory(s.id); toast('Category removed.'); reload(); }}>
+                  onClick={async () => {
+                    if (!(await confirmAction({ title: `Delete the system "${s.name}"?`, body: 'This cannot be undone.' }))) return;
+                    try { await deleteSystemCategory(s.id); toast('Category removed.'); reload(); } catch (e) { toast(e.message); }
+                  }}>
                   {usage(s) > 0 ? 'In use' : 'Delete'}
                 </button>
               </div>
@@ -443,7 +446,7 @@ export default function Admin({ ctx }) {
               <div className="rowactions">
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'measure', m })}>Edit</button>
                 <button className="btn ghost small" onClick={async () => {
-                  if (!window.confirm(`Delete "${m.name}"? Recorded values for it go too.`)) return;
+                  if (!(await confirmAction({ title: `Delete "${m.name}"?`, body: 'Recorded values for it go too. This cannot be undone.' }))) return;
                   try { await deleteMeasure(m.id); toast('Measure deleted.'); loadMeasures(); } catch (e) { toast(e.message); }
                 }}>Delete</button>
               </div>
@@ -553,11 +556,11 @@ export default function Admin({ ctx }) {
                 active={billing.plan === 'small'} cycle={billing.cycle} current={billing.current}
                 onChoose={async (cycle) => {
                   const label = cycle === 'yearly' ? 'yearly' : 'monthly';
-                  if (!window.confirm(
-                    `Switch to Up to 9 people, billed ${label}?\n\n` +
-                    'The subscription is not active until it is paid. You keep your content and the ' +
-                    'champion keeps access; everyone else gains access once payment is recorded by our admin.'
-                  )) return;
+                  if (!(await confirmAction({
+                    title: `Switch to Up to 9 people, billed ${label}?`, action: 'Switch', danger: false,
+                    body: 'The subscription is not active until it is paid. You keep your content and the ' +
+                      'champion keeps access; everyone else gains access once payment is recorded by our admin.'
+                  }))) return;
                   try {
                     await startCheckout(org.id, { plan: 'small', cycle });
                     toast('Plan recorded. Horizon Line confirms the payment before the date changes.');
@@ -569,11 +572,11 @@ export default function Admin({ ctx }) {
                 active={billing.plan === 'unlimited'} cycle={billing.cycle} current={billing.current}
                 onChoose={async (cycle) => {
                   const label = cycle === 'yearly' ? 'yearly' : 'monthly';
-                  if (!window.confirm(
-                    `Switch to Unlimited people, billed ${label}?\n\n` +
-                    'The subscription is not active until it is paid. You keep your content and the ' +
-                    'champion keeps access; everyone else gains access once payment is recorded by our admin.'
-                  )) return;
+                  if (!(await confirmAction({
+                    title: `Switch to Unlimited people, billed ${label}?`, action: 'Switch', danger: false,
+                    body: 'The subscription is not active until it is paid. You keep your content and the ' +
+                      'champion keeps access; everyone else gains access once payment is recorded by our admin.'
+                  }))) return;
                   try {
                     await startCheckout(org.id, { plan: 'unlimited', cycle });
                     toast('Plan recorded. Horizon Line confirms the payment before the date changes.');
@@ -589,10 +592,10 @@ export default function Admin({ ctx }) {
               <div className="btnrow">
                 {billing.cancel_at_period_end ? (
                   <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm(
-                      'Resume this subscription?\n\n' +
-                      'This records your intent. The paid-through date does not change until the next payment is confirmed.'
-                    )) return;
+                    if (!(await confirmAction({
+                      title: 'Resume this subscription?', action: 'Resume', danger: false,
+                      body: 'This records your intent. The paid-through date does not change until the next payment is confirmed.'
+                    }))) return;
                     try {
                       await resumeSubscription(org.id);
                       toast('Resume recorded. Horizon Line confirms the next payment.');
@@ -601,7 +604,7 @@ export default function Admin({ ctx }) {
                   }}>Resume subscription</button>
                 ) : billing.current && (
                   <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm('Cancel at the end of the paid period? Access continues until then.')) return;
+                    if (!(await confirmAction({ title: 'Cancel at the end of the paid period?', body: 'Access continues until then.', action: 'Cancel subscription' }))) return;
                     try {
                       const res = await cancelSubscription(org.id);
                       toast(`Cancelled. Access continues until ${res?.until ?? billing.paid_through}.`);

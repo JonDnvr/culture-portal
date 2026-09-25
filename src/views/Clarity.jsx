@@ -73,12 +73,6 @@ export default function Clarity({ ctx }) {
       )}
 
       <section>
-        {list.length > 0 && (
-          <div className="zonehint">
-            <span><b>Click the name</b> to open the {term.one}</span>
-            <span><b>Click any badge</b> to see how it is earned</span>
-          </div>
-        )}
         {list.length ? (
           <div className="grid">
             {list.map((b) => {

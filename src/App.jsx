@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   getSession, onAuthChange, signOut,
   listMyOrganizations, listValues, listSystemCategories,
@@ -10,7 +10,8 @@ import {
 } from './lib/api.js';
 import TrophyWall from './views/TrophyWall.jsx';
 import ProfileDialog from './views/Profile.jsx';
-import { Avatar } from './components/ui.jsx';
+import { Avatar, ConfirmHost, confirmAction } from './components/ui.jsx';
+import { DraftsDialog, draftCount } from './views/RecordEditor.jsx';
 import { NavIcon } from './components/badges.jsx';
 import { termFor } from './lib/term.js';
 import Home from './views/Home.jsx';
@@ -27,25 +28,21 @@ import SignIn, { SetNewPassword } from './views/SignIn.jsx';
 const ALL_ROLES = ['member', 'leader', 'admin', 'champion', 'owner'];
 const EDITORS = ['admin', 'champion', 'owner'];
 
+// The working sections: the rail on a wide screen, a bar along the bottom
+// on a phone. `short` is the phone label.
 const NAV = [
-  { id: 'home', label: 'Culture home', sub: 'Purpose, values, this week', roles: ALL_ROLES },
-  { id: 'clarity', label: 'Clarity', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
-  { id: 'cadence', label: 'Cadence', sub: 'Practice and rituals', roles: ALL_ROLES },
-  { id: 'connection', label: 'Connection', sub: 'Recognition and stories', roles: ALL_ROLES },
-  { id: 'conviction', label: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
+  { id: 'home', label: 'Culture home', short: 'Home', sub: 'This week', roles: ALL_ROLES },
+  { id: 'clarity', label: 'Clarity', short: 'Clarity', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
+  { id: 'cadence', label: 'Cadence', short: 'Cadence', sub: 'Practice', roles: ALL_ROLES },
+  { id: 'connection', label: 'Connection', short: 'Connect', sub: 'Recognition, stories', roles: ALL_ROLES },
+  { id: 'conviction', label: 'Conviction', short: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
 ];
 
-// Apart from the working sections, at the foot of the navigation: the wall,
-// then Admin.
+// In the header, beside your name: Awards, then Admin.
 const FOOT = [
-  { id: 'wall', label: 'Trophy Wall', sub: 'What has been earned', roles: ALL_ROLES },
-  { id: 'admin', label: 'Admin', sub: 'Content, systems, people', roles: EDITORS }
+  { id: 'wall', label: 'Awards', roles: ALL_ROLES },
+  { id: 'admin', label: 'Admin', roles: EDITORS }
 ];
-
-const ROLE_LABEL = {
-  member: 'Member', leader: 'Leader', admin: 'Admin',
-  champion: 'Culture champion', owner: 'Super user'
-};
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -99,6 +96,10 @@ function App() {
   }, []);
   const [error, setError] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  // What the browser's Back button should do, read fresh on every press.
+  const navRef = useRef(null);
+  useBackGuard(!!session && !!org, navRef);
   // Bumped by "Rate now" to bring the pulse back even after it was dismissed.
   const [pulseAsk, setPulseAsk] = useState(0);
 
@@ -140,14 +141,18 @@ function App() {
         listValues(org.id), listSystemCategories(org.id), listBehaviors(org.id),
         listRituals(org.id), listCategories(),
         soft(listPeople(org.id), []), soft(listTeams(org.id), []),
-        soft(listAwardTypes(org.id), []), soft(listAwardGrants(org.id), []),
-        soft(listIterations(org.id), []), soft(listRecognitions(org.id), []), soft(listStories(org.id), []),
+        soft(listAwardTypes(org.id), []), soft(listAwardGrants(org.id, WITH_DRAFTS), []),
+        soft(listIterations(org.id, WITH_DRAFTS), []), soft(listRecognitions(org.id, WITH_DRAFTS), []),
+        soft(listStories(org.id, WITH_DRAFTS), []),
         soft(listMyFluencyMarks(org.id), []),
         soft(getPulseStatus(org.id), null), soft(getPulseSpreadByRound(org.id), [])
       ]);
       setData({
-        values, systems, behaviors, rituals, categories, people, teams, awardTypes, grants,
-        activity: { iterations, recognitions, stories, fluencyMarks, pulseStatus, pulseSpread }
+        values, systems, behaviors, rituals, categories, people, teams, awardTypes,
+        grants: published(grants),
+        activity: { iterations: published(iterations), recognitions: published(recognitions), stories: published(stories),
+          fluencyMarks, pulseStatus, pulseSpread },
+        drafts: { iterations: drafts(iterations), recognitions: drafts(recognitions), stories: drafts(stories), grants: drafts(grants) }
       });
     } catch (e) { setError(e.message); }
   }, [org]);
@@ -163,20 +168,29 @@ function App() {
     if (!org) return;
     const soft = (p, fallback) => p.catch(() => fallback);
     const [iterations, recognitions, stories, fluencyMarks, pulseStatus, pulseSpread, grants] = await Promise.all([
-      soft(listIterations(org.id), null), soft(listRecognitions(org.id), null), soft(listStories(org.id), null),
+      soft(listIterations(org.id, WITH_DRAFTS), null), soft(listRecognitions(org.id, WITH_DRAFTS), null),
+      soft(listStories(org.id, WITH_DRAFTS), null),
       soft(listMyFluencyMarks(org.id), null), soft(getPulseStatus(org.id), null),
-      soft(getPulseSpreadByRound(org.id), null), soft(listAwardGrants(org.id), null)
+      soft(getPulseSpreadByRound(org.id), null), soft(listAwardGrants(org.id, WITH_DRAFTS), null)
     ]);
+    // Anything that failed to load keeps what was there before.
+    const pick = (rows, split, before) => (rows ? split(rows) : before);
     setData((d) => d && ({
       ...d,
-      grants: grants ?? d.grants,
+      grants: pick(grants, published, d.grants),
       activity: {
-        iterations: iterations ?? d.activity.iterations,
-        recognitions: recognitions ?? d.activity.recognitions,
-        stories: stories ?? d.activity.stories,
+        iterations: pick(iterations, published, d.activity.iterations),
+        recognitions: pick(recognitions, published, d.activity.recognitions),
+        stories: pick(stories, published, d.activity.stories),
         fluencyMarks: fluencyMarks ?? d.activity.fluencyMarks,
         pulseStatus: pulseStatus ?? d.activity.pulseStatus,
         pulseSpread: pulseSpread ?? d.activity.pulseSpread
+      },
+      drafts: {
+        iterations: pick(iterations, drafts, d.drafts.iterations),
+        recognitions: pick(recognitions, drafts, d.drafts.recognitions),
+        stories: pick(stories, drafts, d.drafts.stories),
+        grants: pick(grants, drafts, d.drafts.grants)
       }
     }));
   }, [org]);
@@ -238,7 +252,7 @@ function App() {
         return h.slice(0, -1);
       });
     },
-    canEdit: EDITORS.includes(role),
+    canEdit: EDITORS.includes(role) || isSuper,
     canLead: role !== 'member',
     // Refetch and re-point at the same organization, so an edit to its name,
     // purpose or behavior of the week shows up immediately.
@@ -257,72 +271,181 @@ function App() {
     chooseOrg: () => { setOrg(null); setBehaviorId(null); setDetail(null); setHistory([]); }
   };
 
+  navRef.current = { view, depth: history.length, back: ctx.back };
+  const count = draftCount(ctx);
+
   return (
     <div className="shell" style={{ '--accent': org.accent || '#9C7A3C' }}>
-      <aside className="rail">
-        <div className="brandmark">
-          <div className="chip" style={{ background: org.accent }}>{org.initials}</div>
-          <div>
-            <div className="orgname">{org.name}</div>
-            <div className="orgmeta">{org.subtitle}</div>
-          </div>
-        </div>
-        <nav>
-          {nav.map((n) => <NavButton key={n.id} n={n} term={term} current={view === n.id} onGo={ctx.goto} accent={org.accent} />)}
-          <div className="navwall">
-            {foot.map((n) => <NavButton key={n.id} n={n} term={term} current={view === n.id} onGo={ctx.goto} accent={org.accent} />)}
-          </div>
-        </nav>
-        <div className="railfoot">
-          {isSuper && orgs.length > 1 && (
-            <>
-              <label htmlFor="orgSel">Organization</label>
-              <select id="orgSel" value={org.id} onChange={(e) => ctx.switchOrg(e.target.value)}>
-                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
-            </>
-          )}
-          <div className="credit">
-            <button className="mebtn" onClick={() => setProfileOpen(true)} title="Your picture">
-              <Avatar person={me} name={org.displayName} size={28} />
-              <span>{org.displayName}<br /><small>Your picture</small></span>
+      <header className="topbar">
+        <button className="brandmark" onClick={() => ctx.goto('home')} title={`${org.name} culture home`}>
+          <span className="chip" style={{ background: org.accent }}>{org.initials}</span>
+          <span className="orgname">{org.name}</span>
+        </button>
+        <div className="topnav">
+          {foot.map((n) => (
+            <button key={n.id} className="topbtn" aria-current={view === n.id ? 'page' : undefined} onClick={() => ctx.goto(n.id)}>
+              <span className="navicon" style={{ color: org.accent || 'var(--accent)' }}><NavIcon id={n.id} /></span>
+              <span className="tlabel">{n.label}</span>
             </button>
-            <span className="rolechip">{ROLE_LABEL[role]}{isSuper ? ', all organizations' : ''}</span><br />
-            <button className="linkbtn" onClick={signOut}>Sign out</button>
-            {IS_LOCAL && isSuper && (
-              <> &nbsp;/&nbsp; <button className="linkbtn" onClick={() => { resetLocalData(); signOut(); }}>Reset demo data</button></>
-            )}
+          ))}
+          <MeMenu ctx={ctx} me={me} orgs={orgs} draftCount={count}
+            onPicture={() => setProfileOpen(true)} onDrafts={() => setDraftsOpen(true)} />
+        </div>
+      </header>
+      <div className="frame">
+        <aside className="rail">
+          <nav className="mainnav" aria-label="Sections">
+            {nav.map((n) => <NavButton key={n.id} n={n} term={term} current={view === n.id} onGo={ctx.goto} accent={org.accent} />)}
+          </nav>
+        </aside>
+        <main>
+          {!isSuper && <PulseCheck ctx={ctx} ask={pulseAsk} />}
+          <div className="view">
+            {view === 'home' && <Home ctx={ctx} />}
+            {view === 'clarity' && <Clarity ctx={ctx} />}
+            {view === 'behavior' && <Behavior ctx={ctx} id={behaviorId} />}
+            {view === 'cadence' && <Cadence ctx={ctx} />}
+            {view === 'connection' && <Connection ctx={ctx} />}
+            {view === 'conviction' && <Conviction ctx={ctx} />}
+            {view === 'admin' && <Admin ctx={ctx} />}
+            {view === 'wall' && <TrophyWall ctx={ctx} />}
+            {view === 'record' && detail?.kind === 'story' && <StoryPage key={detail.id} ctx={ctx} id={detail.id} />}
+            {view === 'record' && detail?.kind === 'recognition' && <RecognitionPage key={detail.id} ctx={ctx} id={detail.id} />}
+            {view === 'record' && detail?.kind === 'iteration' && <IterationPage key={detail.id} ctx={ctx} id={detail.id} />}
+            {view === 'record' && detail?.kind === 'ritual' && <RitualPage key={detail.id} ctx={ctx} id={detail.id} />}
           </div>
-        </div>
-      </aside>
-      <main>
-        {!isSuper && <PulseCheck ctx={ctx} ask={pulseAsk} />}
-        <div className="view">
-          {view === 'home' && <Home ctx={ctx} />}
-          {view === 'clarity' && <Clarity ctx={ctx} />}
-          {view === 'behavior' && <Behavior ctx={ctx} id={behaviorId} />}
-          {view === 'cadence' && <Cadence ctx={ctx} />}
-          {view === 'connection' && <Connection ctx={ctx} />}
-          {view === 'conviction' && <Conviction ctx={ctx} />}
-          {view === 'admin' && <Admin ctx={ctx} />}
-          {view === 'wall' && <TrophyWall ctx={ctx} />}
-          {view === 'record' && detail?.kind === 'story' && <StoryPage ctx={ctx} id={detail.id} />}
-          {view === 'record' && detail?.kind === 'recognition' && <RecognitionPage ctx={ctx} id={detail.id} />}
-          {view === 'record' && detail?.kind === 'iteration' && <IterationPage ctx={ctx} id={detail.id} />}
-          {view === 'record' && detail?.kind === 'ritual' && <RitualPage ctx={ctx} id={detail.id} />}
-        </div>
-      </main>
+        </main>
+      </div>
       {profileOpen && <ProfileDialog ctx={ctx} onClose={() => setProfileOpen(false)} />}
+      {draftsOpen && <DraftsDialog ctx={ctx} onClose={() => setDraftsOpen(false)} />}
+      <ConfirmHost />
     </div>
   );
+}
+
+const WITH_DRAFTS = { includeDrafts: true };
+const published = (rows) => (rows ?? []).filter((r) => !r.is_draft);
+const drafts = (rows) => (rows ?? []).filter((r) => r.is_draft);
+
+/**
+ * You, in the header: your picture, then a short menu. The organization
+ * switcher lives here for the super admin.
+ */
+function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  const { org, isSuper } = ctx;
+
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
+  }, [open]);
+
+  const act = (fn) => () => { setOpen(false); fn(); };
+  const first = (org.displayName ?? '').split(' ')[0];
+
+  return (
+    <div className="memenu" ref={box}>
+      <button className="topbtn mebtn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
+        title="Your picture, drafts and sign out">
+        <Avatar person={me} name={org.displayName} size={28} />
+        <span className="tlabel">{first}</span>
+        {draftCount > 0 && <span className="countchip" aria-label={`${draftCount} drafts`}>{draftCount}</span>}
+      </button>
+      {open && (
+        <div className="menupop" role="menu">
+          <div className="menuhead">{org.displayName}</div>
+          <button className="mi" role="menuitem" onClick={act(onPicture)}>Change picture</button>
+          <button className="mi" role="menuitem" onClick={act(onDrafts)}>
+            Your drafts{draftCount ? ` (${draftCount})` : ''}
+          </button>
+          {isSuper && orgs.length > 1 && (
+            <label className="mi misel">
+              <span>Organization</span>
+              <select value={org.id} onChange={(e) => { setOpen(false); ctx.switchOrg(e.target.value); }}>
+                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </label>
+          )}
+          <button className="mi" role="menuitem" onClick={act(signOut)}>Sign out</button>
+          {IS_LOCAL && isSuper && (
+            <button className="mi quietmi" role="menuitem" onClick={act(() => { resetLocalData(); signOut(); })}>Reset demo data</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The browser's Back button moves back through the portal: it closes an open
+ * dialog first, then returns to the page before. On the home page, with
+ * nowhere left to go inside the portal, it asks before leaving. Closing or
+ * reloading the tab with a form open asks too.
+ *
+ * One extra history entry sits above the page's own; every Back lands on the
+ * page's entry, and the guard is put straight back.
+ */
+function useBackGuard(active, navRef) {
+  useEffect(() => {
+    if (!active) return undefined;
+    const GUARD = { cpGuard: true };
+    if (!window.history.state?.cpGuard) window.history.pushState(GUARD, '');
+    let leaving = false;
+
+    const onPop = async () => {
+      if (leaving) return;
+      window.history.pushState(GUARD, '');
+      if (document.querySelector('.scrim')) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        return;
+      }
+      const nav = navRef.current;
+      if (nav && (nav.depth > 0 || nav.view !== 'home')) { nav.back(); return; }
+      const ok = await confirmAction({
+        title: 'Leave the culture portal?',
+        body: 'Going back from here leaves the portal. You stay signed in.',
+        action: 'Leave', danger: false
+      });
+      if (!ok) return;
+      leaving = true;
+      window.history.go(-2);
+      // Nowhere to go back to (the portal was the first page in this tab):
+      // stay, and put the guard back.
+      setTimeout(() => {
+        leaving = false;
+        if (!window.history.state?.cpGuard) window.history.pushState(GUARD, '');
+      }, 700);
+    };
+
+    const onUnload = (e) => {
+      if (window.__cpAllowUnload || !document.querySelector('.scrim .modal')) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('popstate', onPop);
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, [active]);
 }
 
 /** A section in the rail, with its icon in the organization's highlight color. */
 function NavButton({ n, term, current, onGo, accent }) {
   return (
-    <button className="navitem" aria-current={current ? 'page' : undefined} onClick={() => onGo(n.id)}>
+    <button className="navitem" aria-current={current ? 'page' : undefined} onClick={() => onGo(n.id)} title={n.label}>
       <span className="navicon" style={{ color: accent || 'var(--accent)' }}><NavIcon id={n.id} /></span>
-      <span className="navtext">{n.label}<br /><small>{typeof n.sub === 'function' ? n.sub(term) : n.sub}</small></span>
+      <span className="navtext">
+        <span className="full">{n.label}</span><span className="short">{n.short}</span>
+        {n.sub && <small>{typeof n.sub === 'function' ? n.sub(term) : n.sub}</small>}
+      </span>
     </button>
   );
 }

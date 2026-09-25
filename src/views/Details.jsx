@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  getStory, getRecognition, getIteration, getRitual, signAttachment, listIterations
+  getStory, getRecognition, getIteration, getRitual, signAttachment, listIterations,
+  updateRitual, setRitualBehaviors
 } from '../lib/api.js';
 import { pad, Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
 import { GoldStar } from '../components/badges.jsx';
 import { ShareRecord } from './Connection.jsx';
 import { useToast } from '../components/ui.jsx';
+import { RecordActions, DraftTag } from '../components/records.jsx';
+import { RecordEditor } from './RecordEditor.jsx';
+import { dropRitual, RitualForm } from './Cadence.jsx';
 
 /** Shared header: the behavior a record belongs to, with its description. */
 function BehaviorHeader({ behavior, ctx }) {
@@ -69,8 +73,31 @@ export function Attachments({ files = [], compact = false }) {
 
 function useRecord(loader, id) {
   const [row, setRow] = useState(undefined);
-  useEffect(() => { loader(id).then(setRow).catch(() => setRow(null)); }, [id]);
-  return row;
+  const [version, setVersion] = useState(0);
+  useEffect(() => { loader(id).then(setRow).catch(() => setRow(null)); }, [id, version]);
+  return [row, () => setVersion((v) => v + 1)];
+}
+
+/**
+ * Edit, publish and delete at the top of a record's own page, for whoever
+ * may. Deleting returns to wherever the record was opened from.
+ */
+function RecordTools({ ctx, kind, row, reload, extra }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  return (
+    <>
+      <div className="btnrow recordtools">
+        {extra}
+        <RecordActions ctx={ctx} kind={kind} row={row} toast={toast}
+          onEdit={() => setEditing(true)} onChanged={reload} onDeleted={ctx.back} />
+      </div>
+      {editing && (
+        <RecordEditor ctx={ctx} kind={kind} row={row} toast={toast}
+          onClose={() => setEditing(false)} onDone={() => { setEditing(false); reload(); }} />
+      )}
+    </>
+  );
 }
 
 const when = (iso) => new Date(iso).toLocaleString(undefined, {
@@ -78,7 +105,7 @@ const when = (iso) => new Date(iso).toLocaleString(undefined, {
 });
 
 export function StoryPage({ ctx, id }) {
-  const story = useRecord(getStory, id);
+  const [story, reload] = useRecord(getStory, id);
   if (story === undefined) return <div className="empty">Loading…</div>;
   if (!story) return <div className="empty">That story is no longer here.</div>;
 
@@ -87,7 +114,10 @@ export function StoryPage({ ctx, id }) {
       <div className="dateline">
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
-      <div className="kicker">Story</div>
+      <div className="detailhead">
+        <div className="kicker">Story {story.is_draft && <DraftTag />}</div>
+        <RecordTools ctx={ctx} kind="story" row={story} reload={reload} />
+      </div>
       <BehaviorHeader behavior={story.behavior} ctx={ctx} />
       <p className="byline who2">
         <Avatar person={findPerson(ctx.people, { id: story.author_id, name: story.author_name })} name={story.author_name} size={24} />
@@ -100,7 +130,7 @@ export function StoryPage({ ctx, id }) {
 }
 
 export function RecognitionPage({ ctx, id }) {
-  const rec = useRecord(getRecognition, id);
+  const [rec, reload] = useRecord(getRecognition, id);
   const [sharing, setSharing] = useState(false);
   const toast = useToast();
   if (rec === undefined) return <div className="empty">Loading…</div>;
@@ -112,8 +142,9 @@ export function RecognitionPage({ ctx, id }) {
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
       <div className="detailhead">
-        <div className="kicker">Recognition</div>
-        <button className="btn ghost small" onClick={() => setSharing(true)}>Share by email</button>
+        <div className="kicker">Recognition {rec.is_draft && <DraftTag />}</div>
+        <RecordTools ctx={ctx} kind="recognition" row={rec} reload={reload}
+          extra={!rec.is_draft && <button className="btn ghost small" onClick={() => setSharing(true)}>Share by email</button>} />
       </div>
       <BehaviorHeader behavior={rec.behavior} ctx={ctx} />
       <div className="recordwho who2">
@@ -138,7 +169,7 @@ export function RecognitionPage({ ctx, id }) {
 }
 
 export function IterationPage({ ctx, id }) {
-  const it = useRecord(getIteration, id);
+  const [it, reload] = useRecord(getIteration, id);
   if (it === undefined) return <div className="empty">Loading…</div>;
   if (!it) return <div className="empty">That iteration is no longer here.</div>;
 
@@ -149,7 +180,10 @@ export function IterationPage({ ctx, id }) {
       <div className="dateline">
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
-      <div className="kicker">{it.system ? 'System run' : 'Ritual iteration'}</div>
+      <div className="detailhead">
+        <div className="kicker">{it.system ? 'System run' : 'Ritual iteration'} {it.is_draft && <DraftTag />}</div>
+        <RecordTools ctx={ctx} kind="iteration" row={it} reload={reload} />
+      </div>
       <BehaviorHeader behavior={behavior} ctx={ctx} />
 
       <div className="recordpanel">
@@ -194,8 +228,10 @@ export function IterationPage({ ctx, id }) {
 }
 
 export function RitualPage({ ctx, id }) {
-  const ritual = useRecord(getRitual, id);
+  const [ritual, reload] = useRecord(getRitual, id);
   const [runs, setRuns] = useState([]);
+  const [editing, setEditing] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!ritual) return;
@@ -210,7 +246,19 @@ export function RitualPage({ ctx, id }) {
       <div className="dateline">
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
-      <div className="kicker">Ritual</div>
+      <div className="detailhead">
+        <div className="kicker">Ritual</div>
+        {ctx.canEdit && (
+          <div className="btnrow recordtools">
+            <button className="btn ghost small" onClick={() => setEditing(true)}>Edit</button>
+            {!ritual.applies_to_all && (
+              <button className="btn ghost small danger" onClick={async () => {
+                if (await dropRitual(ctx, ritual, toast)) ctx.back();
+              }}>Delete</button>
+            )}
+          </div>
+        )}
+      </div>
       <h2 className="recordbehavior">{ritual.name}</h2>
       <p className="byline">{ritual.owner} &nbsp;/&nbsp; {ritual.cadence}</p>
       <p className="recordbody">{ritual.description}</p>
@@ -253,6 +301,16 @@ export function RitualPage({ ctx, id }) {
           </div>
         ) : <div className="empty">Not run yet, or not recorded.</div>}
       </section>
+      {editing && (
+        <RitualForm title="Edit ritual" term={ctx.term} initial={ritual} toast={toast}
+          behaviors={ritual.applies_to_all ? null : ctx.behaviors} selected={(ritual.behaviors ?? []).map((b) => b.id)}
+          onClose={() => setEditing(false)}
+          onSave={async (fields, behaviorIds) => {
+            await updateRitual(ritual.id, fields);
+            if (behaviorIds) await setRitualBehaviors(ritual.id, behaviorIds);
+            toast('Ritual updated.'); setEditing(false); reload(); ctx.reload();
+          }} />
+      )}
     </article>
   );
 }

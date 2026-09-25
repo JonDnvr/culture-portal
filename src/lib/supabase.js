@@ -409,7 +409,7 @@ export async function unapplyRitual(behaviorId, ritualId) {
 
 /* -------------------------------------------------------------- iterations */
 
-export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [] }) {
+export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [], isDraft = false }) {
   if (!!ritualId === !!systemId) throw new Error('An iteration is a run of one ritual or one system.');
   if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
   const { data: { user } } = await supabase.auth.getUser();
@@ -417,7 +417,7 @@ export async function recordIteration(orgId, { ritualId = null, systemId = null,
     org_id: orgId, ritual_id: ritualId, system_category_id: systemId, team_id: teamId,
     behavior_ids: behaviorIds,
     recorded_by: user.id, recorded_by_name: user.user_metadata?.display_name ?? user.email,
-    held_at: heldAt ?? new Date().toISOString(), notes: notes ?? null
+    held_at: heldAt ?? new Date().toISOString(), notes: notes ?? null, is_draft: !!isDraft
   }).select().single();
   if (error) throw error;
 
@@ -499,8 +499,7 @@ export async function getIteration(id) {
 }
 
 export async function deleteIteration(id) {
-  const { error } = await supabase.from('iterations').delete().eq('id', id);
-  if (error) throw error;
+  await deleteRecord('iteration', id);
 }
 
 /* ------------------------------------------------- single records by id */
@@ -720,13 +719,11 @@ export async function listMemberEmails(orgId) {
 }
 
 export async function deleteStory(id) {
-  const { error } = await supabase.from('stories').delete().eq('id', id);
-  if (error) throw error;
+  await deleteRecord('story', id);
 }
 
 export async function deleteRecognition(id) {
-  const { error } = await supabase.from('recognitions').delete().eq('id', id);
-  if (error) throw error;
+  await deleteRecord('recognition', id);
 }
 
 /* ----------------------------------------------------------------- billing */
@@ -813,7 +810,7 @@ function attachmentKind(file) {
  * Any member can add a story. Files go to the story-media bucket under
  * {org_id}/{story_id}/, which is what the storage policies key on.
  */
-export async function createStory(orgId, { behaviorId, body, authorName, files = [] }) {
+export async function createStory(orgId, { behaviorId, body, authorName, files = [], isDraft = false }) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: story, error } = await supabase
     .from('stories')
@@ -822,7 +819,8 @@ export async function createStory(orgId, { behaviorId, body, authorName, files =
       behavior_id: behaviorId,
       author_id: user.id,
       author_name: authorName,
-      body
+      body,
+      is_draft: !!isDraft
     })
     .select()
     .single();
@@ -880,7 +878,7 @@ export async function listRecognitions(orgId, { behaviorId } = {}) {
   return data.map((r) => ({ ...r, attachments: r.recognition_attachments ?? [] }));
 }
 
-export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [] }) {
+export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [], isDraft = false }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (recipientUserId && recipientUserId === user.id) throw new Error('Recognition goes to someone else.');
   const { data: rec, error } = await supabase.from('recognitions').insert({
@@ -891,7 +889,8 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
     recipient,
     recipient_user_id: recipientUserId,
     title: title || null,
-    body
+    body,
+    is_draft: !!isDraft
   }).select().single();
   if (error) throw error;
 
@@ -1067,7 +1066,7 @@ export async function listAwardGrants(orgId) {
   }));
 }
 
-export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, recipientName, files = [] }) {
+export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, recipientName, files = [], isDraft = false }) {
   if (!!recipientUserId === !!teamId) throw new Error('An award goes to one person or one team.');
   if (!String(citation ?? '').trim()) throw new Error('Write the citation: what they did.');
   const { data: { user } } = await supabase.auth.getUser();
@@ -1076,7 +1075,7 @@ export async function grantAward(orgId, { awardTypeId, recipientUserId = null, t
     org_id: orgId, award_type_id: awardTypeId,
     recipient_user_id: recipientUserId, team_id: teamId, recipient_name: recipientName,
     granted_by: user.id, granted_by_name: user.user_metadata?.display_name ?? user.email,
-    citation: citation.trim()
+    citation: citation.trim(), is_draft: !!isDraft
   }).select().single();
   // The cap and recipient rules live in a trigger; its message is the useful part.
   if (error) throw new Error(error.message?.replace(/^.*?ERROR:\s*/, '') || 'That award could not be given.');
@@ -1128,3 +1127,96 @@ export async function getPulseSpreadByRound(orgId) {
   if (error) throw error;
   return (data ?? []).map((r) => ({ ...r, spread: Number(r.spread) }));
 }
+
+
+/* ================================================================== R3 */
+/* Editing, drafts and deleting. Row level security decides who may; these
+   calls report plainly when the answer is no.                             */
+
+const RECORDS = {
+  story:       { table: 'stories',      files: 'story_attachments',       fk: 'story_id',       folder: (o, id) => `${o}/${id}` },
+  recognition: { table: 'recognitions', files: 'recognition_attachments', fk: 'recognition_id', folder: (o, id) => `${o}/recognitions/${id}` },
+  iteration:   { table: 'iterations',   files: 'iteration_attachments',   fk: 'iteration_id',   folder: (o, id) => `${o}/iterations/${id}` },
+  award:       { table: 'award_grants', files: 'award_grant_attachments', fk: 'grant_id',       folder: (o, id) => `${o}/awards/${id}` }
+};
+
+const NOT_ALLOWED = 'Only the person who made it, the culture champion or an admin can change that.';
+const clean = (e) => new Error(e?.message?.replace(/^.*?ERROR:\s*/, '') || 'That could not be saved.');
+
+async function uploadRecordFiles(kind, orgId, id, files = []) {
+  const r = RECORDS[kind];
+  for (const file of files) {
+    const path = `${r.folder(orgId, id)}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from('story-media').upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    const { error } = await supabase.from(r.files).insert({
+      [r.fk]: id, storage_path: path, file_name: file.name,
+      mime_type: file.type, byte_size: file.size, kind: attachmentKind(file)
+    });
+    if (error) throw clean(error);
+  }
+}
+
+async function removeRecordFiles(kind, fileIds = []) {
+  if (!fileIds.length) return;
+  const r = RECORDS[kind];
+  const { data, error } = await supabase.from(r.files).delete().in('id', fileIds).select('storage_path');
+  if (error) throw clean(error);
+  const paths = (data ?? []).map((x) => x.storage_path);
+  // The row is what the portal shows; a file left behind in storage is harmless.
+  if (paths.length) await supabase.storage.from('story-media').remove(paths).catch(() => {});
+}
+
+async function updateRecord(kind, id, fields, { addFiles = [], removeFileIds = [] } = {}) {
+  const r = RECORDS[kind];
+  const patch = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+  let row;
+  if (Object.keys(patch).length) {
+    const { data, error } = await supabase.from(r.table).update(patch).eq('id', id).select();
+    if (error) throw clean(error);
+    if (!data?.length) throw new Error(NOT_ALLOWED);
+    row = data[0];
+  } else {
+    const { data, error } = await supabase.from(r.table).select('*').eq('id', id).single();
+    if (error) throw clean(error);
+    row = data;
+  }
+  await removeRecordFiles(kind, removeFileIds);
+  await uploadRecordFiles(kind, row.org_id, id, addFiles);
+  return row;
+}
+
+async function deleteRecord(kind, id) {
+  const r = RECORDS[kind];
+  const { data: files } = await supabase.from(r.files).select('storage_path').eq(r.fk, id);
+  const { data, error } = await supabase.from(r.table).delete().eq('id', id).select('id');
+  if (error) throw clean(error);
+  if (!data?.length) throw new Error('Only the person who made it, the culture champion or an admin can delete that.');
+  const paths = (files ?? []).map((f) => f.storage_path);
+  if (paths.length) await supabase.storage.from('story-media').remove(paths).catch(() => {});
+}
+
+const draftField = (isDraft) => (isDraft === undefined ? undefined : !!isDraft);
+
+export const updateStory = (id, { behaviorId, body, isDraft, addFiles, removeFileIds }) =>
+  updateRecord('story', id, { behavior_id: behaviorId, body, is_draft: draftField(isDraft) }, { addFiles, removeFileIds });
+
+export async function updateRecognition(id, { behaviorId, recipientUserId, recipient, title, body, isDraft, addFiles, removeFileIds }) {
+  return updateRecord('recognition', id, {
+    behavior_id: behaviorId, recipient_user_id: recipientUserId, recipient,
+    title: title === undefined ? undefined : (title || null), body, is_draft: draftField(isDraft)
+  }, { addFiles, removeFileIds });
+}
+
+export const updateIteration = (id, { behaviorIds, teamId, heldAt, notes, isDraft, addFiles, removeFileIds }) =>
+  updateRecord('iteration', id, {
+    behavior_ids: behaviorIds, team_id: teamId === undefined ? undefined : (teamId || null),
+    held_at: heldAt, notes, is_draft: draftField(isDraft)
+  }, { addFiles, removeFileIds });
+
+export const updateAwardGrant = (id, { citation, isDraft, addFiles, removeFileIds }) =>
+  updateRecord('award', id, {
+    citation: citation === undefined ? undefined : citation.trim(), is_draft: draftField(isDraft)
+  }, { addFiles, removeFileIds });
+
+export const deleteAwardGrant = (id) => deleteRecord('award', id);
