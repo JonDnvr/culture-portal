@@ -147,11 +147,11 @@ export async function deleteBehavior(behaviorId) {
 export async function listMembers(orgId) {
   const { data, error } = await supabase
     .from('memberships')
-    .select('id, role, display_name, user_id, email')
+    .select('id, role, display_name, user_id, email, team_id, avatar_path')
     .eq('org_id', orgId)
     .order('role');
   if (error) throw error;
-  return data;
+  return data.map((m) => ({ ...m, avatar_url: avatarUrl(m.avatar_path) }));
 }
 
 /* -------------------------------------------------- administration of users */
@@ -409,10 +409,13 @@ export async function unapplyRitual(behaviorId, ritualId) {
 
 /* -------------------------------------------------------------- iterations */
 
-export async function recordIteration(orgId, { ritualId, behaviorIds = [], heldAt, notes, files = [] }) {
+export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [] }) {
+  if (!!ritualId === !!systemId) throw new Error('An iteration is a run of one ritual or one system.');
+  if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
   const { data: { user } } = await supabase.auth.getUser();
   const { data: it, error } = await supabase.from('iterations').insert({
-    org_id: orgId, ritual_id: ritualId, behavior_ids: behaviorIds,
+    org_id: orgId, ritual_id: ritualId, system_category_id: systemId, team_id: teamId,
+    behavior_ids: behaviorIds,
     recorded_by: user.id, recorded_by_name: user.user_metadata?.display_name ?? user.email,
     held_at: heldAt ?? new Date().toISOString(), notes: notes ?? null
   }).select().single();
@@ -432,27 +435,67 @@ export async function recordIteration(orgId, { ritualId, behaviorIds = [], heldA
   return it.id;
 }
 
-export async function listIterations(orgId, { behaviorId, ritualId, days } = {}) {
+/**
+ * behavior_ids is an array column, so Postgres cannot join it. The behaviors
+ * are looked up in one extra query and attached, which the local backend has
+ * always done; hosted mode was missing them.
+ */
+async function attachBehaviors(rows, orgId, full = false) {
+  const ids = [...new Set(rows.flatMap((r) => r.behavior_ids ?? []))];
+  if (!ids.length) return rows.map((r) => ({ ...r, behaviors: [] }));
+  const { data, error } = await supabase
+    .from('behaviors')
+    .select(full ? 'id, number, title, description, category' : 'id, number, title')
+    .in('id', ids);
+  if (error) throw error;
+  const byId = Object.fromEntries(data.map((b) => [b.id, b]));
+  return rows.map((r) => ({
+    ...r,
+    behaviors: (r.behavior_ids ?? []).map((id) => byId[id]).filter(Boolean).sort((a, b) => a.number - b.number)
+  }));
+}
+
+const ITERATION_SELECT =
+  '*, rituals ( id, name, cadence, owner, description, practice, applies_to_all ), ' +
+  'system_categories ( id, name ), iteration_attachments ( * )';
+
+export async function listIterations(orgId, { behaviorId, ritualId, systemId, days } = {}) {
   let q = supabase
     .from('iterations')
-    .select('*, rituals ( id, name, cadence, owner, description, practice ), iteration_attachments ( * )')
+    .select(ITERATION_SELECT)
     .eq('org_id', orgId)
     .order('held_at', { ascending: false });
   if (ritualId) q = q.eq('ritual_id', ritualId);
+  if (systemId) q = q.eq('system_category_id', systemId);
   if (behaviorId) q = q.contains('behavior_ids', [behaviorId]);
   if (days) q = q.gte('held_at', new Date(Date.now() - days * 86400000).toISOString());
   const { data, error } = await q;
   if (error) throw error;
-  return data.map((it) => ({ ...it, ritual: it.rituals, attachments: it.iteration_attachments ?? [] }));
+  const rows = data.map((it) => ({
+    ...it, ritual: it.rituals, system: it.system_categories, attachments: it.iteration_attachments ?? []
+  }));
+  return attachBehaviors(rows, orgId);
 }
 
 export async function getIteration(id) {
   const { data, error } = await supabase
     .from('iterations')
-    .select('*, rituals ( * ), iteration_attachments ( * )')
+    .select('*, rituals ( * ), system_categories ( id, name ), iteration_attachments ( * )')
     .eq('id', id).single();
   if (error) throw error;
-  return { ...data, ritual: data.rituals, attachments: data.iteration_attachments ?? [] };
+  const [row] = await attachBehaviors([{ ...data, ritual: data.rituals, system: data.system_categories,
+    attachments: data.iteration_attachments ?? [] }], data.org_id, true);
+  // A system run shows the template it followed.
+  if (row.system && row.behavior_ids?.length) {
+    const { data: p } = await supabase
+      .from('placements')
+      .select('template, artifact, owner, cadence')
+      .eq('system_category_id', row.system_category_id)
+      .in('behavior_id', row.behavior_ids)
+      .limit(1);
+    if (p?.[0]) row.system = { ...row.system, ...p[0] };
+  }
+  return row;
 }
 
 export async function deleteIteration(id) {
@@ -828,26 +871,42 @@ export async function shareStoryByEmail(storyId, recipients, note) {
 export async function listRecognitions(orgId, { behaviorId } = {}) {
   let q = supabase
     .from('recognitions')
-    .select('*, behaviors ( id, number, title )')
+    .select('*, behaviors ( id, number, title ), recognition_attachments ( * )')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false });
   if (behaviorId) q = q.eq('behavior_id', behaviorId);
   const { data, error } = await q;
   if (error) throw error;
-  return data;
+  return data.map((r) => ({ ...r, attachments: r.recognition_attachments ?? [] }));
 }
 
-export async function createRecognition(orgId, { behaviorId, recipient, body, authorName }) {
+export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [] }) {
   const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from('recognitions').insert({
+  if (recipientUserId && recipientUserId === user.id) throw new Error('Recognition goes to someone else.');
+  const { data: rec, error } = await supabase.from('recognitions').insert({
     org_id: orgId,
     behavior_id: behaviorId,
     author_id: user.id,
     author_name: authorName,
     recipient,
+    recipient_user_id: recipientUserId,
+    title: title || null,
     body
-  });
+  }).select().single();
   if (error) throw error;
+
+  // Attachments were accepted by the form but never uploaded in hosted mode.
+  for (const file of files) {
+    const path = `${orgId}/recognitions/${rec.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage
+      .from('story-media').upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    const { error: rowErr } = await supabase.from('recognition_attachments').insert({
+      recognition_id: rec.id, storage_path: path, file_name: file.name,
+      mime_type: file.type, byte_size: file.size, kind: attachmentKind(file)
+    });
+    if (rowErr) throw rowErr;
+  }
 }
 
 /* ------------------------------------------------------------- measurement */
@@ -872,3 +931,200 @@ export async function getCoverage(orgId) {
   return data;
 }
 
+
+/* ================================================================== R1 */
+
+/** Avatars are in a public bucket, so a picture is one plain URL. */
+function avatarUrl(path) {
+  if (!path) return null;
+  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+}
+
+/* ----------------------------------------------------------------- people */
+
+/** Members plus the super user, with team and picture: everyone a page can name. */
+export async function listPeople(orgId) {
+  const { data, error } = await supabase.rpc('org_people', { p_org: orgId });
+  if (error) throw error;
+  return (data ?? []).map((p) => ({ ...p, avatar_url: avatarUrl(p.avatar_path) }));
+}
+
+/**
+ * The file arrives already cropped and shrunk by the profile dialog. A new
+ * name each time, so browsers and the CDN never show the old face.
+ */
+export async function uploadMyAvatar(orgId, file) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const ext = (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+  const path = `${orgId}/${user.id}/avatar-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('avatars').upload(path, file, { contentType: file.type, upsert: false, cacheControl: '31536000' });
+  if (upErr) throw upErr;
+
+  const { data: old } = await supabase.storage.from('avatars').list(`${orgId}/${user.id}`);
+  const { error } = await supabase.rpc('set_my_avatar', { p_path: path });
+  if (error) throw error;
+  // Tidy up earlier pictures. Failing here leaves a stray file, nothing more.
+  const stale = (old ?? []).map((f) => `${orgId}/${user.id}/${f.name}`).filter((p) => p !== path);
+  if (stale.length) await supabase.storage.from('avatars').remove(stale);
+  return avatarUrl(path);
+}
+
+export async function removeMyAvatar(orgId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.rpc('set_my_avatar', { p_path: null });
+  if (error) throw error;
+  const { data: old } = await supabase.storage.from('avatars').list(`${orgId}/${user.id}`);
+  if (old?.length) await supabase.storage.from('avatars').remove(old.map((f) => `${orgId}/${user.id}/${f.name}`));
+}
+
+/* ------------------------------------------------------------------ teams */
+
+export async function listTeams(orgId) {
+  const { data, error } = await supabase
+    .from('teams').select('*').eq('org_id', orgId).eq('archived', false).order('name');
+  if (error) throw error;
+  return data;
+}
+
+export async function createTeam(orgId, name) {
+  const clean = String(name ?? '').trim();
+  if (!clean) throw new Error('Name the team.');
+  const { data, error } = await supabase
+    .from('teams').insert({ org_id: orgId, name: clean }).select().single();
+  if (error) {
+    if (error.code === '23505') throw new Error(`There is already a team called ${clean}.`);
+    throw error;
+  }
+  return data;
+}
+
+export async function renameTeam(teamId, name) {
+  const { data, error } = await supabase
+    .from('teams').update({ name: String(name).trim() }).eq('id', teamId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function setMemberTeam(orgId, userId, teamId) {
+  const { error } = await supabase
+    .from('memberships').update({ team_id: teamId || null }).eq('org_id', orgId).eq('user_id', userId);
+  if (error) throw error;
+}
+
+/* ----------------------------------------------------------- value awards */
+
+export async function listAwardTypes(orgId) {
+  const { data, error } = await supabase
+    .from('award_types')
+    .select('*, award_type_values ( value_id )')
+    .eq('org_id', orgId)
+    .order('created_at');
+  if (error) throw error;
+  return data.map((a) => ({ ...a, valueIds: (a.award_type_values ?? []).map((v) => v.value_id) }));
+}
+
+export async function saveAwardType(orgId, fields) {
+  const row = {
+    org_id: orgId,
+    name: String(fields.name ?? '').trim(),
+    description: fields.description?.trim() || null,
+    grantable_to: fields.grantable_to ?? 'both',
+    grant_cap: fields.grant_cap ? Number(fields.grant_cap) : null,
+    cap_period: fields.grant_cap ? fields.cap_period ?? 'quarter' : null,
+    active: fields.active ?? true
+  };
+  if (!row.name) throw new Error('Name the award.');
+  if (!fields.valueIds?.length) throw new Error('Pick at least one Value this award stands for.');
+
+  const q = fields.id
+    ? supabase.from('award_types').update(row).eq('id', fields.id)
+    : supabase.from('award_types').insert(row);
+  const { data, error } = await q.select().single();
+  if (error) throw error;
+
+  await supabase.from('award_type_values').delete().eq('award_type_id', data.id);
+  const { error: vErr } = await supabase.from('award_type_values')
+    .insert(fields.valueIds.map((value_id) => ({ award_type_id: data.id, value_id })));
+  if (vErr) throw vErr;
+  return data;
+}
+
+export async function listAwardGrants(orgId) {
+  const { data, error } = await supabase
+    .from('award_grants')
+    .select('*, award_types ( *, award_type_values ( value_id ) ), award_grant_recipients ( user_id ), award_grant_attachments ( * )')
+    .eq('org_id', orgId)
+    .order('granted_at', { ascending: false });
+  if (error) throw error;
+  return data.map((g) => ({
+    ...g,
+    award: g.award_types
+      ? { ...g.award_types, valueIds: (g.award_types.award_type_values ?? []).map((v) => v.value_id) }
+      : null,
+    recipients: (g.award_grant_recipients ?? []).map((r) => r.user_id),
+    attachments: g.award_grant_attachments ?? []
+  }));
+}
+
+export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, recipientName, files = [] }) {
+  if (!!recipientUserId === !!teamId) throw new Error('An award goes to one person or one team.');
+  if (!String(citation ?? '').trim()) throw new Error('Write the citation: what they did.');
+  const { data: { user } } = await supabase.auth.getUser();
+  if (recipientUserId === user.id) throw new Error('A Value award goes to someone else.');
+  const { data, error } = await supabase.from('award_grants').insert({
+    org_id: orgId, award_type_id: awardTypeId,
+    recipient_user_id: recipientUserId, team_id: teamId, recipient_name: recipientName,
+    granted_by: user.id, granted_by_name: user.user_metadata?.display_name ?? user.email,
+    citation: citation.trim()
+  }).select().single();
+  // The cap and recipient rules live in a trigger; its message is the useful part.
+  if (error) throw new Error(error.message?.replace(/^.*?ERROR:\s*/, '') || 'That award could not be given.');
+
+  for (const file of files) {
+    const path = `${orgId}/awards/${data.id}/${Date.now()}-${file.name}`;
+    const { error: upErr } = await supabase.storage
+      .from('story-media').upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    const { error: rowErr } = await supabase.from('award_grant_attachments').insert({
+      grant_id: data.id, storage_path: path, file_name: file.name,
+      mime_type: file.type, byte_size: file.size, kind: attachmentKind(file)
+    });
+    if (rowErr) throw rowErr;
+  }
+  return data;
+}
+
+/* ------------------------------------------------ sharing by email, R2 */
+
+/** Same email function as stories; it formats each kind of record its own way. */
+export const shareRecognitionByEmail = (id, recipients, note) =>
+  invokeFunction('share-story', { kind: 'recognition', id, recipients, note });
+export const shareAwardByEmail = (id, recipients, note) =>
+  invokeFunction('share-story', { kind: 'award', id, recipients, note });
+
+/* ---------------------------------------------------------------- fluency */
+
+export async function listMyFluencyMarks(orgId) {
+  const { data, error } = await supabase
+    .from('fluency_marks').select('behavior_id, step, marked_at').eq('org_id', orgId);
+  if (error) throw error;
+  return data;
+}
+
+/** Reading steps are recorded once; a repeat is a quiet no-op. */
+export async function markFluency(orgId, behaviorId, step) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('fluency_marks')
+    .upsert({ user_id: user.id, behavior_id: behaviorId, org_id: orgId, step },
+      { onConflict: 'user_id,behavior_id,step', ignoreDuplicates: true });
+  if (error) throw error;
+}
+
+/* ---------------------------------------------------------- pulse history */
+
+export async function getPulseSpreadByRound(orgId) {
+  const { data, error } = await supabase.rpc('pulse_spread_by_round', { p_org: orgId });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ ...r, spread: Number(r.spread) }));
+}

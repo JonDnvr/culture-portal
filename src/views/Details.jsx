@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import {
   getStory, getRecognition, getIteration, getRitual, signAttachment, listIterations
 } from '../lib/api.js';
-import { pad, Tag, BNum, BehaviorTag } from '../components/ui.jsx';
+import { pad, Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
+import { GoldStar } from '../components/badges.jsx';
+import { ShareRecord } from './Connection.jsx';
+import { useToast } from '../components/ui.jsx';
 
 /** Shared header: the behavior a record belongs to, with its description. */
 function BehaviorHeader({ behavior, ctx }) {
@@ -16,13 +19,13 @@ function BehaviorHeader({ behavior, ctx }) {
       </div>
       <p className="recorddesc">{behavior.description}</p>
       <button className="btn ghost small" onClick={() => ctx.openBehavior(behavior.id)}>
-        Open the full behavior
+        Open the full {ctx.term.one}
       </button>
     </div>
   );
 }
 
-export function Attachments({ files = [] }) {
+export function Attachments({ files = [], compact = false }) {
   const [urls, setUrls] = useState({});
 
   useEffect(() => {
@@ -40,10 +43,14 @@ export function Attachments({ files = [] }) {
   if (!files.length) return null;
 
   return (
-    <div className="attachgrid">
+    <div className={compact ? 'attachgrid compact' : 'attachgrid'}>
       {files.map((a) => (
-        <figure key={a.id} className="attachitem">
-          {a.kind === 'image' && urls[a.id] && <img src={urls[a.id]} alt={a.file_name} />}
+        <figure key={a.id ?? a.storage_path} className="attachitem">
+          {a.kind === 'image' && urls[a.id] && (
+            <a href={urls[a.id]} target="_blank" rel="noreferrer" title={`Open ${a.file_name}`}>
+              <img src={urls[a.id]} alt={a.file_name} />
+            </a>
+          )}
           {a.kind === 'video' && urls[a.id] && <video src={urls[a.id]} controls preload="metadata" />}
           {a.kind === 'file' && (
             urls[a.id]
@@ -82,7 +89,10 @@ export function StoryPage({ ctx, id }) {
       </div>
       <div className="kicker">Story</div>
       <BehaviorHeader behavior={story.behavior} ctx={ctx} />
-      <p className="byline">{story.author_name} &nbsp;/&nbsp; {when(story.created_at)}</p>
+      <p className="byline who2">
+        <Avatar person={findPerson(ctx.people, { id: story.author_id, name: story.author_name })} name={story.author_name} size={24} />
+        {story.author_name} &nbsp;/&nbsp; {when(story.created_at)}
+      </p>
       <p className="recordbody">{story.body}</p>
       <Attachments files={story.story_attachments ?? []} />
     </article>
@@ -91,6 +101,8 @@ export function StoryPage({ ctx, id }) {
 
 export function RecognitionPage({ ctx, id }) {
   const rec = useRecord(getRecognition, id);
+  const [sharing, setSharing] = useState(false);
+  const toast = useToast();
   if (rec === undefined) return <div className="empty">Loading…</div>;
   if (!rec) return <div className="empty">That recognition is no longer here.</div>;
 
@@ -99,12 +111,28 @@ export function RecognitionPage({ ctx, id }) {
       <div className="dateline">
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
-      <div className="kicker">Recognition</div>
+      <div className="detailhead">
+        <div className="kicker">Recognition</div>
+        <button className="btn ghost small" onClick={() => setSharing(true)}>Share by email</button>
+      </div>
       <BehaviorHeader behavior={rec.behavior} ctx={ctx} />
-      <h3 className="recordwho">{rec.recipient}</h3>
-      <p className="byline">Recognized by {rec.author_name} &nbsp;/&nbsp; {when(rec.created_at)}</p>
+      <div className="recordwho who2">
+        <Avatar person={findPerson(ctx.people, { id: rec.recipient_user_id, name: rec.recipient })} name={rec.recipient} size={36} />
+        <span>
+          <h3 className="recordwho" style={{ margin: 0 }}>{rec.recipient}</h3>
+          {rec.title && <span className="rectitle">{rec.recipient_user_id && <GoldStar size={16} />} {rec.title}</span>}
+        </span>
+      </div>
+      <p className="byline who2">
+        <Avatar person={findPerson(ctx.people, { id: rec.author_id, name: rec.author_name })} name={rec.author_name} size={20} />
+        Recognized by {rec.author_name} &nbsp;/&nbsp; {when(rec.created_at)}
+      </p>
       <p className="recordbody">{rec.body}</p>
       <Attachments files={rec.attachments ?? []} />
+      {sharing && (
+        <ShareRecord kind="recognition" id={rec.id} onClose={() => setSharing(false)} toast={toast}
+          summary={<p className="rectitle">{rec.recipient_user_id && <GoldStar size={16} />} {rec.title || rec.recipient}</p>} />
+      )}
     </article>
   );
 }
@@ -121,20 +149,35 @@ export function IterationPage({ ctx, id }) {
       <div className="dateline">
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
-      <div className="kicker">Ritual iteration</div>
+      <div className="kicker">{it.system ? 'System run' : 'Ritual iteration'}</div>
       <BehaviorHeader behavior={behavior} ctx={ctx} />
 
       <div className="recordpanel">
-        <h3 className="recordwho">{it.ritual?.name ?? 'Ritual'}</h3>
-        <p className="meta">{it.ritual?.owner} / {it.ritual?.cadence}</p>
-        {it.ritual && (
-          <button className="btn ghost small" onClick={() => ctx.openRecord('ritual', it.ritual.id)}>
-            Open the ritual
-          </button>
+        {it.system ? (
+          <>
+            <h3 className="recordwho">{it.system.name}</h3>
+            {it.system.artifact && <p className="meta">{it.system.artifact} / {it.system.owner} / {it.system.cadence}</p>}
+            {it.system.template && <pre className="practice">{it.system.template}</pre>}
+          </>
+        ) : (
+          <>
+            <h3 className="recordwho">{it.ritual?.name ?? 'Ritual'}</h3>
+            <p className="meta">{it.ritual?.owner} / {it.ritual?.cadence}</p>
+            {it.ritual && (
+              <button className="btn ghost small" onClick={() => ctx.openRecord('ritual', it.ritual.id)}>
+                Open the ritual
+              </button>
+            )}
+          </>
         )}
       </div>
 
-      <p className="byline">Recorded by {it.recorded_by_name} &nbsp;/&nbsp; run {when(it.held_at)}</p>
+      <p className="byline who2">
+        <Avatar person={findPerson(ctx.people, { id: it.recorded_by, name: it.recorded_by_name })} name={it.recorded_by_name} size={22} />
+        Recorded by {it.recorded_by_name}
+        {ctx.teams.find((t) => t.id === it.team_id) ? ` for ${ctx.teams.find((t) => t.id === it.team_id).name}` : ''}
+        &nbsp;/&nbsp; run {when(it.held_at)}
+      </p>
       {it.behaviors?.length > 1 && (
         <div className="tagrow">
           {it.behaviors.map((b) => (
@@ -173,7 +216,7 @@ export function RitualPage({ ctx, id }) {
       <p className="recordbody">{ritual.description}</p>
 
       {ritual.applies_to_all
-        ? <div className="tagrow"><Tag type="ritual">Applies to every behavior</Tag></div>
+        ? <div className="tagrow"><Tag type="ritual">Applies to every {ctx.term.one}</Tag></div>
         : (
           <div className="tagrow">
             {ritual.behaviors.map((b) => (
@@ -199,7 +242,10 @@ export function RitualPage({ ctx, id }) {
               <div key={r.id} className="row">
                 <div>
                   <div className="t">{new Date(r.held_at).toLocaleDateString()}</div>
-                  <div className="s">{r.recorded_by_name}{r.notes ? ` / ${r.notes.slice(0, 80)}` : ''}</div>
+                  <div className="s who2">
+                    <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
+                    {r.recorded_by_name}{r.notes ? ` / ${r.notes.slice(0, 80)}` : ''}
+                  </div>
                 </div>
                 <button className="btn ghost small" onClick={() => ctx.openRecord('iteration', r.id)}>Open</button>
               </div>

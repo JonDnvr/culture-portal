@@ -3,7 +3,7 @@ import {
   getPulse, getCoverage, listMeasures, listMeasureEntries, recordMeasureEntry,
   listIterations, getPulseStatus
 } from '../lib/api.js';
-import { pad, PulseBar, CategoryBadge, Tag, BehaviorTag, Modal, useToast } from '../components/ui.jsx';
+import { pad, N, NumList, PulseBar, CategoryBadge, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
 
 export default function Conviction({ ctx }) {
   const [tab, setTab] = useState('measures');
@@ -11,7 +11,7 @@ export default function Conviction({ ctx }) {
     <>
       <div className="dateline">Does it hold when it costs something?</div>
       <h1 className="pagetitle">Conviction</h1>
-      <p className="lede">What the behaviors are supposed to move, what people report, and whether the systems and rituals are actually running.</p>
+      <p className="lede">What the {ctx.term.many} are supposed to move, what people report, and whether the systems and rituals are actually running.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'measures'} onClick={() => setTab('measures')}>Measures</button>
         <button className="tab" aria-pressed={tab === 'summary'} onClick={() => setTab('summary')}>Summary ratings</button>
@@ -49,7 +49,7 @@ function Measures({ ctx }) {
   return (
     <section>
       <div className="sectionhead">
-        <h2>Measures these behaviors should move</h2>
+        <h2>Measures these {ctx.term.many} should move</h2>
         <span className="note">
           {canLead && measures.length > 0 && (
             <button className="btn small" onClick={() => setRecording(true)}>Record a period</button>
@@ -159,11 +159,11 @@ function Summary({ ctx }) {
           <div className="metric"><div className="n">{avg ?? '—'}</div><div className="l">Average, out of 5</div></div>
           <div className="metric">
             <div className="n">{widest ? Number(widest.spread).toFixed(1) : '—'}</div>
-            <div className="l">{widest ? `Widest split: ${pad(widest.number)}. ${widest.title}` : 'No responses yet'}</div>
+            <div className="l">{widest ? <>Widest split: <N n={widest.number} /> {widest.title}</> : 'No responses yet'}</div>
           </div>
           <div className="metric">
             <div className="n">{status ? `${status.scored}/${status.total}` : '—'}</div>
-            <div className="l">{status ? `Behaviors covered in round ${status.round}, target ${status.target} responses each` : 'Pulse not started'}</div>
+            <div className="l">{status ? `${ctx.term.Many} covered in round ${status.round}, target ${status.target} responses each` : 'Pulse not started'}</div>
           </div>
         </div>
       </section>
@@ -177,7 +177,7 @@ function Summary({ ctx }) {
             return (
               <div key={v.id} className="metric">
                 <div className="n">{score ?? '—'}</div>
-                <div className="l">{v.name} ({ids.length} behaviors)</div>
+                <div className="l">{v.name} ({ctx.term.count(ids.length)})</div>
                 {score && <PulseBar score={Number(score)} spread={0} />}
               </div>
             );
@@ -188,7 +188,7 @@ function Summary({ ctx }) {
       <section>
         <div className="sectionhead">
           <h2>Categories</h2>
-          <span className="note">Where the behaviors cluster, and where they are thin</span>
+          <span className="note">Where the {ctx.term.many} cluster, and where they are thin</span>
         </div>
         <div className="tablewrap">
           <table className="ctable">
@@ -200,7 +200,7 @@ function Summary({ ctx }) {
                   <tr key={c.name}>
                     <td><CategoryBadge name={c.name} /></td>
                     <td>{c.question}</td>
-                    <td className="meta">Behaviors ({ids.length})</td>
+                    <td className="meta">{ctx.term.Many} ({ids.length})</td>
                     <td className="meta">{score ? `${score} avg` : 'not scored'}</td>
                   </tr>
                 );
@@ -226,7 +226,7 @@ function DetailScores({ ctx }) {
   return (
     <section>
       <div className="sectionhead">
-        <h2>Behavior pulse</h2>
+        <h2>{ctx.term.One} pulse</h2>
         <span className="note">The gold band is the spread of answers, not the average</span>
       </div>
       {scored.length ? scored.map((p) => (
@@ -241,14 +241,14 @@ function DetailScores({ ctx }) {
         </div>
       )) : (
         <div className="empty">
-          No responses yet. Each person is asked about two behaviors when they sign in, so the
+          No responses yet. Each person is asked about two {ctx.term.many} when they sign in, so the
           first numbers arrive as people come through.
         </div>
       )}
 
       {unscored.length > 0 && (
         <div className="notice">
-          Not yet scored this round: {unscored.map((p) => pad(p.number)).join(', ')}.
+          Not yet scored this round: <NumList items={unscored} />.
         </div>
       )}
     </section>
@@ -258,32 +258,37 @@ function DetailScores({ ctx }) {
 /* ------------------------------------------------------- rhythm iterations */
 
 function RhythmIterations({ ctx }) {
-  const { org, rituals, behaviors, openRecord } = ctx;
+  const { org, rituals, behaviors, systems, openRecord } = ctx;
   const [runs, setRuns] = useState([]);
   const days = org.recent_days ?? 45;
 
   useEffect(() => { listIterations(org.id).then(setRuns).catch(() => setRuns([])); }, [org.id]);
 
   const cutoff = Date.now() - days * 86400000;
-  const summary = rituals.map((r) => {
-    const mine = runs.filter((x) => x.ritual_id === r.id);
+  // Rituals and systems side by side: a system run is recorded the same way.
+  const rowFor = (item, kind, match) => {
+    const mine = runs.filter(match);
     const recent = mine.filter((x) => new Date(x.held_at).getTime() >= cutoff);
-    return { ritual: r, total: mine.length, recent: recent.length, last: mine[0] ?? null };
-  }).sort((a, b) => (b.last ? new Date(b.last.held_at) : 0) - (a.last ? new Date(a.last.held_at) : 0));
+    return { ritual: item, kind, total: mine.length, recent: recent.length, last: mine[0] ?? null };
+  };
+  const summary = [
+    ...rituals.map((r) => rowFor(r, 'Ritual', (x) => x.ritual_id === r.id)),
+    ...systems.map((sy) => rowFor({ ...sy, cadence: 'System' }, 'System', (x) => x.system_category_id === sy.id))
+  ].sort((a, b) => (b.last ? new Date(b.last.held_at) : 0) - (a.last ? new Date(a.last.held_at) : 0));
 
   return (
     <>
       <section>
         <div className="sectionhead">
-          <h2>Rituals, by recency</h2>
+          <h2>Rituals and systems, by recency</h2>
           <span className="note">Recent means the last {days} days</span>
         </div>
         <div className="tablewrap">
           <table>
-            <thead><tr><th>Ritual</th><th>Cadence</th><th>Last run</th><th>Recent</th><th>All time</th></tr></thead>
+            <thead><tr><th>Ritual or system</th><th>Cadence</th><th>Last run</th><th>Recent</th><th>All time</th></tr></thead>
             <tbody>
-              {summary.map(({ ritual, total, recent, last }) => (
-                <tr key={ritual.id} className={last ? '' : 'flagged'}>
+              {summary.map(({ ritual, kind, total, recent, last }) => (
+                <tr key={`${kind}-${ritual.id}`} className={last ? '' : 'flagged'}>
                   <td className="name">{ritual.name}</td>
                   <td className="meta">{ritual.cadence}</td>
                   <td>{last ? new Date(last.held_at).toLocaleDateString() : <span className="gap">never</span>}</td>
@@ -302,9 +307,11 @@ function RhythmIterations({ ctx }) {
           {runs.slice(0, 40).map((r) => (
             <div key={r.id} className="row">
               <div>
-                <div className="t">{r.ritual?.name ?? 'Ritual'}</div>
-                <div className="s">
+                <div className="t">{r.ritual?.name ?? r.system?.name ?? 'Run'}{r.system ? ' (system)' : ''}</div>
+                <div className="s who2">
+                  <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
                   {new Date(r.held_at).toLocaleDateString()} / {r.recorded_by_name}
+                  {ctx.teams.find((t) => t.id === r.team_id) ? ` / ${ctx.teams.find((t) => t.id === r.team_id).name}` : ''}
                 </div>
                 {r.behaviors?.length > 0 && (
                   <div className="tagrow">
@@ -350,7 +357,7 @@ function Coverage({ ctx }) {
 
       {gaps.length > 0 && (
         <div className="notice flagnotice">
-          {gaps.length} behavior{gaps.length === 1 ? '' : 's'} reinforced in fewer than two systems: {gaps.map((g) => pad(g.number)).join(', ')}.
+          {ctx.term.count(gaps.length)} reinforced in fewer than two systems: <NumList items={gaps} />.
         </div>
       )}
 
@@ -359,7 +366,7 @@ function Coverage({ ctx }) {
           <div className="tablewrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Behavior</th>{systems.map((s) => <th key={s.id}>{s.name}</th>)}<th>Status</th></tr>
+                <tr><th>#</th><th>{ctx.term.One}</th>{systems.map((s) => <th key={s.id}>{s.name}</th>)}<th>Status</th></tr>
               </thead>
               <tbody>
                 {behaviors.map((b) => {
@@ -388,7 +395,7 @@ function Coverage({ ctx }) {
           <div className="tablewrap">
             <table>
               <thead>
-                <tr><th>#</th><th>Behavior</th>{rituals.map((r) => <th key={r.id}>{r.name}</th>)}</tr>
+                <tr><th>#</th><th>{ctx.term.One}</th>{rituals.map((r) => <th key={r.id}>{r.name}</th>)}</tr>
               </thead>
               <tbody>
                 {behaviors.map((b) => (

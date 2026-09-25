@@ -1,5 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { pad, Tag, BNum } from '../components/ui.jsx';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Tag, BNum } from '../components/ui.jsx';
+import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
+import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
 
 const ALL = 'All';
 const UNAPPLIED = '__none__';
@@ -9,7 +11,10 @@ const UNAPPLIED = '__none__';
  * about, where is it built in, and which category does it belong to.
  */
 export default function Clarity({ ctx }) {
-  const { behaviors, values, systems, categories, rituals, openBehavior, org } = ctx;
+  const { behaviors, values, systems, categories, rituals, openBehavior, org, term } = ctx;
+  const badges = useBehaviorBadges(ctx);
+  const [detail, setDetail] = useState(null);
+  useEffect(() => { ctx.refreshActivity(); }, []);
   const [value, setValue] = useState(ALL);
   const [system, setSystem] = useState(ALL);
   const [category, setCategory] = useState(ALL);
@@ -37,9 +42,9 @@ export default function Clarity({ ctx }) {
 
   return (
     <>
-      <div className="dateline">{behaviors.length} behaviors, numbered for reference</div>
+      <div className="dateline">{term.count(behaviors.length)}, numbered for reference</div>
       <h1 className="pagetitle">Clarity</h1>
-      <p className="lede">Behaviors written as verbs, filed by value, system and category, specific enough to observe.</p>
+      <p className="lede">{term.Many} written as verbs, filed by value, system and category, specific enough to observe.</p>
 
       <FilterRow label="Value" value={value} onChange={setValue}
         options={values.map((v) => ({ key: v.name, label: v.name, count: counts.value[v.name] }))} />
@@ -62,18 +67,45 @@ export default function Clarity({ ctx }) {
       {filtered && (
         <div className="filterline" style={{ marginTop: 12 }}>
           <span className="fl2" />
-          <span className="meta">Showing {list.length} of {behaviors.length} behaviors</span>
+          <span className="meta">Showing {list.length} of {term.count(behaviors.length)}</span>
           <button className="btn ghost small" onClick={clear}>Clear filters</button>
         </div>
       )}
 
       <section>
+        {list.length > 0 && (
+          <div className="zonehint">
+            <span><b>Click the name</b> to open the {term.one}</span>
+            <span><b>Click any badge</b> to see how it is earned</span>
+          </div>
+        )}
         {list.length ? (
           <div className="grid">
-            {list.map((b) => (
-              <button key={b.id} className="fcard" onClick={() => openBehavior(b.id)}>
-                <h3><BNum n={b.number} /> {b.title}</h3>
-                <p>{b.description}</p>
+            {list.map((b) => {
+              const f = badges.fluency[b.id];
+              const pr = badges.practiced[b.id];
+              return (
+              <div key={b.id} className="fcard">
+                <div className="fcardtop">
+                  <button className="zone ztitle" onClick={() => openBehavior(b.id)}>
+                    <h3><BNum n={b.number} /> {b.title}<span className="chev" aria-hidden="true">›</span></h3>
+                    <p>{b.description}</p>
+                  </button>
+                  <button className="zone zbadge" onClick={() => setDetail({ kind: 'fluency', b })}
+                    aria-label={`${fluencyName(f, term)} badge details`} title={`${fluencyName(f, term)}: how it is earned`}>
+                    <FluencyBadge f={f} size={46} />
+                  </button>
+                </div>
+                <div className="chips">
+                  {badges.connection[b.id] && (
+                    <button className="chip gold" onClick={() => setDetail({ kind: 'connection', b })}>
+                      <Nodes size={13} /> Connection
+                    </button>
+                  )}
+                  <button className="chip gold" onClick={() => setDetail({ kind: 'practice', b })}>
+                    <Metronome size={13} /> Practiced {pr.count} of {pr.of} <WeekMarks marks={pr.marks} />
+                  </button>
+                </div>
                 <div className="tagrow">
                   {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
                   <Tag type="category">{b.category}</Tag>
@@ -85,13 +117,26 @@ export default function Clarity({ ctx }) {
                   {org.weekly_behavior_id === b.id && <Tag type="live">This week</Tag>}
                   {b.is_example && <Tag type="warn">Example</Tag>}
                 </div>
-              </button>
-            ))}
+              </div>
+              );
+            })}
           </div>
         ) : (
-          <div className="empty">No behaviors match that combination. That is usually the finding, not a dead end.</div>
+          <div className="empty">No {term.many} match that combination. That is usually the finding, not a dead end.</div>
         )}
       </section>
+
+      {detail?.kind === 'fluency' && (
+        <FluencyDetail ctx={ctx} behavior={detail.b} f={badges.fluency[detail.b.id]} onClose={() => setDetail(null)} />
+      )}
+      {detail?.kind === 'practice' && (
+        <PracticeDetail ctx={ctx} behavior={detail.b} p={badges.practiced[detail.b.id]}
+          scopeName={badges.scopeName} sessionId={badges.sessionId} onClose={() => setDetail(null)} />
+      )}
+      {detail?.kind === 'connection' && (
+        <ConnectionDetail ctx={ctx} behavior={detail.b} scopeName={badges.scopeName}
+          recentDays={badges.recentDays} onClose={() => setDetail(null)} />
+      )}
     </>
   );
 }

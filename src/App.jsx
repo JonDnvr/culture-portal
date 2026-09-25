@@ -3,8 +3,16 @@ import {
   getSession, onAuthChange, signOut,
   listMyOrganizations, listValues, listSystemCategories,
   listBehaviors, listRituals, listCategories,
+  listPeople, listTeams, listAwardTypes, listAwardGrants,
+  listIterations, listRecognitions, listStories, listMyFluencyMarks,
+  getPulseStatus, getPulseSpreadByRound,
   IS_LOCAL, resetLocalData, ARRIVED_FROM_RESET, onPasswordRecovery
 } from './lib/api.js';
+import TrophyWall from './views/TrophyWall.jsx';
+import ProfileDialog from './views/Profile.jsx';
+import { Avatar } from './components/ui.jsx';
+import { NavIcon } from './components/badges.jsx';
+import { termFor } from './lib/term.js';
 import Home from './views/Home.jsx';
 import Clarity from './views/Clarity.jsx';
 import Behavior from './views/Behavior.jsx';
@@ -21,10 +29,16 @@ const EDITORS = ['admin', 'champion', 'owner'];
 
 const NAV = [
   { id: 'home', label: 'Culture home', sub: 'Purpose, values, this week', roles: ALL_ROLES },
-  { id: 'clarity', label: 'Clarity', sub: 'The behaviors', roles: ALL_ROLES },
+  { id: 'clarity', label: 'Clarity', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
   { id: 'cadence', label: 'Cadence', sub: 'Practice and rituals', roles: ALL_ROLES },
   { id: 'connection', label: 'Connection', sub: 'Recognition and stories', roles: ALL_ROLES },
-  { id: 'conviction', label: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] },
+  { id: 'conviction', label: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
+];
+
+// Apart from the working sections, at the foot of the navigation: the wall,
+// then Admin.
+const FOOT = [
+  { id: 'wall', label: 'Trophy Wall', sub: 'What has been earned', roles: ALL_ROLES },
   { id: 'admin', label: 'Admin', sub: 'Content, systems, people', roles: EDITORS }
 ];
 
@@ -84,6 +98,9 @@ function App() {
     return () => sub.unsubscribe();
   }, []);
   const [error, setError] = useState(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Bumped by "Rate now" to bring the pulse back even after it was dismissed.
+  const [pulseAsk, setPulseAsk] = useState(0);
 
   useEffect(() => {
     getSession().then(setSession);
@@ -113,15 +130,56 @@ function App() {
   const load = useCallback(async () => {
     if (!org) return;
     try {
-      const [values, systems, behaviors, rituals, categories] = await Promise.all([
+      // Anything added in R1 falls back to empty rather than failing the page,
+      // so the site still loads if it is deployed a moment before the database
+      // migration has run.
+      const soft = (p, fallback) => p.catch((e) => { console.warn(e); return fallback; });
+      const [values, systems, behaviors, rituals, categories,
+        people, teams, awardTypes, grants,
+        iterations, recognitions, stories, fluencyMarks, pulseStatus, pulseSpread] = await Promise.all([
         listValues(org.id), listSystemCategories(org.id), listBehaviors(org.id),
-        listRituals(org.id), listCategories()
+        listRituals(org.id), listCategories(),
+        soft(listPeople(org.id), []), soft(listTeams(org.id), []),
+        soft(listAwardTypes(org.id), []), soft(listAwardGrants(org.id), []),
+        soft(listIterations(org.id), []), soft(listRecognitions(org.id), []), soft(listStories(org.id), []),
+        soft(listMyFluencyMarks(org.id), []),
+        soft(getPulseStatus(org.id), null), soft(getPulseSpreadByRound(org.id), [])
       ]);
-      setData({ values, systems, behaviors, rituals, categories });
+      setData({
+        values, systems, behaviors, rituals, categories, people, teams, awardTypes, grants,
+        activity: { iterations, recognitions, stories, fluencyMarks, pulseStatus, pulseSpread }
+      });
     } catch (e) { setError(e.message); }
   }, [org]);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Just the activity behind the badges and fluency rings, without reloading
+   * content. Pages that show rings call it when they open, so a practice read
+   * or recorded elsewhere shows up when you come back.
+   */
+  const refreshActivity = useCallback(async () => {
+    if (!org) return;
+    const soft = (p, fallback) => p.catch(() => fallback);
+    const [iterations, recognitions, stories, fluencyMarks, pulseStatus, pulseSpread, grants] = await Promise.all([
+      soft(listIterations(org.id), null), soft(listRecognitions(org.id), null), soft(listStories(org.id), null),
+      soft(listMyFluencyMarks(org.id), null), soft(getPulseStatus(org.id), null),
+      soft(getPulseSpreadByRound(org.id), null), soft(listAwardGrants(org.id), null)
+    ]);
+    setData((d) => d && ({
+      ...d,
+      grants: grants ?? d.grants,
+      activity: {
+        iterations: iterations ?? d.activity.iterations,
+        recognitions: recognitions ?? d.activity.recognitions,
+        stories: stories ?? d.activity.stories,
+        fluencyMarks: fluencyMarks ?? d.activity.fluencyMarks,
+        pulseStatus: pulseStatus ?? d.activity.pulseStatus,
+        pulseSpread: pulseSpread ?? d.activity.pulseSpread
+      }
+    }));
+  }, [org]);
 
   if (!session) return <SignIn />;
   if (recovering) return (
@@ -152,9 +210,15 @@ function App() {
   const role = org.role;
   const isSuper = !!org.isSuper;
   const nav = NAV.filter((n) => n.roles.includes(role));
+  const foot = FOOT.filter((n) => n.roles.includes(role));
+  const term = termFor(org);
+  const userId = session?.user?.id ?? null;
+  const me = data.people.find((p) => p.user_id === userId) ?? null;
 
   const ctx = {
-    org, role, isSuper, ...data, reload: load,
+    org, role, isSuper, ...data, reload: load, refreshActivity, term,
+    openPulse: () => { setPulseAsk((n) => n + 1); window.scrollTo(0, 0); },
+    userId, me, myTeamId: me?.team_id ?? null,
     openBehavior: (id) => {
       setHistory((h) => [...h, { view, behaviorId, detail }]);
       setDetail(null); setBehaviorId(id); setView('behavior'); window.scrollTo(0, 0);
@@ -204,13 +268,10 @@ function App() {
           </div>
         </div>
         <nav>
-          {nav.map((n) => (
-            <button key={n.id} className="navitem"
-              aria-current={view === n.id ? 'page' : undefined}
-              onClick={() => ctx.goto(n.id)}>
-              <span>{n.label}<br /><small>{n.sub}</small></span>
-            </button>
-          ))}
+          {nav.map((n) => <NavButton key={n.id} n={n} term={term} current={view === n.id} onGo={ctx.goto} accent={org.accent} />)}
+          <div className="navwall">
+            {foot.map((n) => <NavButton key={n.id} n={n} term={term} current={view === n.id} onGo={ctx.goto} accent={org.accent} />)}
+          </div>
         </nav>
         <div className="railfoot">
           {isSuper && orgs.length > 1 && (
@@ -222,7 +283,10 @@ function App() {
             </>
           )}
           <div className="credit">
-            {org.displayName}<br />
+            <button className="mebtn" onClick={() => setProfileOpen(true)} title="Your picture">
+              <Avatar person={me} name={org.displayName} size={28} />
+              <span>{org.displayName}<br /><small>Your picture</small></span>
+            </button>
             <span className="rolechip">{ROLE_LABEL[role]}{isSuper ? ', all organizations' : ''}</span><br />
             <button className="linkbtn" onClick={signOut}>Sign out</button>
             {IS_LOCAL && isSuper && (
@@ -232,7 +296,7 @@ function App() {
         </div>
       </aside>
       <main>
-        {!isSuper && <PulseCheck ctx={ctx} />}
+        {!isSuper && <PulseCheck ctx={ctx} ask={pulseAsk} />}
         <div className="view">
           {view === 'home' && <Home ctx={ctx} />}
           {view === 'clarity' && <Clarity ctx={ctx} />}
@@ -241,13 +305,25 @@ function App() {
           {view === 'connection' && <Connection ctx={ctx} />}
           {view === 'conviction' && <Conviction ctx={ctx} />}
           {view === 'admin' && <Admin ctx={ctx} />}
+          {view === 'wall' && <TrophyWall ctx={ctx} />}
           {view === 'record' && detail?.kind === 'story' && <StoryPage ctx={ctx} id={detail.id} />}
           {view === 'record' && detail?.kind === 'recognition' && <RecognitionPage ctx={ctx} id={detail.id} />}
           {view === 'record' && detail?.kind === 'iteration' && <IterationPage ctx={ctx} id={detail.id} />}
           {view === 'record' && detail?.kind === 'ritual' && <RitualPage ctx={ctx} id={detail.id} />}
         </div>
       </main>
+      {profileOpen && <ProfileDialog ctx={ctx} onClose={() => setProfileOpen(false)} />}
     </div>
+  );
+}
+
+/** A section in the rail, with its icon in the organization's highlight color. */
+function NavButton({ n, term, current, onGo, accent }) {
+  return (
+    <button className="navitem" aria-current={current ? 'page' : undefined} onClick={() => onGo(n.id)}>
+      <span className="navicon" style={{ color: accent || 'var(--accent)' }}><NavIcon id={n.id} /></span>
+      <span className="navtext">{n.label}<br /><small>{typeof n.sub === 'function' ? n.sub(term) : n.sub}</small></span>
+    </button>
   );
 }
 

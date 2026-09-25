@@ -1,27 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import {
   createRitual, updateRitual, setRitualBehaviors, recordIteration, listIterations,
-  reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate
+  reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency
 } from '../lib/api.js';
-import { pad, Tag, BNum, BehaviorTag, Modal, useToast } from '../components/ui.jsx';
+import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
 import { BehaviorForm } from './Behavior.jsx';
+import { Attachments } from './Details.jsx';
+import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
+import { termFor } from '../lib/term.js';
 
 const ALL = 'All';
 
 export default function Cadence({ ctx }) {
+  const { term } = ctx;
   const [tab, setTab] = useState('week');
+  // Fluency rings and streaks read from recorded activity; opening Cadence,
+  // or coming back to it, brings them up to date.
+  useEffect(() => { ctx.refreshActivity(); }, []);
   return (
     <>
       <div className="dateline">Week of {new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</div>
       <h1 className="pagetitle">Cadence</h1>
-      <p className="lede">One behavior at a time, carried by practices nobody has to remember.</p>
+      <p className="lede">One {term.one} at a time, carried by practices nobody has to remember.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>This week</button>
+        <button className="tab" aria-pressed={tab === 'sessions'} onClick={() => setTab('sessions')}>Sessions</button>
         <button className="tab" aria-pressed={tab === 'rotation'} onClick={() => setTab('rotation')}>Rotation</button>
         <button className="tab" aria-pressed={tab === 'rituals'} onClick={() => setTab('rituals')}>Rituals</button>
         <button className="tab" aria-pressed={tab === 'systems'} onClick={() => setTab('systems')}>Systems</button>
       </div>
       {tab === 'week' && <ThisWeek ctx={ctx} />}
+      {tab === 'sessions' && <Sessions ctx={ctx} />}
       {tab === 'rotation' && <Rotation ctx={ctx} />}
       {tab === 'rituals' && <Rituals ctx={ctx} />}
       {tab === 'systems' && <Systems ctx={ctx} />}
@@ -32,7 +41,7 @@ export default function Cadence({ ctx }) {
 /* ---------------------------------------------------------------- this week */
 
 function ThisWeek({ ctx }) {
-  const { org, behaviors, rituals, canEdit, canLead, reload, openRecord } = ctx;
+  const { org, behaviors, rituals, canEdit, reload, openRecord, term } = ctx;
   const week = behaviors.find((b) => b.id === org.weekly_behavior_id) ?? behaviors[0];
   // The session script is a ritual that applies to every behavior, so editing
   // it here changes the practice everywhere.
@@ -47,7 +56,7 @@ function ThisWeek({ ctx }) {
     listIterations(org.id, { ritualId: session.id }).then(setRuns).catch(() => setRuns([]));
   }, [org.id, session?.id, modal]);
 
-  if (!week) return <div className="empty">No behaviors yet. Add the first one from the Rotation tab.</div>;
+  if (!week) return <div className="empty">No {term.many} yet. Add the first one from the Rotation tab.</div>;
 
   return (
     <>
@@ -65,7 +74,7 @@ function ThisWeek({ ctx }) {
 
           <div className="btnrow">
             <button className="btn ghost" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-              {expanded ? 'Hide the detail' : 'Show the full behavior'}
+              {expanded ? 'Hide the detail' : `Show the full ${term.one}`}
             </button>
           </div>
 
@@ -117,31 +126,36 @@ function ThisWeek({ ctx }) {
                 <p className="meta">{session.owner} / {session.cadence}</p>
                 <pre className="practice">{session.practice}</pre>
                 <p className="meta">
-                  This is a ritual that applies to every behavior. Editing it changes the session for all of them.
+                  This is a ritual that applies to every {term.one}. Editing it changes the session for all of them.
                 </p>
-                {canLead && (
-                  <div className="btnrow">
-                    <button className="btn" onClick={() => setModal({ kind: 'run', ritual: session, behaviorIds: [week.id] })}>
-                      Record an iteration
-                    </button>
-                  </div>
-                )}
+                <div className="btnrow">
+                  <button className="btn" onClick={() => setModal({ kind: 'run', ritual: session, readFor: [week.id], preselect: [week.id] })}>
+                    Record an iteration
+                  </button>
+                </div>
               </>
             ) : <div className="empty">No practice session ritual defined yet.</div>}
           </div>
 
-          {runs.length > 0 && (
+          {runs.some((r) => (r.behavior_ids ?? []).includes(week.id)) && (
             <div className="panel" style={{ marginTop: 15 }}>
-              <div className="sectionhead"><h2 className="small">Recent sessions</h2><span className="note">({runs.length})</span></div>
+              <div className="sectionhead">
+                <h2 className="small">Recent sessions</h2>
+                <span className="note">For <N n={week.number} /> ({runs.filter((r) => (r.behavior_ids ?? []).includes(week.id)).length})</span>
+              </div>
               <div className="rowlist flat">
-                {runs.slice(0, 5).map((r) => (
+                {runs.filter((r) => (r.behavior_ids ?? []).includes(week.id)).slice(0, 5).map((r) => (
                   <div key={r.id} className="row">
                     <div>
                       <div className="t">{new Date(r.held_at).toLocaleDateString()}</div>
                       <div className="tagrow">
                         {(r.behaviors ?? []).map((b) => <BehaviorTag key={b.id} behavior={b} />)}
                       </div>
-                      <div className="s">{r.recorded_by_name}</div>
+                      <div className="s who2">
+                        <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })}
+                          name={r.recorded_by_name} size={18} />
+                        {r.recorded_by_name}
+                      </div>
                     </div>
                     <button className="btn ghost small" onClick={() => openRecord('iteration', r.id)}>Open</button>
                   </div>
@@ -158,17 +172,90 @@ function ThisWeek({ ctx }) {
           onSave={async (fields) => { await updateRitual(session.id, fields); toast('Practice updated.'); setModal(null); reload(); }} />
       )}
       {modal?.kind === 'run' && (
-        <RecordIteration ctx={ctx} ritual={modal.ritual} behaviorIds={modal.behaviorIds}
+        <RecordIteration ctx={ctx} ritual={modal.ritual} readFor={modal.readFor ?? []} preselect={modal.preselect ?? []}
           onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
     </>
   );
 }
 
+/* ----------------------------------------------------------------- sessions */
+
+/**
+ * Every recorded run of a ritual or a system, newest first: filtered by value
+ * and behavior like the other Cadence tabs, and with the team toggle, search
+ * and "See more" that Recognition and Stories use.
+ */
+function Sessions({ ctx }) {
+  const { org, behaviors, values, teams, activity, openRecord, openBehavior, term } = ctx;
+  const [value, setValue] = useState(ALL);
+  const [behavior, setBehavior] = useState(ALL);
+  const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
+  const teamName = (id) => teams.find((t) => t.id === id)?.name;
+
+  const rows = activity.iterations.filter((it) => {
+    const bs = (it.behavior_ids ?? []).map((id) => byId[id]).filter(Boolean);
+    if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
+    if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
+    return true;
+  });
+
+  const tools = useListTools({
+    ctx, rows,
+    onTeam: (it, teamId) => it.team_id === teamId,
+    text: (it) => searchable(ctx, [
+      it.ritual?.name, it.system?.name, it.system ? 'system' : 'ritual', it.notes, it.recorded_by_name,
+      teamName(it.team_id), new Date(it.held_at).toLocaleDateString(),
+      (it.behavior_ids ?? []).map((id) => behaviorWords(byId[id]))
+    ])
+  });
+
+  return (
+    <section>
+      <div className="sectionhead">
+        <h2>Sessions</h2>
+        <span className="note">Every ritual and system run that has been recorded</span>
+      </div>
+      <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
+        value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
+      <ListBar ctx={ctx} tools={tools} placeholder={`Search sessions: a ritual, a person, a ${term.one}, a note`} />
+
+      <div className="rowlist">
+        {tools.shown.map((it) => (
+          <div key={it.id} className="row sessrow">
+            <div>
+              <div className="t">
+                {it.ritual?.name ?? it.system?.name ?? 'Run'}
+                <Tag type={it.system ? 'system' : 'ritual'}>{it.system ? 'System' : 'Ritual'}</Tag>
+                {teamName(it.team_id) && <Tag type="plain">{teamName(it.team_id)}</Tag>}
+              </div>
+              <div className="s who2">
+                <Avatar person={findPerson(ctx.people, { id: it.recorded_by, name: it.recorded_by_name })}
+                  name={it.recorded_by_name} size={18} />
+                {it.recorded_by_name} &nbsp;/&nbsp; {new Date(it.held_at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </div>
+              <div className="tagrow">
+                {(it.behavior_ids ?? []).map((id) => byId[id]).filter(Boolean).map((b) => (
+                  <BehaviorTag key={b.id} behavior={b} onClick={() => openBehavior(b.id)} />
+                ))}
+              </div>
+              {it.notes && <p className="quiet" style={{ margin: '6px 0 0' }}>{it.notes}</p>}
+              {(it.attachments ?? []).length > 0 && <Attachments files={it.attachments} compact />}
+            </div>
+            <button className="btn ghost small" onClick={() => openRecord('iteration', it.id)}>Open</button>
+          </div>
+        ))}
+        {!tools.shown.length && <div className="row"><div className="s">Nothing matches.</div></div>}
+      </div>
+      <MoreButton tools={tools} />
+    </section>
+  );
+}
+
 /* ----------------------------------------------------------------- rotation */
 
 function Rotation({ ctx }) {
-  const { org, behaviors, values, categories, canEdit, openBehavior, reload } = ctx;
+  const { org, behaviors, values, categories, canEdit, openBehavior, reload, term } = ctx;
   const [order, setOrder] = useState(behaviors.map((b) => b.id));
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState(null);
@@ -207,13 +294,13 @@ function Rotation({ ctx }) {
               </>
             : <>
                 <button className="btn ghost small" onClick={() => setEditing(true)}>Reorder</button>{' '}
-                <button className="btn small" onClick={() => setAdding(true)}>Add a behavior</button>
+                <button className="btn small" onClick={() => setAdding(true)}>Add a {term.one}</button>
               </>)}
         </span>
       </div>
 
       {editing && (
-        <div className="notice">Drag a behavior to move it. Saving renumbers the list, so the number always matches the order.</div>
+        <div className="notice">Drag a {term.one} to move it. Saving renumbers the list, so the number always matches the order.</div>
       )}
 
       <div className="rowlist">
@@ -248,11 +335,11 @@ function Rotation({ ctx }) {
       </div>
 
       {adding && (
-        <BehaviorForm title="Add a behavior" values={values} categories={categories} toast={toast} wide
+        <BehaviorForm title={`Add a ${term.one}`} term={term} values={values} categories={categories} toast={toast} wide
           onClose={() => setAdding(false)}
           onSave={async (fields) => {
             const b = await createBehavior(org.id, fields);
-            toast('Behavior added.');
+            toast(`${term.One} added.`);
             setAdding(false);
             await reload();
             openBehavior(b.id);
@@ -265,7 +352,7 @@ function Rotation({ ctx }) {
 /* ------------------------------------------------------------------ filters */
 
 /** One label for however many dropdowns follow it: "Behavior / System". */
-function BehaviorValueFilters({ values, behaviors, counts, value, setValue, behavior, setBehavior,
+function BehaviorValueFilters({ term, values, behaviors, counts, value, setValue, behavior, setBehavior,
   categories, category, setCategory, extra, extraLabel }) {
   return (
     <div className="filters">
@@ -289,9 +376,9 @@ function BehaviorValueFilters({ values, behaviors, counts, value, setValue, beha
         </div>
       )}
       <div className="filterline">
-        <span className="fl2">{extraLabel ? `Behavior / ${extraLabel}` : 'Behavior'}</span>
+        <span className="fl2">{extraLabel ? `${term.One} / ${extraLabel}` : term.One}</span>
         <select className="field inline" value={behavior} onChange={(e) => setBehavior(e.target.value)}>
-          <option value={ALL}>All behaviors</option>
+          <option value={ALL}>All {term.many}</option>
           {behaviors.map((b) => <option key={b.id} value={b.id}>{pad(b.number)}. {b.title}</option>)}
         </select>
         {extra}
@@ -303,7 +390,7 @@ function BehaviorValueFilters({ values, behaviors, counts, value, setValue, beha
 /* ------------------------------------------------------------------ rituals */
 
 function Rituals({ ctx }) {
-  const { org, behaviors, values, rituals, canEdit, canLead, openBehavior, openRecord, reload } = ctx;
+  const { org, behaviors, values, rituals, canEdit, openBehavior, openRecord, reload } = ctx;
   const [value, setValue] = useState(ALL);
   const [behavior, setBehavior] = useState(ALL);
   const [modal, setModal] = useState(null);
@@ -332,11 +419,11 @@ function Rituals({ ctx }) {
         </span>
       </div>
       <p className="lede small">
-        Practices written once and applied to any behavior they reinforce. Recording an iteration
+        Practices written once and applied to any {ctx.term.one} they reinforce. Recording an iteration
         is what feeds recency and count on Conviction.
       </p>
 
-      <BehaviorValueFilters values={values} behaviors={behaviors}
+      <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
         value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
 
       {list.map((r) => {
@@ -352,10 +439,10 @@ function Rituals({ ctx }) {
             <p className="pact">{r.description}</p>
             <div className="tagrow">
               {r.applies_to_all
-                ? <Tag type="ritual">Every behavior</Tag>
+                ? <Tag type="ritual">Every {ctx.term.one}</Tag>
                 : bs.length
                   ? bs.map((b) => <BehaviorTag key={b.id} behavior={b} onClick={() => openBehavior(b.id)} />)
-                  : <Tag type="warn">Not applied to any behavior</Tag>}
+                  : <Tag type="warn">Not applied to any {ctx.term.one}</Tag>}
             </div>
             <div className="tagrow">
               <Tag type="ritual">Iterations ({mine.length})</Tag>
@@ -364,11 +451,12 @@ function Rituals({ ctx }) {
                 : <Tag type="warn">Never recorded</Tag>}
             </div>
             <div className="btnrow">
-              {canLead && (
-                <button className="btn small" onClick={() => setModal({ kind: 'run', ritual: r, behaviorIds: bs.map((b) => b.id) })}>
-                  Practice It
-                </button>
-              )}
+              <button className="btn small" onClick={() => setModal({
+                kind: 'run', ritual: r,
+                readFor: r.applies_to_all ? [org.weekly_behavior_id].filter(Boolean) : bs.map((b) => b.id)
+              })}>
+                Practice It
+              </button>
               <button className="btn ghost small" onClick={() => openRecord('ritual', r.id)}>Details</button>
               {canEdit && (
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'edit', ritual: r })}>Edit</button>
@@ -380,7 +468,7 @@ function Rituals({ ctx }) {
       {!list.length && <div className="empty">No rituals match that filter.</div>}
 
       {modal?.kind === 'new' && (
-        <RitualForm title="New ritual" toast={toast} behaviors={behaviors} onClose={() => setModal(null)}
+        <RitualForm title="New ritual" toast={toast} term={ctx.term} behaviors={behaviors} onClose={() => setModal(null)}
           onSave={async (fields, behaviorIds) => {
             const r = await createRitual(org.id, fields);
             if (behaviorIds?.length) await setRitualBehaviors(r.id, behaviorIds);
@@ -388,7 +476,7 @@ function Rituals({ ctx }) {
           }} />
       )}
       {modal?.kind === 'edit' && (
-        <RitualForm title="Edit ritual" initial={modal.ritual} behaviors={modal.ritual.applies_to_all ? null : behaviors}
+        <RitualForm title="Edit ritual" term={ctx.term} initial={modal.ritual} behaviors={modal.ritual.applies_to_all ? null : behaviors}
           selected={carriers(modal.ritual).map((b) => b.id)} toast={toast} onClose={() => setModal(null)}
           onSave={async (fields, behaviorIds) => {
             await updateRitual(modal.ritual.id, fields);
@@ -397,7 +485,7 @@ function Rituals({ ctx }) {
           }} />
       )}
       {modal?.kind === 'run' && (
-        <RecordIteration ctx={ctx} ritual={modal.ritual} behaviorIds={modal.behaviorIds}
+        <RecordIteration ctx={ctx} ritual={modal.ritual} readFor={modal.readFor ?? []} preselect={modal.preselect ?? []}
           onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
     </section>
@@ -442,10 +530,10 @@ function Systems({ ctx }) {
         </span>
       </div>
       <p className="lede small">
-        Where each behavior is built into how the organization already runs, grouped by system.
+        Where each {ctx.term.one} is built into how the organization already runs, grouped by system.
       </p>
 
-      <BehaviorValueFilters values={values} behaviors={behaviors}
+      <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
         value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior}
         categories={categories} category={category} setCategory={setCategory}
         extraLabel="System"
@@ -478,10 +566,11 @@ function Systems({ ctx }) {
               {b.is_example && <div className="tagrow"><Tag type="warn">Example</Tag></div>}
               <div className="btnrow">
                 {p.template
-                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'template', p })}>Open the template</button>
-                  : canEdit
-                    ? <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p })}>Write the template</button>
-                    : <button className="btn ghost small" disabled>No template yet</button>}
+                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', s, p, b })}>Open the template</button>
+                  : <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', s, p, b })}>Record a run</button>}
+                {!p.template && canEdit && (
+                  <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p })}>Write the template</button>
+                )}
               </div>
             </div>
           )) : <div className="empty">Nothing applied to this system yet.</div>}
@@ -492,12 +581,9 @@ function Systems({ ctx }) {
         <ApplySystemToMany ctx={ctx} onClose={() => setModal(null)} toast={toast}
           onDone={() => { setModal(null); reload(); }} />
       )}
-      {modal?.kind === 'template' && (
-        <Modal title={modal.p.artifact} onClose={() => setModal(null)}
-          footer={<button className="btn ghost" onClick={() => setModal(null)}>Close</button>}>
-          <div className="meta">{modal.p.system} / {modal.p.owner} / {modal.p.cadence}</div>
-          <pre>{modal.p.template}</pre>
-        </Modal>
+      {modal?.kind === 'runSystem' && (
+        <RecordIteration ctx={ctx} system={modal.s} placement={modal.p} readFor={[modal.b.id]}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
       {modal?.kind === 'writeTemplate' && (
         <WriteTemplate placement={modal.p} onClose={() => setModal(null)}
@@ -524,7 +610,7 @@ function ApplySystemToMany({ ctx, onClose, onDone, toast }) {
     if (!f.behaviorIds.length) return toast('Pick at least one behavior.');
     try {
       await applySystemToBehaviors(org.id, f.behaviorIds, f);
-      toast(`Applied to ${f.behaviorIds.length} behavior${f.behaviorIds.length === 1 ? '' : 's'}.`);
+      toast(`Applied to ${ctx.term.count(f.behaviorIds.length)}.`);
       onDone();
     } catch (e) { toast(e.message); }
   }
@@ -552,19 +638,19 @@ function ApplySystemToMany({ ctx, onClose, onDone, toast }) {
       <label className="fl">Artifact</label>
       <input type="text" placeholder="The thing that exists: a form, a log, a question"
         value={f.artifact} onChange={(e) => setF({ ...f, artifact: e.target.value })} />
-      <label className="fl">Behaviors it reinforces</label>
+      <label className="fl">{ctx.term.Many} it reinforces</label>
       <div className="tagrow">
         {behaviors.map((b) => (
           <button key={b.id} className="pill" aria-pressed={f.behaviorIds.includes(b.id)} onClick={() => toggle(b.id)}>
-            {pad(b.number)}. {b.title}
+            <N n={b.number} /> {b.title}
           </button>
         ))}
       </div>
       <label className="fl">Template, optional now</label>
       <textarea rows={6} value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} />
       <p className="meta" style={{ marginTop: 8 }}>
-        The same owner, cadence, artifact and template are written to each behavior you pick.
-        Edit any of them individually afterwards from its behavior page.
+        The same owner, cadence, artifact and template are written to each {ctx.term.one} you pick.
+        Edit any of them individually afterwards from its {ctx.term.one} page.
       </p>
     </Modal>
   );
@@ -590,7 +676,7 @@ function WriteTemplate({ placement, onClose, onDone, toast }) {
 
 /* --------------------------------------------------------- shared modals */
 
-export function RitualForm({ title, initial, behaviors, selected = [], note, onSave, onClose, toast }) {
+export function RitualForm({ title, initial, behaviors, selected = [], note, onSave, onClose, toast, term = termFor(null) }) {
   const [f, setF] = useState({
     name: initial?.name ?? '', cadence: initial?.cadence ?? '', owner: initial?.owner ?? '',
     description: initial?.description ?? '', practice: initial?.practice ?? ''
@@ -633,11 +719,11 @@ export function RitualForm({ title, initial, behaviors, selected = [], note, onS
       <textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
       {behaviors && (
         <>
-          <label className="fl">Behaviors it reinforces</label>
+          <label className="fl">{term.Many} it reinforces</label>
           <div className="tagrow">
             {behaviors.map((b) => (
               <button key={b.id} className="pill" aria-pressed={ids.includes(b.id)} onClick={() => toggle(b.id)}>
-                {pad(b.number)}. {b.title}
+                <N n={b.number} /> {b.title}
               </button>
             ))}
           </div>
@@ -650,9 +736,34 @@ export function RitualForm({ title, initial, behaviors, selected = [], note, onS
   );
 }
 
-export function RecordIteration({ ctx, ritual, behaviorIds = [], onClose, onDone, toast }) {
-  const { org, behaviors } = ctx;
-  const [ids, setIds] = useState(behaviorIds);
+/**
+ * Which behaviors a ritual or system can be recorded against: the ones it is
+ * connected to. The practice session applies to every behavior.
+ */
+export function connectedBehaviors(behaviors, { ritual, system }) {
+  const active = behaviors.filter((b) => !b.archived);
+  if (ritual) return ritual.applies_to_all ? active : active.filter((b) => b.rituals.some((r) => r.id === ritual.id));
+  if (system) return active.filter((b) => b.placements.some((p) => p.systemId === system.id));
+  return [];
+}
+
+/**
+ * One dialog for running a ritual or executing a system: it shows the
+ * practice or the template, then records the run. Opened from Cadence, from a
+ * behavior page, or from a template, it behaves the same way everywhere.
+ *
+ * Nothing is pre-selected: the person recording says which behaviors the run
+ * actually covered. Members see the practice and template without the form,
+ * since recording is a leader's job.
+ */
+export function RecordIteration({ ctx, ritual, system, placement, readFor = [], preselect = [], onClose, onDone, toast }) {
+  const { org, behaviors, teams, myTeamId, term } = ctx;
+  const options = connectedBehaviors(behaviors, { ritual, system })
+    .slice()
+    .sort((a, b) => (b.id === org.weekly_behavior_id) - (a.id === org.weekly_behavior_id) || a.number - b.number);
+  // Only This Week pre-selects, and only the behavior of the week.
+  const [ids, setIds] = useState(() => preselect.filter((id) => options.some((b) => b.id === id)));
+  const [teamId, setTeamId] = useState(myTeamId ?? '');
   const [when, setWhen] = useState(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -662,51 +773,87 @@ export function RecordIteration({ ctx, ritual, behaviorIds = [], onClose, onDone
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
 
+  // Opening the practice or the template is the reading step of fluency.
+  useEffect(() => {
+    Promise.all(readFor.map((id) => markFluency(org.id, id, 'template').catch(() => {})))
+      .then(() => ctx.refreshActivity());
+  }, []);
+
   const toggle = (id) => setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  const name = ritual?.name ?? system?.name;
+  const script = ritual ? ritual.practice : placement?.template;
 
   async function save() {
+    if (!ids.length) return toast(`Pick the ${term.many} this run covered.`);
     setBusy(true);
     try {
       await recordIteration(org.id, {
-        ritualId: ritual.id, behaviorIds: ids,
-        heldAt: new Date(when).toISOString(), notes: notes.trim(), files
+        ritualId: ritual?.id ?? null, systemId: system?.id ?? null, teamId: teamId || null,
+        behaviorIds: ids, heldAt: new Date(when).toISOString(), notes: notes.trim(), files
       });
-      toast('Iteration recorded.');
+      toast(ritual ? 'Iteration recorded.' : 'System run recorded.');
       onDone();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
   return (
-    <Modal title={`Practice It: ${ritual.name}`} onClose={onClose} wide
+    <Modal title={ritual ? `Practice It: ${name}` : `Run the system: ${name}`} onClose={onClose} wide
       footer={<>
         <button className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Mark it done'}</button>
       </>}>
-      <p className="meta">{ritual.owner} / {ritual.cadence}</p>
-      {ritual.practice && <pre className="practice">{ritual.practice}</pre>}
+      {ritual && <p className="meta">{ritual.owner} / {ritual.cadence}</p>}
+      {placement && <p className="meta">{placement.artifact} / {placement.owner} / {placement.cadence}</p>}
+      {script
+        ? <pre className="practice">{script}</pre>
+        : <p className="quiet">{ritual ? 'No practice written yet.' : 'No template written yet.'}</p>}
 
-      <label className="fl">When it was run</label>
-      <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
-      <p className="meta" style={{ marginTop: 6 }}>Recorded by {org.displayName}.</p>
 
-      <label className="fl">Behaviors this run covered</label>
-      <div className="tagrow">
-        {behaviors.map((b) => (
-          <button key={b.id} className="pill" aria-pressed={ids.includes(b.id)} onClick={() => toggle(b.id)}>
-            {pad(b.number)}
-          </button>
-        ))}
-      </div>
+      {(
+        <>
+          <div className="tworow">
+            <div>
+              <label className="fl">When it was run</label>
+              <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+            </div>
+            <div>
+              <label className="fl">Team</label>
+              <select className="field" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                <option value="">No team</option>
+                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <p className="meta" style={{ marginTop: 6 }}>
+            Recorded by {org.displayName}. The team gets the credit toward its streaks.
+          </p>
 
-      <label className="fl">What happened, optional</label>
-      <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <label className="fl">Photo, video or file, optional</label>
-      <input type="file" multiple accept="image/*,video/*,.pdf,.docx"
-        onChange={(e) => setFiles(Array.from(e.target.files))} />
-      {files.length > 0 && (
-        <div className="tagrow" style={{ marginTop: 8 }}>
-          {files.map((f) => <span key={f.name} className="tag">{f.name}</span>)}
-        </div>
+          <label className="fl">{term.Many} this run covered</label>
+          {options.length ? (
+            <div className="tagrow">
+              {options.map((b) => (
+                <button key={b.id} className="pill" aria-pressed={ids.includes(b.id)} onClick={() => toggle(b.id)}>
+                  <N n={b.number} /> {b.title}{b.id === org.weekly_behavior_id ? ' (this week)' : ''}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="empty">
+              {ritual ? `This ritual is not connected to any ${term.one} yet.` : `This system is not applied to any ${term.one} yet.`}
+            </div>
+          )}
+
+          <label className="fl">What happened, optional</label>
+          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          <label className="fl">Photo, video or file, optional</label>
+          <input type="file" multiple accept="image/*,video/*,.pdf,.docx"
+            onChange={(e) => setFiles(Array.from(e.target.files))} />
+          {files.length > 0 && (
+            <div className="tagrow" style={{ marginTop: 8 }}>
+              {files.map((f) => <span key={f.name} className="tag">{f.name}</span>)}
+            </div>
+          )}
+        </>
       )}
     </Modal>
   );

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getPulseAssignment, submitPulse } from '../lib/api.js';
 import { BNum, Modal, useToast } from '../components/ui.jsx';
 
-const SCALE = [
+const BASE_SCALE = [
   {
     v: 1, l: 'Rarely', head: 'We are starting from zero',
     lead: 'The behavior is rarely or never observed.',
@@ -51,13 +51,22 @@ const SCALE = [
   }
 ];
 
+/** The scale in the organization's own word for a behavior. */
+function scaleFor(term) {
+  const sw = (x) => x.replace(/\bBehaviors\b/g, term.Many).replace(/\bbehaviors\b/g, term.many)
+    .replace(/\bBehavior\b/g, term.One).replace(/\bbehavior\b/g, term.one);
+  return BASE_SCALE.map((s) => ({ ...s, head: sw(s.head), lead: sw(s.lead), points: s.points.map(sw) }));
+}
+
+
 /**
  * An add-on to whatever the person came to do, not a gate. It sits above the
  * page, clearly labelled, and can be dismissed for the session. How many
  * behaviors appear is set by an administrator.
  */
-export default function PulseCheck({ ctx }) {
-  const { org, reload } = ctx;
+export default function PulseCheck({ ctx, ask = 0 }) {
+  const { org, reload, term } = ctx;
+  const SCALE = scaleFor(term);
   const [assignment, setAssignment] = useState(null);
   const [answers, setAnswers] = useState({});
   const [guide, setGuide] = useState(false);
@@ -69,6 +78,24 @@ export default function PulseCheck({ ctx }) {
   useEffect(() => {
     getPulseAssignment(org.id).then(setAssignment).catch(() => setAssignment(null));
   }, [org.id]);
+
+  // "Rate now" from the home page: bring the pulse back with fresh questions,
+  // even if it was dismissed earlier in this session.
+  useEffect(() => {
+    if (!ask) return;
+    setAnswers({});
+    getPulseAssignment(org.id).then((a) => {
+      setAssignment(a);
+      if (!a?.behaviors?.length) {
+        toast(a?.waiting
+          ? `The pulse starts once your ${term.many} are written.`
+          : `You have rated everything you can this round. Thank you.`);
+        return;
+      }
+      setDismissed(false);
+      try { sessionStorage.removeItem(`pulse-skip-${org.id}`); } catch { /* fine */ }
+    }).catch((e) => toast(e.message));
+  }, [ask]);
 
   // Nothing to ask about until the organization has written its own behaviors.
   if (dismissed || assignment?.waiting || !assignment?.behaviors?.length) return null;
@@ -83,7 +110,7 @@ export default function PulseCheck({ ctx }) {
   async function save() {
     try {
       await submitPulse(org.id, answers);
-      toast(`Thank you. That is ${assignment.behaviors.length} more behavior${assignment.behaviors.length === 1 ? '' : 's'} covered.`);
+      toast(`Thank you. That is ${term.count(assignment.behaviors.length)} more covered.`);
       setDismissed(true);
       reload();
     } catch (e) { toast(e.message); }
@@ -95,7 +122,7 @@ export default function PulseCheck({ ctx }) {
         <div className="pulsebar">
           <span className="pulsetag">Quick pulse</span>
           <span className="meta">
-            Round {assignment.round} &nbsp;/&nbsp; {assignment.behaviors.length} behavior{assignment.behaviors.length === 1 ? '' : 's'}, about 30 seconds
+            Round {assignment.round} &nbsp;/&nbsp; {term.count(assignment.behaviors.length)}, about 30 seconds
           </span>
           <button className="linkbtn" onClick={skip}>Dismiss</button>
         </div>

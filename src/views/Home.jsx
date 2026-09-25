@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { pad, Tag } from '../components/ui.jsx';
+import { N, Tag } from '../components/ui.jsx';
+import HomeBadges from './HomeBadges.jsx';
 
 export default function Home({ ctx }) {
-  const { org, behaviors, values, goto, openBehavior } = ctx;
+  const { org, behaviors, values, goto, openBehavior, term } = ctx;
   const [openValue, setOpenValue] = useState(null);
   const week = behaviors.find((b) => b.id === org.weekly_behavior_id) ?? behaviors[0];
   const countFor = (v) => behaviors.filter((b) => b.values.some((x) => x.id === v.id)).length;
@@ -14,7 +15,7 @@ export default function Home({ ctx }) {
       <p className="lede">{org.creed}</p>
       {org.has_example_content && (
         <div className="notice examplenotice">
-          Some of this is example content, marked with an Example tag. Edit a value or a behavior
+          Some of this is example content, marked with an Example tag. Edit a value or a {term.one}
           to make it yours, or clear the rest from Admin.
         </div>
       )}
@@ -23,16 +24,18 @@ export default function Home({ ctx }) {
         <section>
           <div className="sectionhead"><h2>This week</h2><span className="note">Rotates Monday</span></div>
           <div className="bigcard">
-            <div className="kicker">{pad(week.number)} / {week.category} / {week.values.map((v) => v.name).join(', ')}</div>
+            <div className="kicker"><N n={week.number} dot={false} /> / {week.category} / {week.values.map((v) => v.name).join(', ')}</div>
             <h2>{week.title}</h2>
             <p className="desc">{week.description}</p>
             <div className="btnrow">
               <button className="btn" onClick={() => goto('cadence')}>Practice it</button>
-              <button className="btn ghost" onClick={() => openBehavior(week.id)}>Full behavior</button>
+              <button className="btn ghost" onClick={() => openBehavior(week.id)}>Full {term.one}</button>
             </div>
           </div>
         </section>
       )}
+
+      <HomeBadges ctx={ctx} />
 
       <section>
         <div className="sectionhead"><h2>Purpose</h2></div>
@@ -41,7 +44,7 @@ export default function Home({ ctx }) {
       </section>
 
       <section>
-        <div className="sectionhead"><h2>Values</h2><span className="note">Each one carried by behaviors</span></div>
+        <div className="sectionhead"><h2>Values</h2><span className="note">Each one carried by {term.many}</span></div>
         <div className="vgrid">
           {values.map((v) => {
             const carried = behaviors.filter((b) => b.values.some((x) => x.id === v.id));
@@ -53,18 +56,18 @@ export default function Home({ ctx }) {
                 <p>{v.description}</p>
                 <button className="cnt linkbtn" aria-expanded={open}
                   onClick={() => setOpenValue(open ? null : v.id)}>
-                  Behaviors ({carried.length}) {open ? '▴' : '▾'}
+                  {term.Many} ({carried.length}) {open ? '▴' : '▾'}
                 </button>
                 {open && (
                   <ul className="vlist">
                     {carried.map((b) => (
                       <li key={b.id}>
                         <button className="linkbtn" onClick={() => openBehavior(b.id)}>
-                          {pad(b.number)}. {b.title}
+                          <N n={b.number} /> {b.title}
                         </button>
                       </li>
                     ))}
-                    {!carried.length && <li className="quiet">No behavior carries this value yet.</li>}
+                    {!carried.length && <li className="quiet">No {term.one} carries this value yet.</li>}
                   </ul>
                 )}
               </div>
@@ -75,7 +78,7 @@ export default function Home({ ctx }) {
 
       <section>
         <div className="sectionhead">
-          <h2>All behaviors</h2>
+          <h2>All {term.many}</h2>
           <span className="note">{behaviors.length} in practice</span>
         </div>
         <p className="prose">
@@ -84,11 +87,11 @@ export default function Home({ ctx }) {
         </p>
         <div className="btnrow">
           <button className="btn" onClick={() => goto('clarity')}>See the full list</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false)}>Open the handout</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true)}>Open the full handout</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false, term)}>Open the handout</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true, term)}>Open the full handout</button>
         </div>
         <p className="meta" style={{ marginTop: 8 }}>
-          The handout is the one-line-per-behavior version for a meeting. The full handout adds
+          The handout is the one-line-per-{term.one} version for a meeting. The full handout adds
           the coaching tips, teaching points, discussion questions, failure state and rule, for
           whoever is leading. Both open as a clean page you can print or save as a PDF.
         </p>
@@ -101,7 +104,7 @@ export default function Home({ ctx }) {
  * Builds the handout as its own page rather than printing the app. Two
  * depths: the short one for the room, the full one for whoever is leading.
  */
-function openHandout(org, values, behaviors, full) {
+function openHandout(org, values, behaviors, full, term) {
   const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const num = (n) => String(n).padStart(2, '0');
@@ -115,12 +118,12 @@ function openHandout(org, values, behaviors, full) {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(org.name)} — behaviors${full ? ', full' : ''}</title>
+<title>${esc(org.name)} — ${esc(term.many)}${full ? ', full' : ''}</title>
 <style>
   :root{
     --ink:#151A18;--soft:#3E4A46;--muted:#5F6C67;--line:#D4DAD6;
     --accent:${esc(org.accent || '#9C7A3C')};
-    --value:#A8791F;--category:#4F7052;
+    --value:#B5541C;--category:#4F7052;
   }
   *{box-sizing:border-box}
   body{margin:0;background:#f4f5f3;color:var(--ink);
@@ -178,7 +181,7 @@ function openHandout(org, values, behaviors, full) {
     ${values.map((v) => `<li><strong>${esc(v.name)}.</strong> ${esc(v.description)}</li>`).join('')}
   </ul>
 
-  <h2>Behaviors</h2>
+  <h2>${esc(term.Many)}</h2>
   ${behaviors.map((b) => `
     <div class="behavior">
       <h3><span class="bnum">${num(b.number)}.</span> ${esc(b.title)}</h3>

@@ -127,6 +127,8 @@ export const listStories = (...a) => impl.listStories(...a);
 export const createStory = (...a) => impl.createStory(...a);
 export const signAttachment = (...a) => impl.signAttachment(...a);
 export const shareStoryByEmail = (...a) => impl.shareStoryByEmail(...a);
+export const shareRecognitionByEmail = (...a) => impl.shareRecognitionByEmail(...a);
+export const shareAwardByEmail = (...a) => impl.shareAwardByEmail(...a);
 export const listRecognitions = (...a) => impl.listRecognitions(...a);
 export const createRecognition = (...a) => impl.createRecognition(...a);
 
@@ -134,3 +136,25 @@ export const createRecognition = (...a) => impl.createRecognition(...a);
 export const getPulse = (...a) => impl.getPulse(...a);
 export const getCoverage = (...a) => impl.getCoverage(...a);
 export const submitPulse = (...a) => impl.submitPulse(...a);
+export const getPulseSpreadByRound = (...a) => impl.getPulseSpreadByRound(...a);
+
+/* people: names, teams and pictures for everyone a page can mention */
+export const listPeople = (...a) => impl.listPeople(...a);
+export const uploadMyAvatar = (...a) => impl.uploadMyAvatar(...a);
+export const removeMyAvatar = (...a) => impl.removeMyAvatar(...a);
+
+/* teams: every member belongs to one */
+export const listTeams = (...a) => impl.listTeams(...a);
+export const createTeam = (...a) => impl.createTeam(...a);
+export const renameTeam = (...a) => impl.renameTeam(...a);
+export const setMemberTeam = (...a) => impl.setMemberTeam(...a);
+
+/* value awards: an organization's catalog, and the grants leaders make from it */
+export const listAwardTypes = (...a) => impl.listAwardTypes(...a);
+export const saveAwardType = (...a) => impl.saveAwardType(...a);
+export const listAwardGrants = (...a) => impl.listAwardGrants(...a);
+export const grantAward = (...a) => impl.grantAward(...a);
+
+/* fluency: the reading steps, private to each person */
+export const listMyFluencyMarks = (...a) => impl.listMyFluencyMarks(...a);
+export const markFluency = (...a) => impl.markFluency(...a);

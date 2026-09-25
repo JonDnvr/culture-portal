@@ -390,15 +390,15 @@ input[type=file]{font-family:"Archivo";font-size:13px}
 
 /* --- tags colored by what kind of thing they are --- */
 :root{
-  --t-value:#A8791F; --t-category:#4F7052; --t-system:#2F5F8E; --t-ritual:#6E4B86; --t-warn:#8E3B2F;
+  --t-value:#B5541C; --t-category:#4F7052; --t-system:#2F5F8E; --t-ritual:#6E4B86; --t-warn:#8E3B2F;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --t-value:#D2A661; --t-category:#8FB894; --t-system:#7FAAD6; --t-ritual:#B99BD4; --t-warn:#D98878;
+    --t-value:#E8905A; --t-category:#8FB894; --t-system:#7FAAD6; --t-ritual:#B99BD4; --t-warn:#D98878;
   }
 }
 :root[data-theme="dark"]{
-  --t-value:#D2A661; --t-category:#8FB894; --t-system:#7FAAD6; --t-ritual:#B99BD4; --t-warn:#D98878;
+  --t-value:#E8905A; --t-category:#8FB894; --t-system:#7FAAD6; --t-ritual:#B99BD4; --t-warn:#D98878;
 }
 .tag.tg-value{color:var(--t-value);border-color:var(--t-value)}
 .tag.tg-category{color:var(--t-category);border-color:var(--t-category)}
@@ -452,9 +452,11 @@ input[type=file]{font-family:"Archivo";font-size:13px}
 
 
 /* --- behavior numbers read as part of the title --- */
-.bnum{font-family:inherit;font-size:inherit;font-weight:600;color:var(--accent);letter-spacing:0}
+.bnum{font-family:inherit;font-size:inherit;font-weight:700;color:var(--accent);letter-spacing:0}
 .fcard h3 .bnum,.pagetitle .bnum,.recordbehavior .bnum,.bigcard h2 .bnum,.row .t .bnum,.psys .bnum{
-  font-size:inherit;font-weight:600}
+  font-size:inherit;font-weight:700}
+/* a behavior number inside other text: always bold */
+.bn{font-weight:700}
 .tag.tg-behavior{color:var(--accent);border-color:var(--accent)}
 .btn.chosen{background:var(--accent);border-color:var(--accent);color:#fff}
 .statusline{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
@@ -510,3 +512,215 @@ html,body{overflow-x:hidden;max-width:100%}
 .checkrow{display:flex;gap:9px;align-items:center;margin-top:16px;font-family:"Archivo";font-size:13.5px;cursor:pointer}
 .checkrow input{width:17px;height:17px;accent-color:var(--accent)}
 .toast{max-width:min(560px,92vw);text-align:center;line-height:1.45}
+
+
+/* =================================================================== R1 */
+/* Gold means earned. Ember is the practice streak. Both themes. */
+:root{
+  --gold:#9C6F14; --gold-bright:#C9992F; --gold-wash:#F7EDD6; --gold-line:#E2C98B; --on-gold:#4A3408;
+  --ember:#B8430D; --ember-wash:#FBE8DC; --on-ember:#FFFFFF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --gold:#E3B44F; --gold-bright:#F0C96B; --gold-wash:#332A15; --gold-line:#6B551F; --on-gold:#1A1405;
+    --ember:#F08A52; --ember-wash:#3A2115; --on-ember:#2A1408;
+  }
+}
+:root[data-theme="dark"]{
+  --gold:#E3B44F; --gold-bright:#F0C96B; --gold-wash:#332A15; --gold-line:#6B551F; --on-gold:#1A1405;
+  --ember:#F08A52; --ember-wash:#3A2115; --on-ember:#2A1408;
+}
+
+/* --- people --- */
+.avatar{border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;
+  border:1px solid var(--line);background:var(--card)}
+.avatar.initials{display:inline-grid;place-items:center;background:var(--accent-soft);color:var(--accent);
+  font-family:"Archivo";font-weight:700;letter-spacing:.02em;line-height:1}
+.who2{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap}
+.pickedwho{margin-top:8px}
+.profilehead{display:flex;gap:16px;align-items:center;margin-bottom:12px}
+.profilename{font-size:20px}
+.mebtn{display:flex;gap:9px;align-items:center;background:none;border:0;padding:4px 0;cursor:pointer;
+  color:inherit;text-align:left;font:inherit;margin-bottom:4px}
+.mebtn small{color:#93A9A1;font-size:10.5px}
+.mebtn:hover small{color:#DCE6E1;text-decoration:underline}
+
+/* --- navigation: the wall sits apart, at the foot --- */
+.navwall{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14)}
+.navwall .navitem{width:100%}
+
+/* --- section marks and medals --- */
+.flame{position:relative;display:inline-block;flex:none}
+.flame svg{width:100%;height:100%;display:block}
+.flame path{fill:var(--ember)}
+.flame .count{position:absolute;left:0;right:0;text-align:center;font-family:"Archivo";font-weight:700;
+  color:var(--on-ember);font-variant-numeric:tabular-nums;line-height:1}
+.medal{border-radius:50%;display:inline-grid;place-items:center;flex:none}
+.medal.wash{background:var(--gold-wash);border:1.5px solid var(--gold-line);color:var(--gold)}
+.medal.solid{background:var(--gold-bright);border:1.5px solid var(--gold);color:var(--on-gold);box-shadow:0 0 0 3px var(--gold-wash)}
+.ring{position:relative;display:inline-block;flex:none}
+.ring svg{transform:rotate(-90deg);display:block}
+.ring .pct{position:absolute;inset:0;display:grid;place-items:center;font-family:"Archivo";
+  font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* --- chips that are badges --- */
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip.gold{display:inline-flex;align-items:center;gap:5px;width:auto;height:auto;border-radius:999px;
+  font-family:"Archivo";font-size:11.5px;font-weight:600;padding:4px 9px 4px 7px;cursor:pointer;
+  border:1px solid var(--gold-line);background:var(--gold-wash);color:var(--gold);flex:none}
+.chip.gold:hover{box-shadow:0 0 0 2px var(--gold-line)}
+.chip.gold:focus-visible,.zone:focus-visible{outline:2px solid var(--spruce);outline-offset:2px}
+.ofdots{display:inline-flex;gap:3px;align-items:center;margin-left:2px}
+.ofdots i{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.25}
+.ofdots i.on{opacity:1}
+
+/* --- two click zones on a Foundation card: name opens it, badge explains the badge --- */
+.zonehint{display:flex;gap:16px;flex-wrap:wrap;font-family:"Archivo";font-size:11.5px;color:var(--muted);margin:0 0 12px}
+.zonehint b{color:var(--ink-soft);font-weight:600}
+.fcard{cursor:default}
+.fcard:hover{border-color:var(--line)}
+.fcardtop{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.zone{appearance:none;background:none;border:0;font:inherit;color:inherit;cursor:pointer;text-align:left;
+  padding:6px;margin:-6px;border-radius:6px}
+.ztitle{display:flex;flex-direction:column;gap:6px}
+.ztitle:hover{background:var(--accent-soft)}
+.ztitle .chev{color:var(--muted);margin-left:6px;font-family:"Archivo"}
+.ztitle:hover .chev{color:var(--accent)}
+.zbadge{display:grid;place-items:center;border-radius:50%;padding:5px;margin:-5px}
+.zbadge:hover{box-shadow:0 0 0 2px var(--gold-line)}
+.badgerow{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:14px 0 4px}
+
+/* --- badge detail dialogs --- */
+.badgehead{display:flex;gap:14px;align-items:center;background:var(--paper);border:1px solid var(--line);
+  border-radius:6px;padding:12px 14px;margin:6px 0 12px}
+.badgeart{display:grid;place-items:center;flex:none}
+.kicker2{display:block;font-family:"Archivo";font-size:10.5px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--gold)}
+.badgestatus{display:block;font-size:15px;margin-top:3px}
+.badgehow{font-size:15px;color:var(--ink-soft);margin:4px 0 12px}
+.badgefoot{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.steprows{display:grid}
+.steprow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
+.steprow.top{border-top:1px solid var(--line);border-bottom:0;margin-top:6px}
+.steprow .st{font-family:"Archivo";font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.tick{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;flex:none}
+.tick.on{background:var(--spruce);border-color:var(--spruce)}
+.tick.gold{background:var(--gold-bright);border-color:var(--gold)}
+.linkbtn2{background:none;border:0;padding:0;color:var(--gold);font:inherit;text-decoration:underline;cursor:pointer}
+.marksline{display:flex;gap:10px;align-items:center;color:var(--gold);margin-bottom:10px}
+
+/* --- run lists (what was counted) --- */
+.runlist{display:grid;border-top:1px solid var(--line)}
+.runrow{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:start;width:100%;text-align:left;
+  background:none;border:0;border-bottom:1px solid var(--line);padding:11px 4px;cursor:pointer;font:inherit;color:inherit}
+.runrow:hover{background:var(--paper)}
+.runrow b{display:block;font-weight:600;font-size:15px;line-height:1.3}
+.runrow small{display:block;font-family:"Archivo";font-size:12px;color:var(--muted);margin-top:2px}
+.runrow .w{font-family:"Archivo";font-size:11.5px;color:var(--muted);white-space:nowrap;padding-top:2px}
+.nostar{width:20px;height:20px;border-radius:50%;border:1px dashed var(--line);display:inline-block}
+
+/* --- home: badges and streaks --- */
+.homebadges{margin-top:30px}
+.scopebar{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 13px;margin-bottom:12px}
+.scopelabel{font-family:"Archivo";font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.scopenote{font-family:"Archivo";font-size:12.5px;color:var(--muted);margin-top:1px}
+.scopenote b{color:var(--ink);font-weight:600}
+.seg{display:inline-flex;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:3px;gap:3px}
+.seg button{appearance:none;border:0;background:none;font-family:"Archivo";font-size:12.5px;color:var(--muted);
+  padding:5px 12px;border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.home3{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));align-items:start}
+.hcard{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:13px 15px;text-align:left;font:inherit;color:inherit}
+.hbtn{cursor:pointer;display:block;width:100%}
+.hbtn:hover{border-color:var(--spruce-soft)}
+.hlabel{font-family:"Archivo";font-size:13px;font-weight:600}
+.hsub{font-family:"Archivo";font-size:11.5px;color:var(--muted);margin-top:1px}
+.botwrow{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:10px}
+.pairh{display:inline-flex;gap:9px;align-items:center}
+.pairh .lbl{font-family:"Archivo";font-size:11.5px;font-weight:600;line-height:1.25}
+.pairh .lbl small{display:block;font-weight:400;font-size:10.5px;color:var(--muted)}
+.lbl.ember{color:var(--ember)} .lbl.gold{color:var(--gold)}
+.weekdots{display:flex;justify-content:space-between;align-items:flex-end;gap:4px;margin-top:10px;
+  padding-top:9px;border-top:1px solid var(--line)}
+.wk{display:grid;gap:3px;justify-items:center}
+.wk i{display:block;border-radius:50%;background:var(--ember);width:10px;height:10px}
+.wk i.lo{width:7px;height:7px;opacity:.5}
+.wk i.off{background:none;border:1.5px solid var(--line);width:9px;height:9px}
+.wk span{font-family:"Archivo";font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums}
+.wk.now span{color:var(--ink);font-weight:600}
+.bigstat{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin-top:8px}
+.bigstat .n{font-size:38px;line-height:.95;font-weight:600;font-variant-numeric:tabular-nums}
+.bigstat .cap{font-family:"Archivo";font-size:12px;color:var(--muted)}
+.hbtn .more{display:inline-block;font-family:"Archivo";font-size:12px;font-weight:600;color:var(--spruce);margin-top:8px}
+.milerow{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.mileline{font-family:"Archivo";font-size:12px;color:var(--ink-soft);margin-top:9px}
+
+/* --- trophy wall --- */
+.wallsection{margin-top:26px}
+.tgrid{display:grid;gap:11px;grid-template-columns:repeat(auto-fill,minmax(236px,1fr))}
+.tro{background:var(--card);border:1px solid var(--gold-line);border-radius:6px;padding:13px;display:grid;
+  grid-template-columns:auto 1fr;gap:12px;align-items:start;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.tro:hover{background:var(--gold-wash)}
+.tro .art{display:grid;place-items:center;min-width:44px}
+.tro .kick{display:block;font-family:"Archivo";font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--gold)}
+.tro .ttl{display:block;font-size:16px;font-weight:600;line-height:1.25;margin-top:2px}
+.tro .tmeta{display:block;font-family:"Archivo";font-size:11.5px;color:var(--muted);margin-top:5px}
+.chartwrap{overflow-x:auto}
+.chart{display:block;width:100%;min-width:340px;height:auto;aspect-ratio:640/190}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-family:"Archivo";font-size:12px;color:var(--muted);margin-top:8px}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* --- recognition --- */
+.rectitle{display:flex;gap:6px;align-items:center;font-weight:600;margin:4px 0 0;font-size:15.5px}
+
+/* --- admin --- */
+.linkn{display:inline-flex;gap:4px;align-items:center;background:none;border:1px solid transparent;border-radius:5px;
+  font-family:"Archivo";font-size:13px;font-weight:600;color:var(--spruce);cursor:pointer;padding:3px 7px;
+  text-decoration:underline;text-underline-offset:2px;font-variant-numeric:tabular-nums}
+.linkn:hover{border-color:var(--line);background:var(--paper)}
+.teamnew{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.teamnew input{width:150px}
+
+@media (max-width:700px){
+  .fcardtop{grid-template-columns:1fr auto}
+  .home3{grid-template-columns:1fr}
+}
+
+/* =================================================================== R2 */
+/* navigation icons, in the organization's highlight color */
+.navitem{justify-content:flex-start;gap:10px;align-items:flex-start}
+.navicon{display:inline-flex;flex:0 0 18px;margin-top:2px}
+.navtext{flex:1}
+
+/* "This week" is gold wherever it appears */
+.tag.tg-live,.tag.live{color:var(--gold);border-color:var(--gold-line);background:var(--gold-wash)}
+
+/* week dots carry the date each week starts: the month where it changes, then the day */
+.wk em{font-style:normal;font-family:"Archivo";font-size:8.5px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.03em;line-height:1;height:9px}
+.wk.now em{color:var(--ink)}
+
+/* behavior lists under each Value read left to right when they wrap */
+.vlist li{text-align:left}
+.vlist .linkbtn{text-align:left;display:inline;white-space:normal}
+
+/* lists: team or organization, search, and more */
+.listbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:14px 0 4px}
+.searchbox{flex:1;min-width:220px;max-width:420px;font-family:"Archivo";font-size:14px;padding:8px 11px;
+  border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink)}
+.searchnote{font-family:"Archivo";font-size:12px;color:var(--muted);margin:6px 0 0}
+.moreline{display:flex;justify-content:center;margin:14px 0 4px}
+.feed .post .attachgrid{margin-top:10px}
+.attachgrid.compact{display:flex;flex-wrap:wrap;gap:8px}
+.attachgrid.compact .attachitem{margin:0;width:150px}
+.attachgrid.compact img,.attachgrid.compact video{width:150px;height:100px;object-fit:cover;border-radius:4px;display:block}
+.attachgrid.compact figcaption{display:none}
+.trowrap{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--gold-line);border-radius:6px;overflow:hidden}
+.trowrap .tro{border:0;border-radius:0;width:100%}
+.trofiles{padding:0 13px 12px 70px}
+.trofiles .attachgrid.compact{margin:0;gap:6px}
+.trofiles .attachgrid.compact .attachitem{width:auto}
+.trofiles .attachgrid.compact img,.trofiles .attachgrid.compact video{width:84px;height:60px}
+.sessrow .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap}

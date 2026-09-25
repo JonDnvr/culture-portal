@@ -215,12 +215,198 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (isUsable(parsed)) return parsed;
+      if (isUsable(parsed)) {
+        // R1 added collections rather than changing existing ones, so an
+        // older store is upgraded in place instead of being thrown away.
+        if (upgrade(parsed)) persist(parsed);
+        return parsed;
+      }
     }
   } catch { /* fall through to a fresh store */ }
   const fresh = build();
+  upgrade(fresh);
   persist(fresh);
   return fresh;
+}
+
+/**
+ * Brings a store up to R1: teams, avatars, award catalog and grants, fluency
+ * marks, and enough history for the badges to have something to show.
+ * Returns true when anything changed.
+ */
+function upgrade(store) {
+  let changed = false;
+  const need = (k, v) => { if (store[k] === undefined) { store[k] = v; changed = true; } };
+  need('teams', {});
+  need('awardTypes', {});
+  need('awardGrants', []);
+  need('fluencyMarks', []);
+
+  const DEMO_TEAMS = { vd: ['Newsroom', 'Advertising', 'Leadership'], mv: ['CE Team', 'Chairs'] };
+  for (const org of store.orgs) {
+    if (!store.teams[org.id]) {
+      store.teams[org.id] = (DEMO_TEAMS[org.slug] ?? []).map((name) => ({
+        id: uid(), org_id: org.id, name, archived: false, created_at: now()
+      }));
+      changed = true;
+    }
+    if (!store.awardTypes[org.id]) {
+      const vals = store.values[org.id] ?? [];
+      store.awardTypes[org.id] = vals.length ? [
+        { id: uid(), org_id: org.id, name: 'The Horizon Award', grantable_to: 'member',
+          description: 'For living our values over a season, not a single moment.',
+          grant_cap: 1, cap_period: 'quarter', active: true, created_at: now(),
+          valueIds: vals.slice(0, 2).map((v) => v.id) },
+        { id: uid(), org_id: org.id, name: 'The Summit Award', grantable_to: 'team',
+          description: 'For a team that carried our values through a hard stretch together.',
+          grant_cap: null, cap_period: null, active: true, created_at: now(),
+          valueIds: vals.slice(0, 3).map((v) => v.id) }
+      ] : [];
+      changed = true;
+    }
+  }
+
+  // Everyone starts on a team in the demo; in hosted mode an admin assigns them.
+  for (const u of store.users) {
+    if (u.org_id && u.team_id === undefined) {
+      const teams = store.teams[u.org_id] ?? [];
+      const byRole = u.role === 'champion' || u.role === 'admin'
+        ? teams.find((t) => /lead|chair/i.test(t.name)) : null;
+      u.team_id = (byRole ?? teams[0])?.id ?? null;
+      u.avatar_path = u.avatar_path ?? null;
+      changed = true;
+    }
+  }
+  for (const s of store.stories) if (s.author_id === undefined) { s.author_id = null; changed = true; }
+
+  if (!store.r1Seeded) {
+    seedHistory(store);
+    store.r1Seeded = true;
+    changed = true;
+  }
+  return changed;
+}
+
+/**
+ * Fourteen weeks of Behavior of the Week sessions, some ritual and system
+ * runs, recognitions to real members and one Value award, so the streaks and
+ * badges read as they would in an organization that has been at it a while.
+ */
+function seedHistory(store) {
+  const week = 7 * 86400000;
+  for (const org of store.orgs) {
+    const behaviors = (store.behaviors[org.id] ?? []).filter((b) => !b.is_example);
+    const rituals = store.rituals[org.id] ?? [];
+    const session = rituals.find((r) => r.applies_to_all);
+    const teams = store.teams[org.id] ?? [];
+    const people = store.users.filter((u) => u.org_id === org.id);
+    const leader = people.find((u) => u.role === 'leader') ?? people[0];
+    const champ = people.find((u) => u.role === 'champion') ?? people[0];
+    if (!behaviors.length || !session || !people.length) continue;
+
+    const weeks = org.slug === 'vd' ? 14 : 9;
+    for (let w = 0; w < weeks; w++) {
+      const b = behaviors[w % behaviors.length];
+      const held = new Date(Date.now() - w * week - 2 * 86400000).toISOString();
+      // The first team misses a week in the middle, so its streak is shorter
+      // than the organization's; the second team keeps the organization's run.
+      if (w !== 6 || !teams[1]) {
+        store.iterations.push({
+          id: uid(), org_id: org.id, ritual_id: session.id, system_category_id: null,
+          behavior_ids: [b.id], team_id: teams[0]?.id ?? null,
+          recorded_by: leader.id, recorded_by_name: leader.name, held_at: held,
+          notes: '', attachments: []
+        });
+      }
+      if (teams[1]) {
+        store.iterations.push({
+          id: uid(), org_id: org.id, ritual_id: session.id, system_category_id: null,
+          behavior_ids: [b.id], team_id: teams[1].id,
+          recorded_by: champ.id, recorded_by_name: champ.name, held_at: held,
+          notes: '', attachments: []
+        });
+      }
+      if (w < 5) {
+        const pb = behaviors[(w * 3 + 1) % behaviors.length];
+        const r = rituals.find((x) => !x.applies_to_all && pb.ritualIds.includes(x.id));
+        if (r) {
+          store.iterations.push({
+            id: uid(), org_id: org.id, ritual_id: r.id, system_category_id: null,
+            behavior_ids: [pb.id], team_id: teams[0]?.id ?? null,
+            recorded_by: leader.id, recorded_by_name: leader.name,
+            held_at: new Date(Date.now() - w * week - 86400000).toISOString(), notes: '', attachments: []
+          });
+        }
+        const placed = behaviors.find((x) => x.placements.length) ?? null;
+        if (placed && w % 2 === 0) {
+          store.iterations.push({
+            id: uid(), org_id: org.id, ritual_id: null, system_category_id: placed.placements[0].systemId,
+            behavior_ids: [placed.id], team_id: teams[0]?.id ?? null,
+            recorded_by: leader.id, recorded_by_name: leader.name,
+            held_at: new Date(Date.now() - w * week - 3 * 86400000).toISOString(), notes: '', attachments: []
+          });
+        }
+      }
+    }
+
+    // Vail Daily has practiced every Foundation at least once, so the
+    // organization holds The Full Set.
+    if (org.slug === 'vd') {
+      behaviors.forEach((b, i) => {
+        const r = rituals.find((x) => !x.applies_to_all && b.ritualIds.includes(x.id));
+        const p = b.placements[0];
+        if (!r && !p) return;
+        store.iterations.push({
+          id: uid(), org_id: org.id, ritual_id: r ? r.id : null, system_category_id: r ? null : p.systemId,
+          behavior_ids: [b.id], team_id: teams[i % 2]?.id ?? null,
+          recorded_by: leader.id, recorded_by_name: leader.name,
+          held_at: new Date(Date.now() - ((i % 9) + 1) * week - 4 * 86400000).toISOString(), notes: '', attachments: []
+        });
+      });
+
+      // Two finished pulse rounds, the second tighter than the first, and a
+      // third under way: a completed cairn with a 2 on it, and Gap Closed.
+      if (!store.pulse.some((x) => x.org_id === org.id)) {
+        const raters = [champ, leader].filter(Boolean);
+        const stamp = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
+        behaviors.forEach((b, i) => {
+          [[1, [1, 5], 70], [2, [3, 4], 35]].forEach(([round, scores, ago]) => {
+            raters.forEach((u, k) => store.pulse.push({
+              id: uid(), org_id: org.id, behavior_id: b.id, user_id: u.id,
+              score: scores[k % scores.length], round, created_at: stamp(ago)
+            }));
+          });
+          if (i < Math.ceil(behaviors.length * 0.6)) {
+            store.pulse.push({ id: uid(), org_id: org.id, behavior_id: b.id, user_id: champ.id,
+              score: 4, round: 3, created_at: stamp(3) });
+          }
+        });
+      }
+    }
+
+    const member = people.find((u) => u.role === 'member');
+    if (member && leader && member.id !== leader.id) {
+      const titles = ['Corrected the record before anyone had to ask', 'Held the deadline when it would have been easy to slip'];
+      titles.forEach((title, i) => {
+        const b = behaviors[i % behaviors.length];
+        store.recognitions.unshift({
+          id: uid(), org_id: org.id, behavior_id: b.id, author_id: leader.id, author_name: leader.name,
+          recipient: member.name, recipient_user_id: member.id, title,
+          body: 'Seen it, and it made the week better for everyone around it.',
+          created_at: new Date(Date.now() - (i + 1) * 9 * 86400000).toISOString(), attachments: []
+        });
+      });
+      const award = (store.awardTypes[org.id] ?? []).find((a) => a.grantable_to === 'member');
+      if (award) {
+        store.awardGrants.push({
+          id: uid(), org_id: org.id, award_type_id: award.id, recipient_user_id: member.id, team_id: null,
+          recipient_name: member.name, granted_by: champ.id, granted_by_name: champ.name,
+          citation: 'A season of doing the right thing when nobody was checking.',
+          granted_at: new Date(Date.now() - 20 * 86400000).toISOString(), recipients: [member.id]
+        });
+      }
+    }
+  }
 }
 
 function persist(next = db) {
@@ -230,6 +416,7 @@ function persist(next = db) {
 
 export function resetLocalData() {
   db = build();
+  upgrade(db);
   persist();
 }
 
@@ -257,7 +444,7 @@ export function onAuthChange() {
 }
 
 export async function signIn(email, password) {
-  if (!isUsable(db)) { db = build(); persist(); }
+  if (!isUsable(db)) { db = build(); upgrade(db); persist(); }
   const u = (db.users ?? []).find((x) => x.email === String(email).trim().toLowerCase());
   const digest = await hash(password ?? '');
   // Same message either way: a sign-in form should not confirm which
@@ -917,7 +1104,10 @@ export async function setBehaviorValues(behaviorId, valueIds) {
 export async function listMembers(orgId) {
   return (db.users ?? [])
     .filter((u) => u.org_id === orgId)
-    .map((u) => ({ id: u.id, user_id: u.id, role: u.role, display_name: u.name, email: u.email }));
+    .map((u) => ({
+      id: u.id, user_id: u.id, role: u.role, display_name: u.name, email: u.email,
+      team_id: u.team_id ?? null, avatar_url: avatarUrl(u)
+    }));
 }
 
 /* -------------------------------------------------- administration of users */
@@ -1216,11 +1406,15 @@ async function storeFiles(orgId, folder, files = []) {
   return out;
 }
 
-export async function recordIteration(orgId, { ritualId, behaviorIds = [], heldAt, notes, files = [] }) {
+export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [] }) {
   const me = currentUser();
+  if (!!ritualId === !!systemId) throw new Error('An iteration is a run of one ritual or one system.');
+  if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
+  if (teamId && !(db.teams[orgId] ?? []).some((t) => t.id === teamId)) throw new Error('That team is not in this organization.');
   const id = uid();
   db.iterations.unshift({
-    id, org_id: orgId, ritual_id: ritualId, behavior_ids: behaviorIds,
+    id, org_id: orgId, ritual_id: ritualId, system_category_id: systemId, team_id: teamId,
+    behavior_ids: behaviorIds,
     recorded_by: me?.id ?? null, recorded_by_name: me?.name ?? 'Member',
     held_at: heldAt || now(), notes: notes ?? '',
     attachments: await storeFiles(orgId, `iterations/${id}`, files)
@@ -1229,37 +1423,48 @@ export async function recordIteration(orgId, { ritualId, behaviorIds = [], heldA
   return id;
 }
 
-export async function listIterations(orgId, { behaviorId, ritualId, days } = {}) {
+/** The ritual or system an iteration ran, and the behaviors it covered. */
+function withSource(it, orgId, full = false) {
+  return {
+    ...it,
+    ritual_id: it.ritual_id ?? null,
+    system_category_id: it.system_category_id ?? null,
+    team_id: it.team_id ?? null,
+    ritual: it.ritual_id ? (db.rituals[orgId] ?? []).find((r) => r.id === it.ritual_id) ?? null : null,
+    system: it.system_category_id ? (db.systems[orgId] ?? []).find((s) => s.id === it.system_category_id) ?? null : null,
+    behaviors: (db.behaviors[orgId] ?? [])
+      .filter((b) => (it.behavior_ids ?? []).includes(b.id))
+      .map((b) => full
+        ? { id: b.id, number: b.number, title: b.title, description: b.description, category: b.category }
+        : { id: b.id, number: b.number, title: b.title })
+  };
+}
+
+export async function listIterations(orgId, { behaviorId, ritualId, systemId, days } = {}) {
   const cutoff = days ? Date.now() - days * 86400000 : null;
   return db.iterations
     .filter((it) => it.org_id === orgId)
     .filter((it) => !behaviorId || (it.behavior_ids ?? []).includes(behaviorId))
     .filter((it) => !ritualId || it.ritual_id === ritualId)
+    .filter((it) => !systemId || it.system_category_id === systemId)
     .filter((it) => !cutoff || new Date(it.held_at).getTime() >= cutoff)
-    .map((it) => ({
-      ...it,
-      ritual: (db.rituals[orgId] ?? []).find((r) => r.id === it.ritual_id) ?? null,
-      behaviors: (db.behaviors[orgId] ?? [])
-        .filter((b) => (it.behavior_ids ?? []).includes(b.id))
-        .map((b) => ({ id: b.id, number: b.number, title: b.title }))
-    }))
+    .map((it) => withSource(it, orgId))
     .sort((a, b) => b.held_at.localeCompare(a.held_at));
 }
 
 export async function getIteration(id) {
-  for (const it of db.iterations) {
-    if (it.id === id) {
-      const orgId = it.org_id;
-      return {
-        ...it,
-        ritual: (db.rituals[orgId] ?? []).find((r) => r.id === it.ritual_id) ?? null,
-        behaviors: (db.behaviors[orgId] ?? [])
-          .filter((b) => (it.behavior_ids ?? []).includes(b.id))
-          .map((b) => ({ id: b.id, number: b.number, title: b.title, description: b.description, category: b.category }))
-      };
-    }
+  const it = db.iterations.find((x) => x.id === id);
+  if (!it) return null;
+  const out = withSource(it, it.org_id, true);
+  // A system run shows the template it followed, from the first behavior it covered.
+  if (out.system) {
+    const b = (db.behaviors[it.org_id] ?? []).find((x) => (it.behavior_ids ?? []).includes(x.id)
+      && x.placements.some((p) => p.systemId === it.system_category_id));
+    const p = b?.placements.find((x) => x.systemId === it.system_category_id);
+    out.system = { ...out.system, template: p?.template ?? null, artifact: p?.artifact ?? null,
+      owner: p?.owner ?? null, cadence: p?.cadence ?? null };
   }
-  return null;
+  return out;
 }
 
 export async function deleteIteration(id) {
@@ -1451,7 +1656,7 @@ function kindOf(file) {
 
 export async function createStory(orgId, { behaviorId, body, authorName, files = [] }) {
   const story = {
-    id: uid(), org_id: orgId, behavior_id: behaviorId,
+    id: uid(), org_id: orgId, behavior_id: behaviorId, author_id: currentUser()?.id ?? null,
     author_name: authorName || currentUser()?.name || 'Member',
     body, created_at: now(), attachments: []
   };
@@ -1539,11 +1744,19 @@ export async function listRecognitions(orgId, { behaviorId } = {}) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
-export async function createRecognition(orgId, { behaviorId, recipient, body, authorName, files = [] }) {
+export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [] }) {
+  const me = currentUser();
+  if (recipientUserId) {
+    const target = db.users.find((u) => u.id === recipientUserId);
+    if (!target || target.org_id !== orgId) throw new Error('That person is not in this organization.');
+    if (target.id === me?.id) throw new Error('Recognition goes to someone else.');
+    recipient = target.name;
+  }
   const id = uid();
   db.recognitions.unshift({
-    id, org_id: orgId, behavior_id: behaviorId, recipient, body, author_id: currentUser()?.id ?? null,
-    author_name: authorName || currentUser()?.name || 'Member', created_at: now(),
+    id, org_id: orgId, behavior_id: behaviorId, recipient, recipient_user_id: recipientUserId,
+    title: title || null, body, author_id: me?.id ?? null,
+    author_name: authorName || me?.name || 'Member', created_at: now(),
     attachments: await storeFiles(orgId, `recognitions/${id}`, files)
   });
   persist();
@@ -1584,3 +1797,250 @@ export async function getCoverage(orgId) {
 }
 
 
+
+/* ================================================================== R1 */
+
+const LEAD_ROLES = ['leader', 'admin', 'champion', 'owner'];
+
+function requireLeader(orgId) {
+  const me = currentUser();
+  if (!me) throw new Error('Not signed in.');
+  if (me.is_super) return me;
+  if (me.org_id !== orgId || !LEAD_ROLES.includes(me.role)) throw new Error('Only a leader can do that.');
+  return me;
+}
+
+function avatarUrl(u) {
+  return u?.avatar_path ? db.files[u.avatar_path] ?? null : null;
+}
+
+/* ----------------------------------------------------------------- people */
+
+/** Everyone who can appear on this organization's pages, with team and picture. */
+export async function listPeople(orgId) {
+  return db.users
+    .filter((u) => u.org_id === orgId || u.is_super)
+    .map((u) => ({
+      user_id: u.id, display_name: u.name, role: u.is_super ? 'owner' : u.role,
+      team_id: u.is_super ? null : u.team_id ?? null, avatar_url: avatarUrl(u), in_org: !u.is_super
+    }));
+}
+
+/** The file arrives already cropped and shrunk by the profile dialog. */
+export async function uploadMyAvatar(orgId, file) {
+  const me = currentUser();
+  if (!me) throw new Error('Not signed in.');
+  if (!file.type.startsWith('image/')) throw new Error('Choose a picture file.');
+  const path = `${orgId}/${me.id}/avatar`;
+  db.files[path] = await readAsDataUrl(file);
+  me.avatar_path = path;
+  persist();
+  return db.files[path];
+}
+
+export async function removeMyAvatar() {
+  const me = currentUser();
+  if (!me) return;
+  if (me.avatar_path) delete db.files[me.avatar_path];
+  me.avatar_path = null;
+  persist();
+}
+
+/* ------------------------------------------------------------------ teams */
+
+export async function listTeams(orgId) {
+  return (db.teams[orgId] ?? []).filter((t) => !t.archived)
+    .slice().sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createTeam(orgId, name) {
+  requireEditor(orgId);
+  const clean = String(name ?? '').trim();
+  if (!clean) throw new Error('Name the team.');
+  db.teams[orgId] = db.teams[orgId] ?? [];
+  if (db.teams[orgId].some((t) => t.name.toLowerCase() === clean.toLowerCase())) {
+    throw new Error(`There is already a team called ${clean}.`);
+  }
+  const team = { id: uid(), org_id: orgId, name: clean, archived: false, created_at: now() };
+  db.teams[orgId].push(team);
+  persist();
+  return team;
+}
+
+export async function renameTeam(teamId, name) {
+  for (const orgId of Object.keys(db.teams)) {
+    const t = db.teams[orgId].find((x) => x.id === teamId);
+    if (t) { requireEditor(orgId); t.name = String(name).trim(); persist(); return t; }
+  }
+  throw new Error('No such team.');
+}
+
+export async function setMemberTeam(orgId, userId, teamId) {
+  requireEditor(orgId);
+  const u = db.users.find((x) => x.id === userId && x.org_id === orgId);
+  if (!u) throw new Error('No such person in this organization.');
+  if (teamId && !(db.teams[orgId] ?? []).some((t) => t.id === teamId)) throw new Error('No such team.');
+  u.team_id = teamId || null;
+  persist();
+}
+
+/* ----------------------------------------------------------- value awards */
+
+export async function listAwardTypes(orgId) {
+  return (db.awardTypes[orgId] ?? []).map((a) => ({ ...a, valueIds: a.valueIds ?? [] }));
+}
+
+export async function saveAwardType(orgId, fields) {
+  requireEditor(orgId);
+  const clean = {
+    name: String(fields.name ?? '').trim(),
+    description: fields.description?.trim() || null,
+    grantable_to: fields.grantable_to ?? 'both',
+    grant_cap: fields.grant_cap ? Number(fields.grant_cap) : null,
+    cap_period: fields.grant_cap ? fields.cap_period ?? 'quarter' : null,
+    active: fields.active ?? true,
+    valueIds: fields.valueIds ?? []
+  };
+  if (!clean.name) throw new Error('Name the award.');
+  if (!clean.valueIds.length) throw new Error('Pick at least one Value this award stands for.');
+  db.awardTypes[orgId] = db.awardTypes[orgId] ?? [];
+  if (fields.id) {
+    const a = db.awardTypes[orgId].find((x) => x.id === fields.id);
+    if (!a) throw new Error('No such award.');
+    Object.assign(a, clean);
+    persist();
+    return a;
+  }
+  const a = { id: uid(), org_id: orgId, created_at: now(), ...clean };
+  db.awardTypes[orgId].push(a);
+  persist();
+  return a;
+}
+
+export async function listAwardGrants(orgId) {
+  const types = db.awardTypes[orgId] ?? [];
+  return db.awardGrants
+    .filter((g) => g.org_id === orgId)
+    .map((g) => ({ ...g, attachments: g.attachments ?? [], award: types.find((t) => t.id === g.award_type_id) ?? null }))
+    .sort((a, b) => b.granted_at.localeCompare(a.granted_at));
+}
+
+function periodStart(period) {
+  const d = new Date();
+  if (period === 'year') return new Date(d.getFullYear(), 0, 1);
+  if (period === 'quarter') return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1);
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export async function grantAward(orgId, { awardTypeId, recipientUserId = null, teamId = null, citation, files = [] }) {
+  const me = requireLeader(orgId);
+  const t = (db.awardTypes[orgId] ?? []).find((x) => x.id === awardTypeId);
+  if (!t || !t.active) throw new Error('That award is not available.');
+  if (!!recipientUserId === !!teamId) throw new Error('An award goes to one person or one team.');
+  if (t.grantable_to === 'member' && teamId) throw new Error(`${t.name} goes to a person, not a team.`);
+  if (t.grantable_to === 'team' && recipientUserId) throw new Error(`${t.name} goes to a team, not a person.`);
+  if (recipientUserId === me.id) throw new Error('A Value award goes to someone else.');
+  if (!String(citation ?? '').trim()) throw new Error('Write the citation: what they did.');
+  if (t.grant_cap && t.cap_period) {
+    const since = periodStart(t.cap_period).toISOString();
+    const used = db.awardGrants.filter((g) => g.award_type_id === t.id && g.granted_by === me.id && g.granted_at >= since).length;
+    if (used >= t.grant_cap) throw new Error(`You have given ${used} ${t.name} this ${t.cap_period}, the limit for this award.`);
+  }
+  let recipient_name, recipients;
+  if (teamId) {
+    const team = (db.teams[orgId] ?? []).find((x) => x.id === teamId);
+    if (!team) throw new Error('No such team.');
+    recipient_name = team.name;
+    recipients = db.users.filter((u) => u.org_id === orgId && u.team_id === teamId).map((u) => u.id);
+  } else {
+    const u = db.users.find((x) => x.id === recipientUserId && x.org_id === orgId);
+    if (!u) throw new Error('That person is not in this organization.');
+    recipient_name = u.name;
+    recipients = [u.id];
+  }
+  const id = uid();
+  const g = {
+    id, org_id: orgId, award_type_id: t.id, recipient_user_id: recipientUserId, team_id: teamId,
+    recipient_name, granted_by: me.id, granted_by_name: me.name, citation: citation.trim(),
+    granted_at: now(), recipients, attachments: await storeFiles(orgId, `awards/${id}`, files)
+  };
+  db.awardGrants.push(g);
+  persist();
+  return g;
+}
+
+/* ---------------------------------------------------------------- fluency */
+
+export async function listMyFluencyMarks(orgId) {
+  const me = currentUser();
+  return db.fluencyMarks.filter((m) => m.user_id === me?.id && m.org_id === orgId);
+}
+
+export async function markFluency(orgId, behaviorId, step) {
+  const me = currentUser();
+  if (!me) return;
+  if (db.fluencyMarks.some((m) => m.user_id === me.id && m.behavior_id === behaviorId && m.step === step)) return;
+  db.fluencyMarks.push({ user_id: me.id, behavior_id: behaviorId, org_id: orgId, step, marked_at: now() });
+  persist();
+}
+
+/* ---------------------------------------------------------- pulse history */
+
+export async function getPulseSpreadByRound(orgId) {
+  const rows = db.pulse.filter((p) => p.org_id === orgId);
+  const rounds = [...new Set(rows.map((p) => p.round ?? 1))].sort((a, b) => a - b);
+  return rounds.map((round) => {
+    const inRound = rows.filter((p) => (p.round ?? 1) === round);
+    const byBehavior = {};
+    for (const p of inRound) (byBehavior[p.behavior_id] ??= []).push(p.score);
+    const sds = Object.values(byBehavior).map((xs) => {
+      if (xs.length < 2) return 0;
+      const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / (xs.length - 1));
+    });
+    const spread = sds.length ? sds.reduce((a, b) => a + b, 0) / sds.length : 0;
+    return { round, spread: Math.round(spread * 1000) / 1000, responses: inRound.length };
+  });
+}
+
+
+/* ------------------------------------------------ sharing by email, R2 */
+
+/** Opens the person's own mail client; hosted mode sends a formatted email. */
+function openMail(to, subject, lines) {
+  const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.filter(Boolean).join('\n'))}`;
+  window.open(href, '_self');
+  return { sent: to.split(/[,;\s]+/).filter(Boolean).length, mode: 'mailto' };
+}
+
+export async function shareRecognitionByEmail(recognitionId, recipients, note) {
+  const r = db.recognitions.find((x) => x.id === recognitionId);
+  if (!r) throw new Error('That recognition is no longer here.');
+  const b = findBehavior(r.behavior_id);
+  const org = db.orgs.find((o) => o.id === r.org_id);
+  const num = String(b.number).padStart(2, '0');
+  const to = Array.isArray(recipients) ? recipients.join(',') : recipients;
+  return openMail(to, `${org.name}: ${r.author_name} recognized ${r.recipient}`, [
+    note ? note + '\n' : '',
+    `${r.author_name} recognized ${r.recipient}${r.title ? `: ${r.title}` : ''}`,
+    `${num}. ${b.title}`, b.description, '', r.body,
+    (r.attachments ?? []).length ? '\nAttachments (shared separately in local mode): ' + r.attachments.map((a) => a.file_name).join(', ') : '',
+    `\n— ${org.name} culture portal`
+  ]);
+}
+
+export async function shareAwardByEmail(grantId, recipients, note) {
+  const g = db.awardGrants.find((x) => x.id === grantId);
+  if (!g) throw new Error('That award is no longer here.');
+  const org = db.orgs.find((o) => o.id === g.org_id);
+  const t = (db.awardTypes[g.org_id] ?? []).find((x) => x.id === g.award_type_id);
+  const vals = (t?.valueIds ?? []).map((id) => (db.values[g.org_id] ?? []).find((v) => v.id === id)?.name).filter(Boolean);
+  const to = Array.isArray(recipients) ? recipients.join(',') : recipients;
+  return openMail(to, `${org.name}: ${t?.name ?? 'Value award'} for ${g.recipient_name}`, [
+    note ? note + '\n' : '',
+    `${t?.name ?? 'Value award'} conferred on ${g.recipient_name} by ${g.granted_by_name}`,
+    vals.length ? `For living ${vals.join(', ')}` : '', '', g.citation,
+    (g.attachments ?? []).length ? '\nAttachments (shared separately in local mode): ' + g.attachments.map((a) => a.file_name).join(', ') : '',
+    `\n— ${org.name} culture portal`
+  ]);
+}

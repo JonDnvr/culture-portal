@@ -2,15 +2,29 @@ import React, { useState, useEffect } from 'react';
 import {
   applySystem, savePlacementTemplate, removePlacement,
   applyRitual, unapplyRitual, createRitual, updateRitual, saveRitualPractice,
-  updateBehavior, deleteBehavior, listRecognitions, listStories, listIterations
+  updateBehavior, deleteBehavior, listRecognitions, listStories, listIterations, markFluency
 } from '../lib/api.js';
-import { pad, Tag, BNum, Modal, useToast } from '../components/ui.jsx';
+import { pad, NumList, Tag, BNum, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { RecordIteration } from './Cadence.jsx';
+import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
+import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
+import { termFor } from '../lib/term.js';
+
+const DEFAULT_TERM = termFor(null);
 
 
 export default function Behavior({ ctx, id }) {
-  const { behaviors, systems, rituals, values, categories, canEdit, reload, goto, org } = ctx;
+  const { behaviors, systems, rituals, values, categories, canEdit, reload, goto, org, term } = ctx;
   const b = behaviors.find((x) => x.id === id);
   const [modal, setModal] = useState(null);
+  const badges = useBehaviorBadges(ctx);
+
+  // Opening the behavior is reading its full description: the first fluency
+  // step. The rings then refresh, so the step shows straight away.
+  useEffect(() => {
+    if (!b) return;
+    markFluency(org.id, b.id, 'description').catch(() => {}).finally(() => ctx.refreshActivity());
+  }, [org.id, b?.id]);
   const [recent, setRecent] = useState({ stories: [], recognitions: [], iterations: [] });
   const toast = useToast();
   const days = org.recent_days ?? 45;
@@ -26,7 +40,7 @@ export default function Behavior({ ctx, id }) {
     ).catch(() => setRecent({ stories: [], recognitions: [], iterations: [] }));
   }, [org.id, b?.id]);
 
-  if (!b) return <div className="empty">Behavior not found.</div>;
+  if (!b) return <div className="empty">{term.One} not found.</div>;
 
   const sharedWith = (ritualId) =>
     behaviors.filter((x) => x.id !== b.id && x.rituals.some((r) => r.id === ritualId));
@@ -42,8 +56,8 @@ export default function Behavior({ ctx, id }) {
   }
 
   async function detachRitual(ritualId, name) {
-    if (!window.confirm(`Remove "${name}" from this behavior? The ritual stays available to others.`)) return;
-    try { await unapplyRitual(b.id, ritualId); toast('Ritual removed from this behavior.'); reload(); }
+    if (!window.confirm(`Remove "${name}" from this ${term.one}? The ritual stays available to others.`)) return;
+    try { await unapplyRitual(b.id, ritualId); toast(`Ritual removed from this ${term.one}.`); reload(); }
     catch (e) { toast(e.message); }
   }
 
@@ -56,7 +70,7 @@ export default function Behavior({ ctx, id }) {
         <div><h1 className="pagetitle"><BNum n={b.number} /> {b.title}</h1></div>
         {canEdit && (
           <div className="btnrow" style={{ marginTop: 0 }}>
-            <button className="btn small" onClick={() => setModal({ kind: 'editBehavior' })}>Edit behavior</button>
+            <button className="btn small" onClick={() => setModal({ kind: 'editBehavior' })}>Edit {term.one}</button>
             <button className="btn ghost small" onClick={drop}>Delete</button>
           </div>
         )}
@@ -64,15 +78,31 @@ export default function Behavior({ ctx, id }) {
       <div className="tagrow">
         {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
         <Tag type="category">{b.category}</Tag>
-        <Tag type="ritual">Rituals ({appliedRituals.length})</Tag>
         {b.placements.length
           ? <Tag type="system">{b.placements.map((p) => p.system).join(', ')}</Tag>
           : <Tag type="warn">No system</Tag>}
         {b.placements.length === 1 && <Tag type="warn">Thin support</Tag>}
-        {org.weekly_behavior_id === b.id && <Tag type="live">This week</Tag>}
         {b.is_example && <Tag type="warn">Example, edit it to make it yours</Tag>}
       </div>
       <p className="lede">{b.description}</p>
+
+      <div className="badgerow">
+        <button className="zone zbadge" onClick={() => setModal({ kind: 'fluency' })}
+          title={`${fluencyName(badges.fluency[b.id], term)}: how it is earned`}>
+          <FluencyBadge f={badges.fluency[b.id]} size={42} />
+        </button>
+        <div className="chips">
+          {badges.connection[b.id] && (
+            <button className="chip gold" onClick={() => setModal({ kind: 'connection' })}>
+              <Nodes size={13} /> Connection
+            </button>
+          )}
+          <button className="chip gold" onClick={() => setModal({ kind: 'practice' })}>
+            <Metronome size={13} /> Practiced {badges.practiced[b.id].count} of {badges.practiced[b.id].of}
+            {' '}<WeekMarks marks={badges.practiced[b.id].marks} />
+          </button>
+        </div>
+      </div>
 
       <div className="block"><h4>Try this</h4><p>{b.quick_tip}</p></div>
       <List title="Coaching tips" items={b.coaching_tips} />
@@ -108,14 +138,14 @@ export default function Behavior({ ctx, id }) {
               <p className="pact">{r.description}</p>
               <div className="tagrow">
                 {r.applies_to_all
-                  ? <Tag type="ritual">Applies to every behavior</Tag>
+                  ? <Tag type="ritual">Applies to every {term.one}</Tag>
                   : shared.length
-                    ? <Tag type="ritual">Shared with {shared.map((x) => pad(x.number)).join(', ')}</Tag>
+                    ? <Tag type="ritual">Shared with <NumList items={shared} /></Tag>
                     : <Tag type="ritual">Used here only</Tag>}
               </div>
               <div className="btnrow">
                 {r.practice
-                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'viewPractice', r })}>Open the practice</button>
+                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runRitual', r })}>Open the practice</button>
                   : canEdit
                     ? <button className="btn ghost small" onClick={() => setModal({ kind: 'writePractice', r })}>Write the practice</button>
                     : <button className="btn ghost small" disabled>No practice written</button>}
@@ -130,12 +160,12 @@ export default function Behavior({ ctx, id }) {
               </div>
               {canEdit && (shared.length > 0 || r.applies_to_all) && (
                 <p className="meta" style={{ marginTop: 8 }}>
-                  Editing this ritual changes it for every behavior that uses it.
+                  Editing this ritual changes it for every {term.one} that uses it.
                 </p>
               )}
             </div>
           );
-        }) : <div className="empty">No rituals applied. Rituals are the repeatable practices that make this behavior happen without anyone remembering to do it.</div>}
+        }) : <div className="empty">No rituals applied. Rituals are the repeatable practices that make this {term.one} happen without anyone remembering to do it.</div>}
       </section>
 
       <section>
@@ -156,24 +186,27 @@ export default function Behavior({ ctx, id }) {
             <p className="pact">{p.artifact}</p>
             <div className="btnrow">
               {p.template
-                ? <button className="btn ghost small" onClick={() => setModal({ kind: 'viewTemplate', p })}>Open the template</button>
+                ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', p })}>Open the template</button>
                 : canEdit
                   ? <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p })}>Write the template</button>
                   : <button className="btn ghost small" disabled>No template yet</button>}
+              {!p.template && (
+                <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', p })}>Record a run</button>
+              )}
               {canEdit && p.template && (
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p, initial: p.template })}>Edit template</button>
               )}
               {canEdit && (
                 <button className="btn ghost small" onClick={async () => {
-                  if (!window.confirm(`Remove this behavior from ${p.system}?`)) return;
+                  if (!window.confirm(`Remove this ${term.one} from ${p.system}?`)) return;
                   await removePlacement(p.id); toast('System removed.'); reload();
                 }}>Remove</button>
               )}
             </div>
           </div>
-        )) : <div className="empty">Not applied to any system yet. A behavior with no system placement is a poster.</div>}
+        )) : <div className="empty">Not applied to any system yet. A {term.one} with no system placement is a poster.</div>}
         {b.placements.length === 1 && (
-          <div className="notice flagnotice">One system only. A behavior reinforced in a single system usually fades within a quarter.</div>
+          <div className="notice flagnotice">One system only. A {term.one} reinforced in a single system usually fades within a quarter.</div>
         )}
       </section>
 
@@ -186,37 +219,42 @@ export default function Behavior({ ctx, id }) {
           items={[
             ...recent.stories.map((x) => ({
               kind: 'Story', id: x.id, open: 'story', when: x.created_at,
+              who: findPerson(ctx.people, { id: x.author_id, name: x.author_name }), whoName: x.author_name,
               lead: x.author_name, text: x.body, extra: (x.story_attachments ?? []).length
             })),
             ...recent.recognitions.map((x) => ({
               kind: 'Recognition', id: x.id, open: 'recognition', when: x.created_at,
-              lead: `${x.author_name} → ${x.recipient}`, text: x.body, extra: (x.attachments ?? []).length
+              who: findPerson(ctx.people, { id: x.recipient_user_id, name: x.recipient }), whoName: x.recipient,
+              lead: `${x.author_name} → ${x.recipient}${x.title ? `: ${x.title}` : ''}`, text: x.body,
+              extra: (x.attachments ?? []).length
             })),
             ...recent.iterations.map((x) => ({
-              kind: 'Iteration', id: x.id, open: 'iteration', when: x.held_at,
-              lead: x.ritual?.name ?? 'Ritual',
+              kind: x.system ? 'System run' : 'Iteration', id: x.id, open: 'iteration', when: x.held_at,
+              who: findPerson(ctx.people, { id: x.recorded_by, name: x.recorded_by_name }), whoName: x.recorded_by_name,
+              lead: x.ritual?.name ?? x.system?.name ?? 'Run',
               text: x.notes || `Run by ${x.recorded_by_name}`, extra: (x.attachments ?? []).length
             }))
           ]}
-          onOpen={(kind, id) => ctx.openRecord(kind, id)} />
+          onOpen={(kind, id) => ctx.openRecord(kind, id)} term={term} />
       </section>
 
       {modal?.kind === 'editBehavior' && (
-        <BehaviorForm behavior={b} values={values} categories={categories} toast={toast} wide
+        <BehaviorForm behavior={b} values={values} categories={categories} toast={toast} wide term={term}
+          title={`Edit ${term.one}`}
           onClose={() => setModal(null)}
-          onSave={async (fields) => { await updateBehavior(b.id, fields); toast('Behavior updated.'); setModal(null); reload(); }} />
+          onSave={async (fields) => { await updateBehavior(b.id, fields); toast(`${term.One} updated.`); setModal(null); reload(); }} />
       )}
       {modal?.kind === 'system' && (
         <ApplySystemForm behavior={b} systems={systems} ctx={ctx} toast={toast}
           onDone={() => { setModal(null); reload(); }} onClose={() => setModal(null)} />
       )}
       {modal?.kind === 'applyRitual' && (
-        <ApplyRitualForm behavior={b} rituals={rituals} toast={toast}
+        <ApplyRitualForm behavior={b} rituals={rituals} toast={toast} term={term}
           onDone={() => { setModal(null); reload(); }} onClose={() => setModal(null)} />
       )}
       {modal?.kind === 'newRitual' && (
         <RitualForm title="New ritual" toast={toast} onClose={() => setModal(null)}
-          note={`It is created for ${org.name} and applied to this behavior. You can apply it to others later.`}
+          note={`It is created for ${org.name} and applied to this ${term.one}. You can apply it to others later.`}
           onSave={async (fields) => {
             const r = await createRitual(org.id, fields);
             await applyRitual(b.id, r.id);
@@ -227,19 +265,24 @@ export default function Behavior({ ctx, id }) {
         <RitualForm title="Edit ritual" initial={modal.r} toast={toast} onClose={() => setModal(null)}
           onSave={async (fields) => { await updateRitual(modal.r.id, fields); toast('Ritual updated.'); setModal(null); reload(); }} />
       )}
-      {modal?.kind === 'viewTemplate' && (
-        <Modal title={modal.p.artifact} onClose={() => setModal(null)}
-          footer={<button className="btn ghost" onClick={() => setModal(null)}>Close</button>}>
-          <div className="meta">{modal.p.system} / {modal.p.owner} / {modal.p.cadence}</div>
-          <pre>{modal.p.template}</pre>
-        </Modal>
+      {modal?.kind === 'runSystem' && (
+        <RecordIteration ctx={ctx} system={{ id: modal.p.systemId, name: modal.p.system }} placement={modal.p}
+          readFor={[b.id]} onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
-      {modal?.kind === 'viewPractice' && (
-        <Modal title={modal.r.name} onClose={() => setModal(null)}
-          footer={<button className="btn ghost" onClick={() => setModal(null)}>Close</button>}>
-          <div className="meta">{modal.r.owner} / {modal.r.cadence}</div>
-          <pre>{modal.r.practice}</pre>
-        </Modal>
+      {modal?.kind === 'runRitual' && (
+        <RecordIteration ctx={ctx} ritual={modal.r} readFor={[b.id]}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
+      )}
+      {modal?.kind === 'fluency' && (
+        <FluencyDetail ctx={ctx} behavior={b} f={badges.fluency[b.id]} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'practice' && (
+        <PracticeDetail ctx={ctx} behavior={b} p={badges.practiced[b.id]} scopeName={badges.scopeName}
+          sessionId={badges.sessionId} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'connection' && (
+        <ConnectionDetail ctx={ctx} behavior={b} scopeName={badges.scopeName}
+          recentDays={badges.recentDays} onClose={() => setModal(null)} />
       )}
       {modal?.kind === 'writeTemplate' && (
         <TextForm title={modal.initial ? 'Edit the template' : 'Write the template'} label="Template"
@@ -256,10 +299,10 @@ export default function Behavior({ ctx, id }) {
 }
 
 /** One list, newest first, each row labelled by type. Reading, not posting. */
-function RecentList({ items, onOpen }) {
+function RecentList({ items, onOpen, term = DEFAULT_TERM }) {
   const rows = [...items].sort((a, b) => new Date(b.when) - new Date(a.when)).slice(0, 8);
   if (!rows.length) {
-    return <div className="empty">Nothing recorded for this behavior yet.</div>;
+    return <div className="empty">Nothing recorded for this {term.one} yet.</div>;
   }
   return (
     <div className="recentlist">
@@ -267,7 +310,7 @@ function RecentList({ items, onOpen }) {
         <button key={`${it.kind}-${it.id}`} className="recentrow" onClick={() => onOpen(it.open, it.id)}>
           <span className={`typetag t-${it.open}`}>{it.kind}</span>
           <span className="rr-main">
-            <span className="rr-lead">{it.lead}</span>
+            <span className="rr-lead who2"><Avatar person={it.who} name={it.whoName} size={18} />{it.lead}</span>
             <span className="rr-text">{it.text}</span>
           </span>
           <span className="rr-side">
@@ -291,7 +334,7 @@ function List({ title, items }) {
 }
 
 /** One form for creating and editing a behavior; lists are one item per line. */
-export function BehaviorForm({ behavior, values, categories, onSave, onClose, toast, wide, title = 'Edit behavior' }) {
+export function BehaviorForm({ behavior, values, categories, onSave, onClose, toast, wide, term = DEFAULT_TERM, title = `Edit ${term.one}` }) {
   const [f, setF] = useState({
     number: behavior?.number ?? '',
     title: behavior?.title ?? '',
@@ -314,7 +357,7 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
   });
 
   async function save() {
-    if (!f.title.trim() || !f.description.trim()) return toast('A behavior needs a title and a description.');
+    if (!f.title.trim() || !f.description.trim()) return toast(`A ${term.one} needs a title and a description.`);
     setBusy(true);
     try {
       await onSave({
@@ -457,12 +500,12 @@ function ApplySystemForm({ behavior, systems, ctx, onDone, onClose, toast }) {
           <textarea rows={6} placeholder="The actual words: the agenda block, the interview question, the checklist item"
             value={f.template} onChange={(e) => setF({ ...f, template: e.target.value })} />
         </>
-      ) : <div className="empty">Every system category is already applied to this behavior.</div>}
+      ) : <div className="empty">Every system category is already applied to this {ctx.term.one}.</div>}
     </Modal>
   );
 }
 
-function ApplyRitualForm({ behavior, rituals, onDone, onClose, toast }) {
+function ApplyRitualForm({ behavior, rituals, onDone, onClose, toast, term = DEFAULT_TERM }) {
   const used = new Set(behavior.rituals.map((r) => r.id));
   const available = rituals.filter((r) => !used.has(r.id));
   const [id, setId] = useState(available[0]?.id);
@@ -478,7 +521,7 @@ function ApplyRitualForm({ behavior, rituals, onDone, onClose, toast }) {
         <button className="btn ghost" onClick={onClose}>Cancel</button>
         {available.length > 0 && <button className="btn" onClick={save}>Apply ritual</button>}
       </>}>
-      <p className="quiet">The practice comes with the ritual. Editing it later updates every behavior that uses it.</p>
+      <p className="quiet">The practice comes with the ritual. Editing it later updates every {term.one} that uses it.</p>
       {available.length ? (
         <>
           <label className="fl">Ritual</label>

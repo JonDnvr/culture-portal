@@ -9,9 +9,47 @@ import {
   getBilling, setBillingRates, setBillingStatus, startCheckout, cancelSubscription, resumeSubscription,
   sendWelcomeEmail,
   listBillingEvents, listAccessRequests, approveRequest, declineRequest,
-  clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL
+  clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL,
+  createTeam, setMemberTeam, saveAwardType
 } from '../lib/api.js';
-import { pad, Tag, Modal, useToast } from '../components/ui.jsx';
+import { pad, N, Tag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { Crest, GoldStar } from '../components/badges.jsx';
+import { recentWeeks } from '../lib/gamify.js';
+import { termFor } from '../lib/term.js';
+
+const NEW_TEAM = '__new__';
+
+/**
+ * One dropdown for choosing, creating and moving: pick a team, or pick
+ * "Create a new team" and name it on the spot.
+ */
+export function TeamSelect({ teams, value, onChange, onCreate, id }) {
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState('');
+  if (naming) {
+    return (
+      <span className="teamnew">
+        <input type="text" id={id} autoFocus placeholder="New team name" value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === 'Escape') { setNaming(false); setName(''); }
+            if (e.key === 'Enter' && name.trim()) { await onCreate(name.trim()); setNaming(false); setName(''); }
+          }} />
+        <button className="btn small" type="button" disabled={!name.trim()}
+          onClick={async () => { await onCreate(name.trim()); setNaming(false); setName(''); }}>Add</button>
+        <button className="btn ghost small" type="button" onClick={() => { setNaming(false); setName(''); }}>Cancel</button>
+      </span>
+    );
+  }
+  return (
+    <select className="field inline" id={id} value={value ?? ''} aria-label="Team"
+      onChange={(e) => (e.target.value === NEW_TEAM ? setNaming(true) : onChange(e.target.value || null))}>
+      <option value="">No team</option>
+      {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+      <option value={NEW_TEAM}>+ Create a new team…</option>
+    </select>
+  );
+}
 
 const money = (n) => (n || n === 0 ? `$${Number(n).toLocaleString()}` : '—');
 
@@ -23,7 +61,7 @@ const ROLES = [
 ];
 
 export default function Admin({ ctx }) {
-  const { org, isSuper, behaviors, systems, values,
+  const { org, isSuper, behaviors, systems, values, teams, activity, awardTypes, term,
     reload, openBehavior, refreshOrgs, switchOrg } = ctx;
   const [members, setMembers] = useState([]);
   const [name, setName] = useState('');
@@ -65,6 +103,28 @@ export default function Admin({ ctx }) {
     } catch (e) { toast(e.message); }
   }
 
+  async function changeTeam(userId, teamId, who) {
+    try {
+      await setMemberTeam(org.id, userId, teamId);
+      toast(teamId ? `${who} moved to ${teams.find((t) => t.id === teamId)?.name ?? 'the team'}.` : `${who} has no team now.`);
+      loadMembers(); reload();
+    } catch (e) { toast(e.message); }
+  }
+
+  async function newTeamFor(userId, name, who) {
+    try {
+      const t = await createTeam(org.id, name);
+      await setMemberTeam(org.id, userId, t.id);
+      toast(`Created ${t.name} and moved ${who} to it.`);
+      loadMembers(); reload();
+    } catch (e) { toast(e.message); }
+  }
+
+  // Recognition each person has received: gold stars by member, plus older
+  // recognition that named them by typing their name.
+  const received = (m) => (activity?.recognitions ?? []).filter((r) =>
+    r.recipient_user_id ? r.recipient_user_id === m.user_id : r.recipient === m.display_name);
+
   async function changeRole(userId, role) {
     try { await updateUserRole(userId, role); toast('Role updated.'); loadMembers(); }
     catch (e) { toast(e.message); }
@@ -85,7 +145,7 @@ export default function Admin({ ctx }) {
     <>
       <div className="dateline">{isSuper ? 'Super user, all organizations' : `Culture champion, ${org.name}`}</div>
       <h1 className="pagetitle">Admin</h1>
-      <p className="lede">People and roles, purpose, values, system categories and measures for {org.name}. Behaviors and rituals are managed from Cadence.</p>
+      <p className="lede">People and roles, purpose, values, system categories and measures for {org.name}. {term.Many} and rituals are managed from Cadence.</p>
 
       {isSuper && <AdminTabs tab={tab} setTab={setTab} orgName={org.name} />}
 
@@ -112,7 +172,7 @@ export default function Admin({ ctx }) {
 
       <section>
         <div className="sectionhead">
-          <h2>Behavior of the week</h2>
+          <h2>{term.One} of the week</h2>
           <span className="note">Shown on the culture home and in Cadence</span>
         </div>
         <div className="panel" style={{ maxWidth: 560 }}>
@@ -121,7 +181,7 @@ export default function Admin({ ctx }) {
             onChange={async (e) => {
               try {
                 await setWeeklyBehavior(org.id, e.target.value || null);
-                toast('Behavior of the week set.');
+                toast(`${term.One} of the week set.`);
                 await refreshOrgs(); reload();
               } catch (err) { toast(err.message); }
             }}>
@@ -143,7 +203,7 @@ export default function Admin({ ctx }) {
           </label>
           <p className="meta" style={{ marginTop: 8 }}>
             {org.auto_advance
-              ? 'It moves to the next behavior in the rotation a week after the last change. Setting one by hand restarts the clock.'
+              ? `It moves to the next ${term.one} in the rotation a week after the last change. Setting one by hand restarts the clock.`
               : 'Set it each week.'}
           </p>
           {staleWeek(org) && (
@@ -166,10 +226,10 @@ export default function Admin({ ctx }) {
               <div key={v.id} className="row">
                 <div><div className="t">{v.name}</div><div className="s">{v.description}</div></div>
                 <div className="rowactions">
-                  <span className={carried ? 'tag' : 'tag warn'}>{carried} behavior{carried === 1 ? '' : 's'}</span>
+                  <span className={carried ? 'tag' : 'tag warn'}>{term.count(carried)}</span>
                   <button className="btn ghost small" onClick={() => setModal({ kind: 'value', v })}>Edit</button>
                   <button className="btn ghost small" onClick={async () => {
-                    if (!window.confirm(`Delete the value "${v.name}"? Behaviors keep their other values.`)) return;
+                    if (!window.confirm(`Delete the value "${v.name}"? ${term.Many} keep their other values.`)) return;
                     try { await deleteValue(v.id); toast('Value deleted.'); reload(); } catch (e) { toast(e.message); }
                   }}>Delete</button>
                 </div>
@@ -177,6 +237,40 @@ export default function Admin({ ctx }) {
             );
           })}
           {!values.length && <div className="row"><div className="s">No values yet.</div></div>}
+        </div>
+      </section>
+
+      <section>
+        <div className="sectionhead">
+          <h2>Value awards</h2>
+          <span className="note"><button className="btn small" onClick={() => setModal({ kind: 'award' })}>New Value award</button></span>
+        </div>
+        <p className="meta" style={{ marginTop: -6, marginBottom: 12 }}>
+          Named awards a leader gives a person or a team for living one or more Values. Keep them
+          rare: the limit per leader is what stops a crest turning into a large gold star.
+        </p>
+        <div className="rowlist">
+          {awardTypes.map((a) => {
+            const names = a.valueIds.map((id) => values.find((v) => v.id === id)?.name).filter(Boolean);
+            return (
+              <div key={a.id} className="row">
+                <div className="who2">
+                  <Crest height={38} pips={Math.max(1, names.length)} />
+                  <div>
+                    <div className="t">{a.name}{a.active === false ? ' (retired)' : ''}</div>
+                    <div className="s">
+                      {names.join(' · ')} · {a.grantable_to === 'both' ? 'person or team' : a.grantable_to === 'team' ? 'teams' : 'people'}
+                      {a.grant_cap ? ` · ${a.grant_cap} per leader per ${a.cap_period}` : ' · no limit'}
+                    </div>
+                  </div>
+                </div>
+                <div className="rowactions">
+                  <button className="btn ghost small" onClick={() => setModal({ kind: 'award', a })}>Edit</button>
+                </div>
+              </div>
+            );
+          })}
+          {!awardTypes.length && <div className="row"><div className="s">No Value awards yet.</div></div>}
         </div>
       </section>
 
@@ -254,11 +348,21 @@ export default function Admin({ ctx }) {
         <div className="rowlist">
           {members.map((m) => (
             <div key={m.id} className="row">
-              <div>
-                <div className="t">{m.display_name}</div>
-                <div className="s">{m.email}</div>
+              <div className="who2">
+                <Avatar person={m} name={m.display_name} size={30} />
+                <div>
+                  <div className="t">{m.display_name}</div>
+                  <div className="s">{m.email}</div>
+                </div>
               </div>
               <div className="rowactions">
+                <TeamSelect teams={teams} value={m.team_id} id={`team-${m.user_id}`}
+                  onChange={(teamId) => changeTeam(m.user_id, teamId, m.display_name)}
+                  onCreate={(name) => newTeamFor(m.user_id, name, m.display_name)} />
+                <button className="linkn" title="Recognition received"
+                  onClick={() => setModal({ kind: 'received', m })}>
+                  <GoldStar size={14} /> {received(m).length}
+                </button>
                 <select className="field inline" value={m.role} onChange={(e) => changeRole(m.user_id, e.target.value)}>
                   {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                   {m.role === 'owner' && <option value="owner">Super user</option>}
@@ -300,11 +404,11 @@ export default function Admin({ ctx }) {
       </section>
 
       <section>
-        <div className="sectionhead"><h2>System categories</h2><span className="note">Set here, then applied to behaviors</span></div>
+        <div className="sectionhead"><h2>System categories</h2><span className="note">Set here, then applied to {term.many}</span></div>
         <div className="rowlist">
           {systems.map((s) => (
             <div key={s.id} className="row">
-              <div><div className="t">{s.name}</div><div className="s">{usage(s)} behavior{usage(s) === 1 ? '' : 's'} applied</div></div>
+              <div><div className="t">{s.name}</div><div className="s">{term.count(usage(s))} applied</div></div>
               <div className="rowactions">
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'system', s })}>Rename</button>
                 <button className="btn ghost small" disabled={usage(s) > 0}
@@ -329,7 +433,7 @@ export default function Admin({ ctx }) {
           <span className="note"><button className="btn small" onClick={() => setModal({ kind: 'measure' })}>Add a measure</button></span>
         </div>
         <p className="prose">
-          Define what the behaviors are meant to move. Recording a value for each period is a
+          Define what the {term.many} are meant to move. Recording a value for each period is a
           separate job, done from Conviction so it can happen on a cycle.
         </p>
         <div className="rowlist">
@@ -364,8 +468,13 @@ export default function Admin({ ctx }) {
               }}>
               {[14, 30, 45, 60, 90, 180].map((d) => <option key={d} value={d}>Last {d} days</option>)}
             </select>
-            <p className="meta">Used on behavior pages and in Conviction.</p>
+            <p className="meta">
+              Used on {term.one} pages and in Conviction. Badges count weeks, so this reads as
+              the last {recentWeeks(org)} week{recentWeeks(org) === 1 ? '' : 's'} there.
+            </p>
           </div>
+
+          <TermSetting ctx={ctx} toast={toast} />
 
           <div className="panel">
             <label className="fl" htmlFor="pulseSel">Quick pulse per sign-in</label>
@@ -374,9 +483,9 @@ export default function Admin({ ctx }) {
                 try { await setPulseCount(org.id, Number(e.target.value)); toast('Pulse size set.'); await refreshOrgs(); reload(); }
                 catch (err) { toast(err.message); }
               }}>
-              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} behavior{n === 1 ? '' : 's'}</option>)}
+              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{term.count(n)}</option>)}
             </select>
-            <p className="meta">How many behaviors a person is asked to rate when they sign in.</p>
+            <p className="meta">How many {term.many} a person is asked to rate when they sign in.</p>
           </div>
 
           <div className="panel">
@@ -540,7 +649,18 @@ export default function Admin({ ctx }) {
 
       {modal?.kind === 'invite' && (
         <AddPerson ctx={ctx} onClose={() => setModal(null)} toast={toast}
-          onDone={() => { setModal(null); loadMembers(); }} />
+          onDone={() => { setModal(null); loadMembers(); reload(); }} />
+      )}
+      {modal?.kind === 'received' && (
+        <ReceivedList ctx={ctx} member={modal.m} rows={received(modal.m)} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'award' && (
+        <AwardTypeForm award={modal.a} values={values} onClose={() => setModal(null)} toast={toast}
+          onSave={async (fields) => {
+            await saveAwardType(org.id, { ...fields, id: modal.a?.id });
+            toast(modal.a ? 'Award updated.' : 'Award created.');
+            setModal(null); reload();
+          }} />
       )}
       {modal?.kind === 'password' && (
         <SetPassword member={modal.m} onClose={() => setModal(null)} toast={toast} />
@@ -550,7 +670,7 @@ export default function Admin({ ctx }) {
           onDone={async () => { setModal(null); await refreshOrgs(); reload(); }} />
       )}
       {modal?.kind === 'value' && (
-        <ValueForm value={modal.v} onClose={() => setModal(null)} toast={toast}
+        <ValueForm value={modal.v} term={term} onClose={() => setModal(null)} toast={toast}
           onSave={async (fields) => {
             if (modal.v) await updateValue(modal.v.id, fields);
             else await createValue(org.id, fields);
@@ -568,7 +688,7 @@ export default function Admin({ ctx }) {
           }} />
       )}
       {modal?.kind === 'system' && (
-        <SystemForm category={modal.s} onClose={() => setModal(null)} toast={toast}
+        <SystemForm category={modal.s} term={term} onClose={() => setModal(null)} toast={toast}
           onSave={async (fields) => {
             await updateSystemCategory(modal.s.id, fields);
             toast('Category renamed.'); setModal(null); reload();
@@ -776,7 +896,7 @@ function SuperAdmin({ ctx, billing, billingEvents, allOrgs, reloadBilling, toast
                   <div className="t">{o.name}</div>
                   <div className="s">
                     {o.subtitle}
-                    {o.members !== undefined ? ` / ${o.members} people, ${o.behaviors} behaviors` : ''}
+                    {o.members !== undefined ? ` / ${o.members} people, ${o.behaviors} ${termFor(o).many}` : ''}
                   </div>
                   <div className="tagrow">
                     <Tag type="plain">{PLAN_LABEL[o.plan] ?? o.plan}{o.billing_cycle ? `, ${o.billing_cycle}` : ''}</Tag>
@@ -899,7 +1019,7 @@ function MeasureForm({ measure, onSave, onClose, toast }) {
   );
 }
 
-function SystemForm({ category, onSave, onClose, toast }) {
+function SystemForm({ category, term, onSave, onClose, toast }) {
   const [name, setName] = useState(category?.name ?? '');
   return (
     <Modal title="Rename system category" onClose={onClose}
@@ -913,7 +1033,7 @@ function SystemForm({ category, onSave, onClose, toast }) {
       <label className="fl">Name</label>
       <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
       <p className="meta" style={{ marginTop: 8 }}>
-        Renaming keeps every behavior already applied to it.
+        Renaming keeps every {term.one} already applied to it.
       </p>
     </Modal>
   );
@@ -964,7 +1084,7 @@ function PurposeForm({ org, onClose, onDone, toast }) {
   );
 }
 
-function ValueForm({ value, onSave, onClose, toast }) {
+function ValueForm({ value, term, onSave, onClose, toast }) {
   const [f, setF] = useState({ name: value?.name ?? '', description: value?.description ?? '' });
   return (
     <Modal title={value ? `Edit ${value.name}` : 'Add a value'} onClose={onClose}
@@ -980,7 +1100,7 @@ function ValueForm({ value, onSave, onClose, toast }) {
       <label className="fl">What it means here</label>
       <textarea rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
       <p className="meta" style={{ marginTop: 8 }}>
-        Attach it to behaviors from each behavior's edit form. A value with no behavior under it is a poster.
+        Attach it to {term.many} from each {term.one}'s edit form. A value with no {term.one} under it is a poster.
       </p>
     </Modal>
   );
@@ -995,13 +1115,19 @@ export function welcomeMessage(who, welcome) {
 }
 
 function AddPerson({ ctx, onClose, onDone, toast }) {
-  const [f, setF] = useState({ email: '', name: '', role: 'member', password: '', sendWelcome: true });
+  const [f, setF] = useState({ email: '', name: '', role: 'member', password: '', sendWelcome: true, teamId: '' });
+  const [teams, setTeams] = useState(ctx.teams);
   const [busy, setBusy] = useState(false);
 
   async function save() {
+    if (!f.teamId) return toast('Choose a team, or create one from the list.');
     setBusy(true);
     try {
-      const res = await createUser(ctx.org.id, f);
+      const { teamId, ...rest } = f;
+      const res = await createUser(ctx.org.id, rest);
+      // The team is set right after the account exists, so the account
+      // service needs no change.
+      if (res?.id) await setMemberTeam(ctx.org.id, res.id, teamId);
       // Held a little longer when something went wrong, so it can be read.
       toast(welcomeMessage(f.name || f.email, res?.welcome), res?.welcome && !res.welcome.sent && res.welcome.reason !== 'not requested' ? 9000 : 3500);
       onDone();
@@ -1024,6 +1150,16 @@ function AddPerson({ ctx, onClose, onDone, toast }) {
         {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
       </select>
       <p className="meta" style={{ marginTop: 6 }}>{ROLES.find((r) => r.id === f.role)?.can}</p>
+      <label className="fl" htmlFor="newPersonTeam">Team</label>
+      <TeamSelect teams={teams} value={f.teamId} id="newPersonTeam"
+        onChange={(teamId) => setF({ ...f, teamId: teamId ?? '' })}
+        onCreate={async (name) => {
+          try {
+            const t = await createTeam(ctx.org.id, name);
+            setTeams([...teams, t].sort((a, b) => a.name.localeCompare(b.name)));
+            setF({ ...f, teamId: t.id });
+          } catch (e) { toast(e.message); }
+        }} />
       <label className="fl">Starting password</label>
       <input type="text" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })}
         placeholder="At least eight characters" />
@@ -1092,3 +1228,153 @@ function NewOrganization({ onClose, onDone, toast }) {
     </Modal>
   );
 }
+
+/** What a person's recognition count is made of, each line opening its record. */
+function ReceivedList({ ctx, member, rows, onClose }) {
+  const byId = Object.fromEntries(ctx.behaviors.map((b) => [b.id, b]));
+  return (
+    <Modal title={`Recognition for ${member.display_name}`} onClose={onClose} wide
+      footer={<button className="btn ghost" onClick={onClose}>Close</button>}>
+      <p className="meta">
+        {rows.length} recognition{rows.length === 1 ? '' : 's'} received. Gold stars are the ones that
+        named {member.display_name} from the list; older ones typed the name and earn no star.
+      </p>
+      {rows.length ? (
+        <div className="runlist">
+          {rows.map((r) => {
+            const b = byId[r.behavior_id];
+            return (
+              <button key={r.id} className="runrow" onClick={() => { onClose(); ctx.openRecord('recognition', r.id); }}>
+                {r.recipient_user_id ? <GoldStar size={20} /> : <span className="nostar" />}
+                <span>
+                  <b>{r.title || (b ? b.title : 'Recognition')}</b>
+                  <small className="who2">
+                    <Avatar person={findPerson(ctx.people, { id: r.author_id, name: r.author_name })} name={r.author_name} size={14} />
+                    from {r.author_name}{b ? <> · <N n={b.number} /> {b.title}</> : ''}
+                    {!r.recipient_user_id ? ' · typed name' : ''}
+                  </small>
+                </span>
+                <span className="w">{new Date(r.created_at).toLocaleDateString()}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : <div className="empty">Nothing yet.</div>}
+    </Modal>
+  );
+}
+
+function AwardTypeForm({ award, values, onSave, onClose, toast }) {
+  const [f, setF] = useState({
+    name: award?.name ?? '', description: award?.description ?? '',
+    grantable_to: award?.grantable_to ?? 'member',
+    grant_cap: award?.grant_cap ?? 1, cap_period: award?.cap_period ?? 'quarter',
+    limited: award ? !!award.grant_cap : true,
+    active: award?.active ?? true, valueIds: award?.valueIds ?? []
+  });
+  const [busy, setBusy] = useState(false);
+  const toggle = (id) => setF({ ...f, valueIds: f.valueIds.includes(id) ? f.valueIds.filter((x) => x !== id) : [...f.valueIds, id] });
+
+  async function save() {
+    if (!f.name.trim()) return toast('Name the award.');
+    if (!f.valueIds.length) return toast('Pick at least one Value it stands for.');
+    setBusy(true);
+    try {
+      await onSave({
+        name: f.name.trim(), description: f.description, grantable_to: f.grantable_to, active: f.active,
+        grant_cap: f.limited ? Number(f.grant_cap) || 1 : null, cap_period: f.limited ? f.cap_period : null,
+        valueIds: f.valueIds
+      });
+    } catch (e) { toast(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <Modal title={award ? 'Edit Value award' : 'New Value award'} onClose={onClose} wide
+      footer={<>
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save award'}</button>
+      </>}>
+      <div className="badgehead">
+        <span className="badgeart"><Crest height={56} pips={Math.max(1, f.valueIds.length)} /></span>
+        <span className="meta">One pip on the crest for each Value it stands for.</span>
+      </div>
+      <label className="fl">Name</label>
+      <input type="text" value={f.name} placeholder="The Horizon Award" onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <label className="fl">What it is for</label>
+      <textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+      <label className="fl">Values it stands for</label>
+      <div className="tagrow">
+        {values.map((v) => (
+          <button key={v.id} className="pill value" aria-pressed={f.valueIds.includes(v.id)} onClick={() => toggle(v.id)}>{v.name}</button>
+        ))}
+      </div>
+      <label className="fl">Given to</label>
+      <div className="tagrow">
+        {[['member', 'A person'], ['team', 'A team'], ['both', 'Either']].map(([k, l]) => (
+          <button key={k} className="pill" aria-pressed={f.grantable_to === k} onClick={() => setF({ ...f, grantable_to: k })}>{l}</button>
+        ))}
+      </div>
+      <label className="fl">Limit per leader</label>
+      <div className="tworow">
+        <label className="checkrow">
+          <input type="checkbox" checked={f.limited} onChange={(e) => setF({ ...f, limited: e.target.checked })} />
+          <span>Limit how often each leader can give it</span>
+        </label>
+        {f.limited && (
+          <span className="who2">
+            <input type="number" min="1" style={{ width: 70 }} value={f.grant_cap}
+              onChange={(e) => setF({ ...f, grant_cap: e.target.value })} />
+            <span>per</span>
+            <select className="field inline" value={f.cap_period} onChange={(e) => setF({ ...f, cap_period: e.target.value })}>
+              <option value="month">month</option><option value="quarter">quarter</option><option value="year">year</option>
+            </select>
+          </span>
+        )}
+      </div>
+      {award && (
+        <label className="checkrow">
+          <input type="checkbox" checked={!f.active} onChange={(e) => setF({ ...f, active: !e.target.checked })} />
+          <span>Retired: no longer given, but stays on every wall it is already on</span>
+        </label>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * What this organization calls its behaviors. Every screen takes its wording
+ * from here: a portal set to Foundations says Foundations everywhere.
+ */
+function TermSetting({ ctx, toast }) {
+  const { org, refreshOrgs, term } = ctx;
+  const [one, setOne] = useState(org.behavior_label ?? '');
+  const [many, setMany] = useState(org.behavior_label_plural ?? '');
+  const [busy, setBusy] = useState(false);
+  const changed = (one.trim() !== (org.behavior_label ?? '')) || (many.trim() !== (org.behavior_label_plural ?? ''));
+
+  async function save() {
+    const a = one.trim(), b = many.trim();
+    if ((a && !b) || (!a && b)) return toast('Give both words, or leave both empty for "Behavior" and "Behaviors".');
+    setBusy(true);
+    try {
+      await updateOrganization(org.id, { behavior_label: a || null, behavior_label_plural: b || null });
+      await refreshOrgs();
+      toast(a ? `Every screen now says ${b}.` : 'Back to Behaviors.');
+    } catch (e) { toast(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="panel">
+      <label className="fl" htmlFor="termOne">What you call behaviors</label>
+      <div className="tworow">
+        <input id="termOne" type="text" placeholder="Behavior" value={one} onChange={(e) => setOne(e.target.value)} />
+        <input id="termMany" type="text" placeholder="Behaviors" value={many} onChange={(e) => setMany(e.target.value)} aria-label="Plural" />
+      </div>
+      <p className="meta">One and many, for example Foundation and Foundations. Now: {term.One} / {term.Many}.</p>
+      <div className="btnrow" style={{ marginTop: 6 }}>
+        <button className="btn small" onClick={save} disabled={busy || !changed}>{busy ? 'Saving…' : 'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
