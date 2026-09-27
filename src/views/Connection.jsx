@@ -34,8 +34,11 @@ export default function Connection({ ctx }) {
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'recognition'} onClick={() => setTab('recognition')}>Recognition</button>
         <button className="tab" aria-pressed={tab === 'stories'} onClick={() => setTab('stories')}>Stories</button>
+        <button className="tab" aria-pressed={tab === 'good'} onClick={() => setTab('good')}>What's Good</button>
       </div>
-      {tab === 'recognition' ? <Recognition ctx={ctx} /> : <Stories ctx={ctx} />}
+      {tab === 'recognition' && <Recognition ctx={ctx} />}
+      {tab === 'stories' && <Stories ctx={ctx} />}
+      {tab === 'good' && <WhatsGood ctx={ctx} />}
     </>
   );
 }
@@ -293,7 +296,7 @@ export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) 
       }
       const noun = isRecognition ? 'Recognition' : 'Story';
       toast(mode === 'published' ? 'Changes saved.'
-        : asDraft ? 'Saved as a draft. Only you can see it until you publish.'
+        : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
           : isRecognition ? 'Recognition posted.' : mode === 'draft' ? `${noun} published.` : 'Story added.');
       await ctx.refreshActivity();
       onDone();
@@ -438,3 +441,129 @@ export function ShareRecord({ kind, id, summary, onClose, toast }) {
   );
 }
 
+
+/* -------------------------------------------------------------- what's good */
+
+const KIND_LABEL = { recognition: 'Recognition', story: 'Story', award: 'Value award' };
+
+/**
+ * Every recognition, story and Value award that has been recorded, newest
+ * first, in one list: the Connection counterpart of Cadence, Sessions. Same
+ * value and behavior filters, team toggle, search and "See more".
+ */
+function WhatsGood({ ctx }) {
+  const { activity, grants, behaviors, values, teams, people, openRecord, openBehavior, term } = ctx;
+  const [kind, setKind] = useState(ALL);
+  const [value, setValue] = useState(ALL);
+  const [behavior, setBehavior] = useState(ALL);
+  const [editing, setEditing] = useState(null);
+  const [open, setOpen] = useState(null);
+  const toast = useToast();
+  const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
+  const valueName = Object.fromEntries(values.map((v) => [v.id, v.name]));
+  const teamName = (id) => teams.find((t) => t.id === id)?.name;
+
+  const all = [
+    ...activity.recognitions.map((r) => ({
+      kind: 'recognition', row: r, id: r.id, at: r.created_at, by: r.author_name, byId: r.author_id,
+      to: r.recipient, toId: r.recipient_user_id, title: r.title, text: r.body, behavior: byId[r.behavior_id]
+    })),
+    ...activity.stories.map((st) => ({
+      kind: 'story', row: st, id: st.id, at: st.created_at, by: st.author_name, byId: st.author_id,
+      text: st.body, behavior: byId[st.behavior_id]
+    })),
+    ...(grants ?? []).map((g) => ({
+      kind: 'award', row: g, id: g.id, at: g.granted_at, by: g.granted_by_name, byId: g.granted_by,
+      to: g.team_id ? `${g.recipient_name} team` : g.recipient_name, toId: g.recipient_user_id, team: g.team_id,
+      title: g.award?.name, text: g.citation, valueNames: (g.award?.valueIds ?? []).map((id) => valueName[id]).filter(Boolean)
+    }))
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
+  const rows = all.filter((x) => {
+    if (kind !== ALL && x.kind !== kind) return false;
+    if (behavior !== ALL && x.behavior?.id !== behavior) return false;
+    if (value !== ALL) {
+      const names = x.behavior ? x.behavior.values.map((v) => v.name) : (x.valueNames ?? []);
+      if (!names.includes(value)) return false;
+    }
+    return true;
+  });
+
+  const teamOf = (id, name) => findPerson(people, { id, name })?.team_id ?? null;
+  const tools = useListTools({
+    ctx, rows,
+    onTeam: (x, teamId) => x.team === teamId || teamOf(x.byId, x.by) === teamId || (!!x.to && teamOf(x.toId, x.to) === teamId),
+    text: (x) => searchable(ctx, [KIND_LABEL[x.kind], x.by, x.to, x.title, x.text, x.valueNames,
+      new Date(x.at).toLocaleDateString(), behaviorWords(x.behavior)])
+  });
+
+  return (
+    <section>
+      <div className="sectionhead">
+        <h2>What's Good</h2>
+        <span className="note">Every recognition, story and Value award that has been recorded</span>
+      </div>
+      <div className="filters">
+        <div className="filterline">
+          <span className="fl2">Show</span>
+          {[ALL, 'recognition', 'story', 'award'].map((k) => (
+            <button key={k} className="pill" aria-pressed={kind === k} onClick={() => setKind(k)}>
+              {k === ALL ? 'All' : k === 'story' ? 'Stories' : k === 'award' ? 'Value awards' : 'Recognition'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Filters ctx={ctx} value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
+      <ListBar ctx={ctx} tools={tools} placeholder={`Search: a person, a ${term.one}, a word from the story`} />
+
+      <div className="rowlist">
+        {tools.shown.map((x) => {
+          const p = preview(x.text ?? '');
+          return (
+            <div key={`${x.kind}-${x.id}`} className="row sessrow">
+              <div>
+                <div className="t">
+                  {x.kind === 'award' ? (x.title ?? 'Value award') : x.kind === 'recognition' ? (x.title || 'Recognition') : 'Story'}
+                  <Tag type={x.kind === 'award' ? 'value' : x.kind === 'recognition' ? 'live' : 'plain'}>{KIND_LABEL[x.kind]}</Tag>
+                  {x.kind === 'recognition' && x.toId && <GoldStar size={14} />}
+                  {x.team && teamName(x.team) && <Tag type="plain">{teamName(x.team)}</Tag>}
+                </div>
+                <div className="s who2">
+                  <Avatar person={findPerson(people, { id: x.byId, name: x.by })} name={x.by} size={18} />
+                  {x.by}{x.to ? <> &rarr; {x.to}</> : null} &nbsp;/&nbsp; {new Date(x.at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+                <div className="tagrow">
+                  {x.behavior && <BehaviorTag behavior={x.behavior} onClick={() => openBehavior(x.behavior.id)} />}
+                  {(x.valueNames ?? []).map((n) => <Tag key={n} type="value">{n}</Tag>)}
+                </div>
+                {p.text && <p className="quiet" style={{ margin: '6px 0 0' }}>{p.text}</p>}
+                {(x.row.attachments ?? x.row.story_attachments ?? x.row.recognition_attachments ?? []).length > 0 && (
+                  <Attachments files={x.row.attachments ?? x.row.story_attachments ?? x.row.recognition_attachments} compact />
+                )}
+              </div>
+              <div className="rowactions">
+                <button className="btn ghost small" onClick={() => (x.kind === 'award' ? setOpen(x) : openRecord(x.kind, x.id))}>Open</button>
+                <RecordActions ctx={ctx} kind={x.kind} row={x.row} toast={toast} onEdit={(row) => setEditing({ kind: x.kind, row })} />
+              </div>
+            </div>
+          );
+        })}
+        {!tools.shown.length && <div className="row"><div className="s">Nothing matches.</div></div>}
+      </div>
+      <MoreButton tools={tools} />
+      {editing && (
+        <RecordEditor ctx={ctx} kind={editing.kind} row={editing.row} toast={toast}
+          onClose={() => setEditing(null)} onDone={() => setEditing(null)} />
+      )}
+      {open && (
+        <Modal title={open.title ?? 'Value award'} onClose={() => setOpen(null)}
+          footer={<button className="btn ghost" onClick={() => setOpen(null)}>Close</button>}>
+          <div className="tagrow">{(open.valueNames ?? []).map((n) => <Tag key={n} type="value">{n}</Tag>)}</div>
+          <p className="meta">Conferred on {open.to} by {open.by}, {new Date(open.at).toLocaleDateString()}</p>
+          <p className="confirmbody" style={{ whiteSpace: 'pre-wrap' }}>{open.text}</p>
+          {(open.row.attachments ?? []).length > 0 && <Attachments files={open.row.attachments} />}
+        </Modal>
+      )}
+    </section>
+  );
+}

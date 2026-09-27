@@ -80,11 +80,90 @@ export function BehaviorTag({ behavior, onClick }) {
  * rituals grape, systems blue, warnings red. Tags always follow the name they
  * belong to, in that order.
  */
-export function Tag({ type = 'plain', onClick, title, children }) {
+export function Tag({ type = 'plain', onClick, title, children, behaviorId }) {
+  // Values and categories open their definition; a behavior's ritual and
+  // system tags open that list, filtered to the behavior.
+  const auto = !onClick && tagActions && (
+    ((type === 'value' || type === 'category') && typeof children === 'string' && tagActions.knows(type, children)) ||
+    ((type === 'ritual' || type === 'system') && behaviorId));
+  const click = onClick ?? (auto ? (e) => { e.stopPropagation(); tagActions(type, children, behaviorId); } : undefined);
+  const hint = title ?? (auto ? {
+    value: 'What this value means', category: 'What this category means',
+    ritual: 'Show the rituals for this behavior', system: 'Show the systems for this behavior'
+  }[type] : undefined);
   return (
-    <span className={`tag tg-${type}${onClick ? ' btn2' : ''}`} title={title} onClick={onClick}>
+    <span className={`tag tg-${type}${click ? ' btn2' : ''}`} title={hint} onClick={click}
+      role={click ? 'button' : undefined} tabIndex={click ? 0 : undefined}
+      onKeyDown={click ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); click(e); } } : undefined}>
       {children}
     </span>
+  );
+}
+
+let tagActions = null;
+
+/**
+ * Mounted once in the app shell. Gives every Tag its action, and shows the
+ * definition of a value or a 5C category when one is clicked.
+ */
+export function TagActionsHost({ ctx }) {
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    const valueNames = new Set((ctx.values ?? []).map((v) => v.name));
+    const catNames = new Set((ctx.categories ?? []).map((c) => c.name));
+    tagActions = (type, name, behaviorId) => {
+      if (type === 'ritual' || type === 'system') {
+        ctx.openList(type === 'ritual' ? 'rituals' : 'systems', behaviorId);
+        return;
+      }
+      setOpen({ type, name });
+    };
+    // Only real value and category names are clickable, not status labels
+    // that happen to share a tag color.
+    tagActions.knows = (type, name) => (type === 'value' ? valueNames : catNames).has(name);
+    return () => { tagActions = null; };
+  }, [ctx.goto]);
+  if (!open) return null;
+  const close = () => setOpen(null);
+  const { values = [], categories = [], behaviors = [], term, showCats } = ctx;
+
+  if (open.type === 'value') {
+    const v = values.find((x) => x.name === open.name);
+    const carried = behaviors.filter((b) => (b.values ?? []).some((x) => x.name === open.name));
+    return (
+      <Modal title={open.name} onClose={close} footer={<button className="btn ghost" onClick={close}>Close</button>}>
+        <div className="tagrow"><span className="tag tg-value">Value</span>{showCats && v?.category && <Tag type="category">{v.category}</Tag>}</div>
+        <p className="confirmbody">{v?.description || 'No description written yet.'}</p>
+        <label className="fl">{term.Many} that carry it ({carried.length})</label>
+        <ul className="vlist">
+          {carried.map((b) => (
+            <li key={b.id}><button className="linkbtn" onClick={() => { close(); ctx.openBehavior(b.id); }}><N n={b.number} /> {b.title}</button></li>
+          ))}
+          {!carried.length && <li className="quiet">None yet.</li>}
+        </ul>
+      </Modal>
+    );
+  }
+  const c = categories.find((x) => x.name === open.name);
+  const inVals = values.filter((x) => x.category === open.name);
+  const inBeh = behaviors.filter((b) => b.category === open.name);
+  return (
+    <Modal title={open.name} onClose={close} footer={<button className="btn ghost" onClick={close}>Close</button>}>
+      <div className="tagrow"><span className="tag tg-category">5C category</span></div>
+      {c?.question && <p className="ratinghead">{c.question}</p>}
+      <p className="confirmbody">{c?.definition ?? ''}</p>
+      {inVals.length > 0 && <>
+        <label className="fl">Values in it</label>
+        <p className="confirmbody">{inVals.map((x) => x.name).join(', ')}</p>
+      </>}
+      <label className="fl">{term.Many} in it ({inBeh.length})</label>
+      <ul className="vlist">
+        {inBeh.map((b) => (
+          <li key={b.id}><button className="linkbtn" onClick={() => { close(); ctx.openBehavior(b.id); }}><N n={b.number} /> {b.title}</button></li>
+        ))}
+        {!inBeh.length && <li className="quiet">None yet.</li>}
+      </ul>
+    </Modal>
   );
 }
 
@@ -93,22 +172,6 @@ export function CategoryBadge({ name }) {
   return <Tag type="category">{name}</Tag>;
 }
 
-/** The standard run of tags for a behavior, in the standard order. */
-export function BehaviorTags({ behavior, rituals = [], showCounts = true, onSystem }) {
-  const systems = behavior.placements ?? [];
-  const applied = [...rituals.filter((r) => r.applies_to_all), ...(behavior.rituals ?? []).filter((r) => !r.applies_to_all)];
-  return (
-    <>
-      {(behavior.values ?? []).map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-      <Tag type="category">{behavior.category}</Tag>
-      {showCounts && <Tag type="ritual">Rituals ({applied.length})</Tag>}
-      {showCounts && (systems.length
-        ? <Tag type="system" onClick={onSystem}>{systems.map((p) => p.system).join(', ')}</Tag>
-        : <Tag type="warn">No system</Tag>)}
-      {showCounts && systems.length === 1 && <Tag type="warn">Thin support</Tag>}
-    </>
-  );
-}
 
 export function Modal({ title, children, footer, onClose, wide }) {
   const scrim = useRef(null);
@@ -193,4 +256,10 @@ export function PulseBar({ score, spread }) {
       <div className="spread" style={{ left: `${lo}%`, width: `${w}%` }} />
     </div>
   );
+}
+
+/** The organization's logo when it has one, otherwise its initials in its color. */
+export function OrgMark({ org }) {
+  if (org?.logo_url) return <img className="orglogo" src={org.logo_url} alt={`${org.name} logo`} />;
+  return <span className="chip" style={{ background: org?.accent }}>{org?.initials}</span>;
 }

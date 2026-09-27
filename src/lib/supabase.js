@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { accessState } from './billing.js';
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -68,6 +69,18 @@ export async function listMyOrganizations() {
     .select('role, display_name, organizations(*)')
     .limit(1);
   if (error) throw error;
+  if (!data.length) {
+    // A member of an organization whose plan has lapsed reads nothing, by
+    // design. Say why instead of "not attached to an organization".
+    const { data: paused } = await supabase.rpc('my_paused_org');
+    if (paused?.inactive) {
+      throw new Error(`Your account is inactive because ${paused.org_name}'s plan covers fewer people. Ask your culture champion${paused.champion ? `, ${paused.champion}` : ''}.`);
+    }
+    if (paused?.org_name) {
+      throw new Error(`${paused.org_name}'s culture portal is paused, so only its culture champion` +
+        `${paused.champion ? `, ${paused.champion},` : ''} can sign in right now. Nothing has been deleted; ask them to bring the plan up to date.`);
+    }
+  }
   return data.map((m) => ({ ...m.organizations, role: m.role, displayName: m.display_name, isSuper: false }));
 }
 
@@ -98,9 +111,9 @@ export async function setWeeklyBehavior(orgId, behaviorId) {
 
 /* ----------------------------------------------------------------- values */
 
-export async function createValue(orgId, { name, description, position = 99 }) {
+export async function createValue(orgId, { name, description, category = null, position = 99 }) {
   const { data, error } = await supabase
-    .from('values_').insert({ org_id: orgId, name, description, position }).select().single();
+    .from('values_').insert({ org_id: orgId, name, description, category, position }).select().single();
   if (error) throw error;
   return data;
 }
@@ -147,7 +160,7 @@ export async function deleteBehavior(behaviorId) {
 export async function listMembers(orgId) {
   const { data, error } = await supabase
     .from('memberships')
-    .select('id, role, display_name, user_id, email, team_id, avatar_path')
+    .select('id, role, display_name, user_id, email, team_id, avatar_path, inactive')
     .eq('org_id', orgId)
     .order('role');
   if (error) throw error;
@@ -265,6 +278,8 @@ export async function deleteSystemCategory(id) {
  * behaviors with their values, placements and rituals.
  */
 export async function listBehaviors(orgId) {
+  // R4: the database moves the featured behavior on the organization's cadence.
+  try { await supabase.rpc('maybe_advance_weekly', { p_org: orgId }); } catch { /* not migrated yet */ }
   const { data, error } = await supabase
     .from('behaviors')
     .select(`
@@ -293,16 +308,6 @@ export async function listBehaviors(orgId) {
     })),
     rituals: b.behavior_rituals.map((r) => r.rituals).filter(Boolean)
   }));
-}
-
-export async function upsertBehavior(orgId, behavior) {
-  const { data, error } = await supabase
-    .from('behaviors')
-    .upsert({ org_id: orgId, ...behavior })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
 }
 
 export async function setBehaviorValues(behaviorId, valueIds) {
@@ -336,6 +341,13 @@ export async function applySystem(orgId, behaviorId, { systemId, owner, cadence,
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function updatePlacement(placementId, fields) {
+  const row = {};
+  for (const k of ['owner', 'cadence', 'artifact', 'template']) if (fields[k] !== undefined) row[k] = fields[k];
+  const { error } = await supabase.from('placements').update(row).eq('id', placementId);
+  if (error) throw error;
 }
 
 export async function savePlacementTemplate(placementId, template) {
@@ -713,9 +725,31 @@ export async function listOutbox() {
 }
 
 export async function listMemberEmails(orgId) {
-  const { data, error } = await supabase.from('memberships').select('email').eq('org_id', orgId);
+  const { data, error } = await supabase.from('memberships').select('email, email_opt_out').eq('org_id', orgId);
   if (error) throw error;
-  return data.map((m) => m.email).filter(Boolean);
+  // People who opted out of portal email are left off shares and prompts.
+  return data.filter((m) => !m.email_opt_out).map((m) => m.email).filter(Boolean);
+}
+
+/** Anyone can stop portal email; account and billing email still arrive. */
+export async function setEmailOptOut(optOut) {
+  const { error } = await supabase.rpc('set_my_email_opt_out', { p_opt_out: !!optOut });
+  if (error) throw error;
+}
+
+export async function getMyEmailOptOut() {
+  const { data } = await supabase.auth.getUser();
+  const { data: row } = await supabase.from('memberships').select('email_opt_out')
+    .eq('user_id', data?.user?.id ?? '').maybeSingle();
+  return !!row?.email_opt_out;
+}
+
+/** Hosted rotation: the database advances the featured behavior on the org's cadence. */
+export async function setBotwCadence(orgId, { cadence, day }) {
+  const { error } = await supabase.from('organizations')
+    .update({ botw_cadence: cadence, botw_day: Math.min(28, Math.max(1, Number(day) || 1)), weekly_set_at: new Date().toISOString() })
+    .eq('id', orgId);
+  if (error) throw error;
 }
 
 export async function deleteStory(id) {
@@ -731,24 +765,117 @@ export async function deleteRecognition(id) {
 export async function getBilling(orgId) {
   const { data, error } = await supabase.rpc('billing_status', { p_org: orgId });
   if (error) throw error;
-  return data;
+  if (!data) return null;
+  // The database answers who has access (access_state); the same rules in
+  // billing.js give the screens their wording and dates.
+  const today = new Date().toISOString().slice(0, 10);
+  const org = data.org ?? {};
+  return {
+    ...data, today, org,
+    state: accessState(org, today),
+    trial_ends_at: org.trial_ends_at, trial_used: !!org.trial_used,
+    has_payment_method: !!org.has_payment_method, card_last4: org.card_last4 ?? null,
+    override: org.override_kind ? {
+      kind: org.override_kind, plan: org.override_plan, until: org.override_until, note: org.override_note
+    } : null,
+    clock_offset: 0
+  };
 }
 
+/** Super user: what this organization is charged. The trigger refuses anyone else. */
 export async function setBillingRates(orgId, rates) {
   const { error } = await supabase.from('organizations').update(rates).eq('id', orgId);
   if (error) throw error;
 }
 
+/** Super user: set any billing field by hand. */
 export async function setBillingStatus(orgId, fields) {
-  const { error } = await supabase.from('organizations').update(fields).eq('id', orgId);
+  const clean = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v === '' ? null : v]));
+  if (clean.paid_through !== undefined) clean.pending_change = null;
+  const { error } = await supabase.from('organizations').update(clean).eq('id', orgId);
+  if (error) throw error;
+  await supabase.from('billing_events').insert({ org_id: orgId, kind: 'set-by-super', detail: clean });
+}
+
+/** Super user: an arrangement that wins over Stripe until its date. */
+export async function setOverride(orgId, { kind, plan, until, note }) {
+  const row = kind
+    ? { override_kind: kind, override_plan: plan || 'unlimited', override_until: until, override_note: note ?? '' }
+    : { override_kind: null, override_plan: null, override_until: null, override_note: null };
+  const { error } = await supabase.from('organizations').update(row).eq('id', orgId);
+  if (error) throw error;
+  await supabase.from('billing_events').insert({
+    org_id: orgId, kind: kind ? 'override-set' : 'override-cleared', detail: row
+  });
+}
+
+/** The champion picks a plan and term; the first time, it starts the 30-day trial. */
+export async function choosePlan(orgId, { plan, cycle }) {
+  return invokeFunction('billing', { action: 'choose-plan', orgId, plan, cycle });
+}
+
+/**
+ * Hands off to Stripe Checkout to collect a card and billing address. Stripe
+ * works out the tax and holds the first charge until the trial ends.
+ */
+export async function addPaymentMethod(orgId) {
+  const data = await invokeFunction('billing', {
+    action: 'checkout', orgId, returnUrl: window.location.origin + window.location.pathname
+  });
+  if (data?.url) window.location.href = data.url;
+  return data;
+}
+
+/** Stripe's own page for changing the card, reading invoices and receipts. */
+export async function manageBilling(orgId) {
+  const data = await invokeFunction('billing', {
+    action: 'portal', orgId, returnUrl: window.location.origin + window.location.pathname
+  });
+  if (data?.url) window.location.href = data.url;
+  return data;
+}
+
+
+/** A 30-day trial of the unlimited plan, for an organization that never had one. */
+export async function startTrial(orgId) {
+  return invokeFunction('billing', { action: 'start-trial', orgId });
+}
+
+/** Prices on the sign-in page and for new organizations. Readable signed out. */
+export async function getPlatformPricing() {
+  const { data, error } = await supabase.rpc('get_platform_pricing');
+  if (error) throw error;
+  return data;
+}
+
+export async function setPlatformPricing(rates) {
+  const { error } = await supabase.from('platform_settings').update({ rates }).eq('id', 1);
   if (error) throw error;
 }
 
-/** Hands off to Stripe Checkout; the webhook writes the result back. */
-export async function startCheckout(orgId, { plan, cycle }) {
-  const data = await invokeFunction('billing', { action: 'checkout', orgId, plan, cycle, returnUrl: window.location.href });
-  if (data?.url) window.location.href = data.url;
-  return data;
+/** Bring an inactive person back; the database refuses when the plan is full. */
+export async function setMemberActive(userId, active) {
+  const { error } = await supabase.from('memberships').update({ inactive: !active }).eq('user_id', userId);
+  if (error) throw error;
+}
+
+/** Uploads the organization's logo to the public logos bucket. */
+export async function setOrgLogo(orgId, file) {
+  if (!file) {
+    const { error } = await supabase.from('organizations').update({ logo_url: null }).eq('id', orgId);
+    if (error) throw error;
+    return null;
+  }
+  if (!/^image\/(png|jpeg|svg\+xml|webp|gif)$/.test(file.type)) throw new Error('Use a PNG, JPG, SVG or WebP image.');
+  if (file.size > 1024 * 1024) throw new Error('Keep the logo under 1 MB.');
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `${orgId}/logo-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true, contentType: file.type });
+  if (upErr) throw upErr;
+  const { data } = supabase.storage.from('logos').getPublicUrl(path);
+  const { error } = await supabase.from('organizations').update({ logo_url: data.publicUrl }).eq('id', orgId);
+  if (error) throw error;
+  return data.publicUrl;
 }
 
 export async function listBillingEvents(orgId) {
@@ -1108,7 +1235,12 @@ export async function listMyFluencyMarks(orgId) {
   const { data, error } = await supabase
     .from('fluency_marks').select('behavior_id, step, marked_at').eq('org_id', orgId);
   if (error) throw error;
-  return data;
+  // Having rated a behavior in any pulse round is a fluency step too.
+  const { data: auth } = await supabase.auth.getUser();
+  const { data: rated } = await supabase.from('pulse_responses').select('behavior_id')
+    .eq('org_id', orgId).eq('user_id', auth?.user?.id ?? '');
+  const ids = [...new Set((rated ?? []).map((r) => r.behavior_id))];
+  return [...data, ...ids.map((behavior_id) => ({ behavior_id, step: 'rated' }))];
 }
 
 /** Reading steps are recorded once; a repeat is a quiet no-op. */

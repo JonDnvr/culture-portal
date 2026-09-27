@@ -44,13 +44,15 @@ export default function Clarity({ ctx }) {
     <>
       <div className="dateline">{term.count(behaviors.length)}, numbered for reference</div>
       <h1 className="pagetitle">Clarity</h1>
-      <p className="lede">{term.Many} written as verbs, filed by value, system and category, specific enough to observe.</p>
+      <p className="lede">{term.Many} written as verbs, filed by value, system{ctx.showCats ? ' and category' : ''}, specific enough to observe.</p>
 
       <FilterRow label="Value" value={value} onChange={setValue}
         options={values.map((v) => ({ key: v.name, label: v.name, count: counts.value[v.name] }))} />
 
-      <FilterRow label="Category" value={category} onChange={setCategory}
-        options={categories.map((c) => ({ key: c.name, label: c.name, count: counts.category[c.name] }))} />
+      {ctx.showCats && (
+        <FilterRow label="Category" value={category} onChange={setCategory}
+          options={categories.map((c) => ({ key: c.name, label: c.name, count: counts.category[c.name] }))} />
+      )}
 
       <div className="filterline">
         <span className="fl2">System</span>
@@ -103,9 +105,9 @@ export default function Clarity({ ctx }) {
                 <div className="tagrow">
                   {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
                   <Tag type="category">{b.category}</Tag>
-                  <Tag type="ritual">Rituals ({b.rituals.filter((r) => !r.applies_to_all).length + rituals.filter((r) => r.applies_to_all).length})</Tag>
+                  <Tag type="ritual" behaviorId={b.id}>Rituals ({b.rituals.filter((r) => !r.applies_to_all).length + rituals.filter((r) => r.applies_to_all).length})</Tag>
                   {b.placements.length
-                    ? <Tag type="system">{b.placements.map((p) => p.system).join(', ')}</Tag>
+                    ? <Tag type="system" behaviorId={b.id}>{b.placements.map((p) => p.system).join(', ')}</Tag>
                     : <Tag type="warn">No system</Tag>}
                   {b.placements.length === 1 && <Tag type="warn">Thin support</Tag>}
                   {org.weekly_behavior_id === b.id && <Tag type="live">This week</Tag>}

@@ -26,8 +26,6 @@ const UPDATE = { story: updateStory, recognition: updateRecognition, iteration: 
 
 const upper = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
-export const ownerOf = (kind, row) => OWNER[kind](row);
-
 export function canModify(ctx, kind, row) {
   if (!row) return false;
   return OWNER[kind](row) === ctx.userId || ctx.canEdit || ctx.isSuper;

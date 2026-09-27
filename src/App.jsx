@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, Suspense, lazy } from 'react';
+
+// Screens most people open rarely, or only editors open, load when first
+// needed, which keeps the first page light.
+const Admin = lazy(() => import('./views/Admin.jsx'));
+const TrophyWall = lazy(() => import('./views/TrophyWall.jsx'));
+const Conviction = lazy(() => import('./views/Conviction.jsx'));
 import {
   getSession, onAuthChange, signOut,
   listMyOrganizations, listValues, listSystemCategories,
@@ -6,22 +12,21 @@ import {
   listPeople, listTeams, listAwardTypes, listAwardGrants,
   listIterations, listRecognitions, listStories, listMyFluencyMarks,
   getPulseStatus, getPulseSpreadByRound,
-  IS_LOCAL, resetLocalData, ARRIVED_FROM_RESET, onPasswordRecovery
+  resetLocalData, ARRIVED_FROM_RESET, onPasswordRecovery
 } from './lib/api.js';
-import TrophyWall from './views/TrophyWall.jsx';
 import ProfileDialog from './views/Profile.jsx';
-import { Avatar, ConfirmHost, confirmAction } from './components/ui.jsx';
+import { Avatar, ConfirmHost, confirmAction, OrgMark, Modal, useToast, TagActionsHost } from './components/ui.jsx';
 import { DraftsDialog, draftCount } from './views/RecordEditor.jsx';
 import { NavIcon } from './components/badges.jsx';
 import { termFor } from './lib/term.js';
+import { billingNotices } from './lib/billing.js';
+import { billingToday, setEmailOptOut, getMyEmailOptOut } from './lib/api.js';
 import Home from './views/Home.jsx';
 import Clarity from './views/Clarity.jsx';
 import Behavior from './views/Behavior.jsx';
 import Cadence from './views/Cadence.jsx';
 import Connection from './views/Connection.jsx';
-import Conviction from './views/Conviction.jsx';
-import Admin from './views/Admin.jsx';
-import { StoryPage, RecognitionPage, IterationPage, RitualPage } from './views/Details.jsx';
+import { StoryPage, RecognitionPage, IterationPage, RitualPage, PlacementPage } from './views/Details.jsx';
 import PulseCheck from './views/PulseCheck.jsx';
 import SignIn, { SetNewPassword } from './views/SignIn.jsx';
 
@@ -34,7 +39,7 @@ const NAV = [
   { id: 'home', label: 'Culture home', short: 'Home', sub: 'This week', roles: ALL_ROLES },
   { id: 'clarity', label: 'Clarity', short: 'Clarity', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
   { id: 'cadence', label: 'Cadence', short: 'Cadence', sub: 'Practice', roles: ALL_ROLES },
-  { id: 'connection', label: 'Connection', short: 'Connect', sub: 'Recognition, stories', roles: ALL_ROLES },
+  { id: 'connection', label: 'Connection', short: 'Connect', sub: 'Recognition, Stories', roles: ALL_ROLES },
   { id: 'conviction', label: 'Conviction', short: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
 ];
 
@@ -79,6 +84,7 @@ function App() {
   const [org, setOrg] = useState(null);
   const [data, setData] = useState(null);
   const [view, setView] = useState('home');
+  const [navN, setNavN] = useState(0);
   const [behaviorId, setBehaviorId] = useState(null);
   const [detail, setDetail] = useState(null); // { kind, id } for a record's own page
   const [history, setHistory] = useState([]); // where Back should return to
@@ -97,9 +103,11 @@ function App() {
   const [error, setError] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   // What the browser's Back button should do, read fresh on every press.
   const navRef = useRef(null);
-  useBackGuard(!!session && !!org, navRef);
+  // On every screen, signed in or not: Back never leaves the portal without asking.
+  useBackGuard(true, navRef);
   // Bumped by "Rate now" to bring the pulse back even after it was dismissed.
   const [pulseAsk, setPulseAsk] = useState(0);
 
@@ -195,7 +203,7 @@ function App() {
     }));
   }, [org]);
 
-  if (!session) return <SignIn />;
+  if (!session) { navRef.current = null; return <><SignIn /><ConfirmHost /></>; }
   if (recovering) return (
     <SetNewPassword onDone={() => {
       setRecovering(false);
@@ -209,9 +217,10 @@ function App() {
       <div className="btnrow"><button className="btn ghost" onClick={() => { setError(null); signOut(); }}>Sign out</button></div>
     </div>
   );
-  if (!org && orgs.length > 1) return (
-    <ChooseOrg orgs={orgs} onPick={(o) => { setOrg(o); setView('admin'); }} />
-  );
+  if (!org && orgs.length > 1) {
+    navRef.current = null;
+    return (<><ChooseOrg orgs={orgs} onPick={(o) => { setOrg(o); setView('admin'); }} /><ConfirmHost /></>);
+  }
   if (!org) return (
     <div className="pad">
       <p className="empty">Your account is not attached to an organization yet. Your administrator assigns that.</p>
@@ -241,7 +250,17 @@ function App() {
       setHistory((h) => [...h, { view, behaviorId, detail }]);
       setDetail({ kind, id }); setView('record'); window.scrollTo(0, 0);
     },
-    goto: (v) => { setHistory([]); setBehaviorId(null); setDetail(null); setView(v); window.scrollTo(0, 0); },
+    // A behavior's Rituals or Systems tag: that list, filtered, with Back to here.
+    openList: (tab, behavior) => {
+      setHistory((h) => [...h, { view, behaviorId, detail }]);
+      window.__cpCadence = { tab, behavior, back: true };
+      setDetail(null); setBehaviorId(null); setView('cadence'); setNavN((n) => n + 1); window.scrollTo(0, 0);
+    },
+    goto: (v, hint) => {
+      setHistory([]); setBehaviorId(null); setDetail(null); setView(v); setNavN((n) => n + 1);
+      window.__cpAdminTab = hint?.tab ?? null;
+      window.scrollTo(0, 0);
+    },
     // Back returns to wherever you came from, however deep the chain went.
     back: () => {
       setHistory((h) => {
@@ -253,6 +272,8 @@ function App() {
       });
     },
     canEdit: EDITORS.includes(role) || isSuper,
+    // The 5C category tags, on unless the organization switched them off.
+    showCats: org.show_categories !== false,
     canLead: role !== 'member',
     // Refetch and re-point at the same organization, so an edit to its name,
     // purpose or behavior of the week shows up immediately.
@@ -275,10 +296,10 @@ function App() {
   const count = draftCount(ctx);
 
   return (
-    <div className="shell" style={{ '--accent': org.accent || '#9C7A3C' }}>
+    <div className={ctx.showCats ? 'shell' : 'shell hide-cats'} style={{ '--accent': org.accent || '#9C7A3C' }}>
       <header className="topbar">
         <button className="brandmark" onClick={() => ctx.goto('home')} title={`${org.name} culture home`}>
-          <span className="chip" style={{ background: org.accent }}>{org.initials}</span>
+          <OrgMark org={org} />
           <span className="orgname">{org.name}</span>
         </button>
         <div className="topnav">
@@ -289,7 +310,7 @@ function App() {
             </button>
           ))}
           <MeMenu ctx={ctx} me={me} orgs={orgs} draftCount={count}
-            onPicture={() => setProfileOpen(true)} onDrafts={() => setDraftsOpen(true)} />
+            onPicture={() => setProfileOpen(true)} onDrafts={() => setDraftsOpen(true)} onEmail={() => setEmailOpen(true)} />
         </div>
       </header>
       <div className="frame">
@@ -300,25 +321,31 @@ function App() {
         </aside>
         <main>
           {!isSuper && <PulseCheck ctx={ctx} ask={pulseAsk} />}
+          {(EDITORS.includes(role) || isSuper) && view !== 'admin' && <BillingBanner ctx={ctx} />}
           <div className="view">
+            <Suspense fallback={<p className="empty">Loading…</p>}>
             {view === 'home' && <Home ctx={ctx} />}
             {view === 'clarity' && <Clarity ctx={ctx} />}
             {view === 'behavior' && <Behavior ctx={ctx} id={behaviorId} />}
-            {view === 'cadence' && <Cadence ctx={ctx} />}
+            {view === 'cadence' && <Cadence key={navN} ctx={ctx} />}
             {view === 'connection' && <Connection ctx={ctx} />}
             {view === 'conviction' && <Conviction ctx={ctx} />}
-            {view === 'admin' && <Admin ctx={ctx} />}
+            {view === 'admin' && <Admin key={navN} ctx={ctx} />}
             {view === 'wall' && <TrophyWall ctx={ctx} />}
             {view === 'record' && detail?.kind === 'story' && <StoryPage key={detail.id} ctx={ctx} id={detail.id} />}
             {view === 'record' && detail?.kind === 'recognition' && <RecognitionPage key={detail.id} ctx={ctx} id={detail.id} />}
             {view === 'record' && detail?.kind === 'iteration' && <IterationPage key={detail.id} ctx={ctx} id={detail.id} />}
             {view === 'record' && detail?.kind === 'ritual' && <RitualPage key={detail.id} ctx={ctx} id={detail.id} />}
+            {view === 'record' && detail?.kind === 'placement' && <PlacementPage key={detail.id} ctx={ctx} id={detail.id} />}
+            </Suspense>
           </div>
         </main>
       </div>
       {profileOpen && <ProfileDialog ctx={ctx} onClose={() => setProfileOpen(false)} />}
       {draftsOpen && <DraftsDialog ctx={ctx} onClose={() => setDraftsOpen(false)} />}
+      {emailOpen && <EmailPrefs onClose={() => setEmailOpen(false)} />}
       <ConfirmHost />
+      <TagActionsHost ctx={ctx} />
     </div>
   );
 }
@@ -331,7 +358,7 @@ const drafts = (rows) => (rows ?? []).filter((r) => r.is_draft);
  * You, in the header: your picture, then a short menu. The organization
  * switcher lives here for the super admin.
  */
-function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts }) {
+function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts, onEmail }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
   const { org, isSuper } = ctx;
@@ -360,6 +387,7 @@ function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts }) {
         <div className="menupop" role="menu">
           <div className="menuhead">{org.displayName}</div>
           <button className="mi" role="menuitem" onClick={act(onPicture)}>Change picture</button>
+          <button className="mi" role="menuitem" onClick={act(onEmail)}>Email preferences</button>
           <button className="mi" role="menuitem" onClick={act(onDrafts)}>
             Your drafts{draftCount ? ` (${draftCount})` : ''}
           </button>
@@ -372,9 +400,6 @@ function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts }) {
             </label>
           )}
           <button className="mi" role="menuitem" onClick={act(signOut)}>Sign out</button>
-          {IS_LOCAL && isSuper && (
-            <button className="mi quietmi" role="menuitem" onClick={act(() => { resetLocalData(); signOut(); })}>Reset demo data</button>
-          )}
         </div>
       )}
     </div>
@@ -459,7 +484,7 @@ function ChooseOrg({ orgs, onPick }) {
       <div className="orgpicker">
         {orgs.map((o) => (
           <button key={o.id} className="orgcard" onClick={() => onPick(o)}>
-            <span className="chip" style={{ background: o.accent }}>{o.initials}</span>
+            <OrgMark org={o} />
             <span className="orgcardname">{o.name}</span>
             <span className="orgcardsub">{o.subtitle}</span>
             <span className="orgcardplan">
@@ -472,6 +497,46 @@ function ChooseOrg({ orgs, onPick }) {
       </div>
       <div className="btnrow"><button className="btn ghost" onClick={signOut}>Sign out</button></div>
     </div>
+  );
+}
+
+/**
+ * For the champion and admins: anything about the plan that needs doing soon,
+ * on every page but Admin (which shows it in full).
+ */
+function BillingBanner({ ctx }) {
+  const { org, goto } = ctx;
+  const urgent = billingNotices(org, billingToday()).filter((n) => n.level === 'warn');
+  if (!urgent.length) return null;
+  return (
+    <div className="billbanner" role="status">
+      <span>{urgent[0].text}</span>
+      <button className="btn small" onClick={() => goto('admin', { tab: 'billing' })}>Plan and billing</button>
+    </div>
+  );
+}
+
+/** Anyone can stop portal email. Account and billing email still arrive. */
+function EmailPrefs({ onClose }) {
+  const [on, setOn] = useState(null);
+  const toast = useToast();
+  useEffect(() => { getMyEmailOptOut().then((out) => setOn(!out)).catch(() => setOn(true)); }, []);
+  async function save() {
+    try { await setEmailOptOut(!on); toast(on ? 'You will get portal email.' : 'Portal email is off for you.'); onClose(); }
+    catch (e) { toast(e.message); }
+  }
+  return (
+    <Modal title="Email preferences" onClose={onClose}
+      footer={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={save} disabled={on === null}>Save</button></>}>
+      <label className="toggle">
+        <input type="checkbox" checked={!!on} onChange={(e) => setOn(e.target.checked)} />
+        <span>Send me portal email: the weekly practice prompts, and stories, recognition and awards people share with me.</span>
+      </label>
+      <p className="meta">
+        Turning this off stops those. Emails about your account, such as a password reset, still
+        arrive, and so do plan and billing notices if you are the culture champion.
+      </p>
+    </Modal>
   );
 }
 

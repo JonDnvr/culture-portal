@@ -10,7 +10,7 @@ import { RecordActions, FormButtons, FileEditor, formMode, DraftTag } from '../c
 import { DraftsPanel } from './RecordEditor.jsx';
 import { Attachments } from './Details.jsx';
 import {
-  sessionRitualId, recentWeeks, botwStreak, fullSet, cairnFor, gapClosed, weeklyEvents
+  sessionRitualId, recentWeeks, botwStreak, cadenceOf, fullSet, cairnFor, gapClosed, weeklyEvents
 } from '../lib/gamify.js';
 
 const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -202,7 +202,7 @@ function GroupWall({ ctx, team, setModal }) {
     const cairn = activity.pulseStatus ? cairnFor(activity.pulseStatus) : null;
     return {
       rw,
-      streak: botwStreak(activity.iterations, sessionId, scope),
+      streak: botwStreak(activity.iterations, sessionId, scope, new Date(), cadenceOf(org)),
       set: fullSet(behaviors, activity.iterations, sessionId, scope),
       cairn,
       gap: cairn ? gapClosed(activity.pulseSpread ?? [], activity.pulseStatus.round) : { earned: false },
@@ -235,11 +235,11 @@ function GroupWall({ ctx, team, setModal }) {
         {d.streak.seal.tier > 0 && (
           <Trophy art={<Seal size={50} months={d.streak.seal.months} tier={d.streak.seal.tier} />}
             kicker={`${ctx.term.One} of the Week`} title={d.streak.seal.name}
-            meta={`${d.streak.weeks} consecutive weeks for ${name}`}
+            meta={`${d.streak.count} consecutive ${d.streak.unit.many} for ${name}`}
             onClick={() => setModal({ kind: 'info', title: d.streak.seal.name, kicker: 'Cadence Seal',
               art: <Seal size={64} months={d.streak.seal.months} tier={d.streak.seal.tier} />,
-              status: `${d.streak.weeks} consecutive weeks for ${name} · ${d.streak.seal.months} of 12 months`,
-              how: `An unbroken run of weeks with a ${ctx.term.One} of the Week discussion recorded. Seals come at 4, 12, 26 and 52 weeks; each of the twelve notches is a month, so a full ring is a year. The week in progress never breaks a run, and a missed week starts it over.` })} />
+              status: `${d.streak.count} consecutive ${d.streak.unit.many} for ${name} · ${d.streak.seal.months} of 12 months`,
+              how: `An unbroken run of ${d.streak.unit.many} with a discussion of the featured ${ctx.term.one} recorded. Seals come at one month, a quarter, a half year and a year of ${d.streak.unit.many}; each of the twelve notches is a month, so a full ring is a year. The ${d.streak.unit.one} in progress never breaks a run, and a missed ${d.streak.unit.one} starts it over.` })} />
         )}
       </Section>
 
@@ -247,11 +247,11 @@ function GroupWall({ ctx, team, setModal }) {
         {d.cairn?.completed > 0 && (
           <Trophy art={<CairnDone size={44} rounds={d.cairn.completed} />} kicker="Survey cadence"
             title={d.cairn.completed === 1 ? 'First pulse round complete' : `${d.cairn.completed} pulse rounds complete`}
-            meta={`${d.cairn.scored} of ${d.cairn.total} ${ctx.term.many} answered toward the next`}
+            meta={`${d.cairn.done} of ${d.cairn.target} people finished toward the next`}
             onClick={() => setModal({ kind: 'info', title: 'Survey cadence', kicker: 'Conviction',
               art: <CairnDone size={56} rounds={d.cairn.completed} />,
               status: `${d.cairn.completed} round${d.cairn.completed === 1 ? '' : 's'} complete · round ${d.cairn.round} under way`,
-              how: `A pulse round is complete when every ${ctx.term.one} has been answered by a quarter of the organization. The cairn on the home page fills from the bottom as that happens; each finished round adds one to the number on the base stone.` })} />
+              how: `A pulse round is complete when 80% of the organization's members have each rated every ${ctx.term.one}. The cairn on the home page fills from the bottom as people finish; each finished round adds one to the number on the base stone.` })} />
         )}
         {!team && d.gap.earned && (
           <Trophy art={<Medal size={44} solid><Converge size={22} /></Medal>} kicker="Trust view"
@@ -264,7 +264,7 @@ function GroupWall({ ctx, team, setModal }) {
       </Section>
 
       {!d.set.earned && d.streak.seal.tier === 0 && !(d.cairn?.completed > 0) && !myGrants.length && (
-        <div className="empty" style={{ marginTop: 20 }}>No trophies for {name} yet. The first seal comes at four straight weeks.</div>
+        <div className="empty" style={{ marginTop: 20 }}>No trophies for {name} yet. The first seal comes after a month of unbroken practice.</div>
       )}
 
       <section className="wallsection">
@@ -433,7 +433,7 @@ export function GiveAward({ ctx, initial = null, onClose, onDone }) {
           citation: f.citation, isDraft: mode === 'published' ? undefined : asDraft,
           addFiles: f.files, removeFileIds: removeIds
         });
-        await finish(mode === 'published' ? 'Changes saved.' : asDraft ? 'Draft saved.'
+        await finish(mode === 'published' ? 'Changes saved.' : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
           : `${award?.name ?? 'The award'} conferred on ${initial.recipient_name}.`);
       } catch (e) { toast(e.message); } finally { setBusy(false); }
       return;
@@ -452,7 +452,7 @@ export function GiveAward({ ctx, initial = null, onClose, onDone }) {
         recipientUserId: to === 'member' ? f.recipientId : null, teamId: to === 'team' ? f.teamId : null
       });
       await finish(asDraft
-        ? 'Saved as a draft. It does not count toward your limit until you publish it.'
+        ? 'Saved as a draft. Publish it from your top account dropdown.'
         : `${award.name} conferred on ${recipientName}.`);
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }

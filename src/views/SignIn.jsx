@@ -1,32 +1,127 @@
 import React, { useEffect, useState } from 'react';
+import stone from '../assets/horizon-stone.webp';
+import hlgLogo from '../assets/hlg-logo.webp';
+import { TRIAL_DAYS, DEFAULT_RATES, money } from '../lib/billing.js';
 import {
   signIn, signOut, createPortal, requestAccess, requestPasswordReset, resetPassword,
-  listOrganizationNames, IS_LOCAL
+  listOrganizationNames, IS_LOCAL, getPlatformPricing
 } from '../lib/api.js';
 
 /**
- * Four ways to arrive: sign in, start a new portal, ask to join one, or
- * recover a password. Everything else in the app assumes a signed-in person,
- * so all of it lives here.
+ * The front door, in Horizon Line Group's own look since nobody has picked an
+ * organization yet. Written for a prospect first (what this is, why it works,
+ * start a trial) and for members second (sign in).
+ *
+ * It can sit in an iframe on horizonlinegroup.com. Framed, the buttons open
+ * the portal at full size instead of signing in inside the frame, because
+ * Stripe and the portal itself need the whole window.
  */
+const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+const startMode = () => {
+  const m = new URLSearchParams(window.location.search).get('mode');
+  return ['signin', 'create', 'request', 'forgot'].includes(m) ? m : 'signin';
+};
+const fullUrl = (mode) => `${window.location.origin}${window.location.pathname}?mode=${mode}`;
+
 export default function SignIn() {
-  const [mode, setMode] = useState('signin');
+  const [mode, setMode] = useState(startMode);
+  const go = (m) => {
+    setMode(m);
+    document.querySelector('.hlg-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
-    <div className="signin">
-      <h1 className="pagetitle">Culture Portal</h1>
+    <div className={FRAMED ? 'hlg framed' : 'hlg'}>
+      <header className="hlg-bar">
+        <a className="hlg-mark" href="https://horizonlinegroup.com" target="_top" rel="noopener">
+          <img className="hlg-logo" src={hlgLogo} alt="" />
+          <span>Horizon Line Group</span>
+        </a>
+        <span className="hlg-product">
+          Culture Portal
+          {FRAMED
+            ? <a className="btn small" href={fullUrl('signin')} target="_top">Sign in</a>
+            : <button className="btn small" onClick={() => go('signin')}>Sign in</button>}
+        </span>
+      </header>
 
-      <div className="tabs" style={{ marginBottom: 18 }}>
-        <button className="tab" aria-pressed={mode === 'signin'} onClick={() => setMode('signin')}>Sign in</button>
-        <button className="tab" aria-pressed={mode === 'create'} onClick={() => setMode('create')}>Create a new culture portal</button>
-        <button className="tab" aria-pressed={mode === 'request'} onClick={() => setMode('request')}>Request access</button>
-        <button className="tab" aria-pressed={mode === 'forgot'} onClick={() => setMode('forgot')}>Forgot password</button>
+      <div className="hlg-grid">
+        <section className="hlg-pitch" aria-labelledby="hlg-h1">
+          <div className="hlg-hero" style={{ backgroundImage: `url(${stone})` }} role="img"
+            aria-label="A stone with a single white line across it, the sea behind." />
+          <h1 id="hlg-h1" className="hlg-h1">Your culture, practiced regularly.</h1>
+          <p className="hlg-lede">
+            Most culture lives on a wall. The Culture Portal turns your values into defined behaviors
+            people can name, practice together, and recognize in each other, with a clear read on
+            whether it is holding.
+          </p>
+
+          <div className="hlg-trial">
+            <div>
+              <h2>Try it free for 30 days</h2>
+              <p>
+                No card to start. Set up your organization in two minutes with example behaviors to
+                edit, invite your team, and add a payment method only if you keep it.
+              </p>
+            </div>
+            {FRAMED
+              ? <a className="btn hlg-gold" href={fullUrl('create')} target="_top">Start your free trial</a>
+              : <button className="btn hlg-gold" onClick={() => go('create')}>Start your free trial</button>}
+          </div>
+
+          <h2 className="hlg-youget">You get</h2>
+          <ul className="hlg-four">
+            <li><strong>Clarity</strong> Translate values to clear behaviors with tips and questions
+              to bring them to life.</li>
+            <li><strong>Cadence</strong> Behavior of the week, rituals, systems and templates, to
+              make practice routine.</li>
+            <li><strong>Connection</strong> Recognize someone in seconds. Add Stories to make the
+              good visible. Fluency tracking, and awards keep people engaged.</li>
+            <li><strong>Conviction</strong> Ratings, measures, coverage gaps and team streaks show
+              where culture is strong and where it is thin.</li>
+            <li><strong>Engagement</strong> Email with practice prompts, and printable handouts bring
+              culture outside the portal.</li>
+          </ul>
+
+          <p className="hlg-members">
+            <strong>Already part of a portal?</strong> Sign in with the account set up for you or
+            request access from your company. A couple of minutes a week is enough.
+          </p>
+        </section>
+
+        <section className="hlg-panel" aria-label="Sign in or start a portal">
+          {FRAMED ? (
+            <div className="panel hlg-framed">
+              <h2 className="hlg-panelh">Open the portal</h2>
+              <p className="meta">It opens full size, so you can work in it comfortably.</p>
+              <div className="btnrow">
+                <a className="btn" href={fullUrl('signin')} target="_top">Sign in</a>
+                <a className="btn ghost" href={fullUrl('create')} target="_top">Start a free trial</a>
+                <a className="btn ghost" href={fullUrl('request')} target="_top">Request access</a>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="tabs hlg-tabs">
+                <button className="tab" aria-pressed={mode === 'signin' || mode === 'forgot'} onClick={() => setMode('signin')}>Sign in</button>
+                <button className="tab" aria-pressed={mode === 'create'} onClick={() => setMode('create')}>Start a free trial</button>
+                <button className="tab" aria-pressed={mode === 'request'} onClick={() => setMode('request')}>Request access</button>
+              </div>
+
+              {mode === 'signin' && <SignInForm onForgot={() => setMode('forgot')} />}
+              {mode === 'create' && <CreatePortal />}
+              {mode === 'request' && <RequestAccess onDone={() => setMode('signin')} />}
+              {mode === 'forgot' && <ForgotPassword onDone={() => setMode('signin')} />}
+            </>
+          )}
+        </section>
       </div>
 
-      {mode === 'signin' && <SignInForm onForgot={() => setMode('forgot')} />}
-      {mode === 'create' && <CreatePortal />}
-      {mode === 'request' && <RequestAccess onDone={() => setMode('signin')} />}
-      {mode === 'forgot' && <ForgotPassword onDone={() => setMode('signin')} />}
+      <footer className="hlg-foot">
+        Built to drive high performing culture: name the behaviors, practice them with rhythm, and
+        integrate them into how you already run.{' '}
+        <a href="https://horizonlinegroup.com" target="_top" rel="noopener">horizonlinegroup.com</a>
+      </footer>
     </div>
   );
 }
@@ -57,8 +152,7 @@ function SignInForm({ onForgot }) {
 
   return (
     <>
-      <p className="lede">Sign in with the account your organization set up for you.</p>
-      <div className="panel" style={{ maxWidth: 420 }}>
+      <div className="panel">
         <Field label="Email" autoComplete="username" value={email}
           onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
         <label className="fl">Password</label>
@@ -70,8 +164,8 @@ function SignInForm({ onForgot }) {
         </div>
         {err && <p className="err">{err}</p>}
       </div>
-      <p className="meta" style={{ maxWidth: 420, marginTop: 16 }}>
-        Your organization and your role are assigned by your administrator.
+      <p className="meta" style={{ marginTop: 12 }}>
+        Your organization and your role are assigned by your culture champion or administrator.
       </p>
     </>
   );
@@ -79,6 +173,8 @@ function SignInForm({ onForgot }) {
 
 function CreatePortal() {
   const [f, setF] = useState({ orgName: '', subtitle: '', championName: '', championEmail: '', password: '' });
+  const [rates, setRates] = useState(DEFAULT_RATES);
+  useEffect(() => { getPlatformPricing().then((r) => r && setRates(r)).catch(() => {}); }, []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -89,31 +185,41 @@ function CreatePortal() {
     catch (e) { setErr(e.message); setBusy(false); }
   }
 
+
   return (
     <>
-      <p className="lede">
-        Set up a portal for your organization. You become its culture champion, which is the
-        one seat that is always free.
-      </p>
-      <div className="panel" style={{ maxWidth: 480 }}>
+      <div className="panel">
+        <h2 className="hlg-panelh">Start your {TRIAL_DAYS}-day free trial</h2>
+        <p className="meta" style={{ marginTop: 0 }}>
+          You become the culture champion: you run the portal for your organization and keep access
+          whatever happens to the plan.
+        </p>
+
+        <div className="pricebox">
+          <div><strong>Up to 9 people</strong><span>{money(rates.small.monthly)} a month or {money(rates.small.yearly)} a year</span></div>
+          <div><strong>Unlimited people</strong><span>{money(rates.unlimited.monthly)} a month or {money(rates.unlimited.yearly)} a year</span></div>
+        </div>
+        <p className="meta">
+          Both plans include everything, pick a plan and set up payment only if you keep it. The
+          trial gives you unlimited people for {TRIAL_DAYS} days, with no card.
+        </p>
+
         <Field label="Organization name" value={f.orgName} onChange={set('orgName')} />
-        <Field label="Subtitle, optional" hint="Where you are, or which team." value={f.subtitle} onChange={set('subtitle')} />
-        <Field label="Your name" value={f.championName} onChange={set('championName')} />
+        <Field label="Your name" hint="Who's the Culture Champion." value={f.championName} onChange={set('championName')} />
         <Field label="Your email" autoComplete="username" value={f.championEmail} onChange={set('championEmail')} />
         <label className="fl">Choose a password</label>
         <input type="password" autoComplete="new-password" value={f.password} onChange={set('password')} />
         <p className="meta">At least eight characters.</p>
         <div className="btnrow">
-          <button className="btn" onClick={submit} disabled={busy}>
-            {busy ? 'Setting it up…' : 'Create the portal'}
+          <button className="btn hlg-gold" onClick={submit} disabled={busy}>
+            {busy ? 'Setting it up…' : 'Start the free trial'}
           </button>
         </div>
         {err && <p className="err">{err}</p>}
       </div>
-      <p className="meta" style={{ maxWidth: 480, marginTop: 16 }}>
-        It starts with three example behaviors, three example values and a practice session, all
-        marked as examples until you edit them or clear them out. You can add people once you
-        pick a plan.
+      <p className="meta" style={{ marginTop: 12 }}>
+        It starts with three example values, three example behaviors and a practice session, all
+        marked as examples until you edit them or clear them out.
       </p>
     </>
   );
@@ -155,8 +261,8 @@ function RequestAccess({ onDone }) {
 
   return (
     <>
-      <p className="lede">Ask to join an organization already using the portal.</p>
-      <div className="panel" style={{ maxWidth: 480 }}>
+      <div className="panel">
+        <p className="meta" style={{ marginTop: 0 }}>Ask to join an organization already using the portal.</p>
         <Field label="Your name" value={f.name} onChange={set('name')} />
         <Field label="Your email" autoComplete="username" value={f.email} onChange={set('email')} />
         <label className="fl">Organization</label>
@@ -213,8 +319,9 @@ function ForgotPassword({ onDone }) {
 
   return (
     <>
-      <p className="lede">Set a new password for your account.</p>
-      <div className="panel" style={{ maxWidth: 440 }}>
+      <div className="panel">
+        <h2 className="hlg-panelh">Forgot password</h2>
+        <p className="meta" style={{ marginTop: 0 }}>Set a new password for your account.</p>
         {step === 'email' && (
           <>
             <Field label="Your email" value={email} onChange={(e) => setEmail(e.target.value)}
@@ -225,6 +332,7 @@ function ForgotPassword({ onDone }) {
             </p>
             <div className="btnrow">
               <button className="btn" onClick={ask} disabled={busy}>{busy ? 'Sending…' : 'Send the code'}</button>
+              <button className="btn ghost" onClick={onDone}>Back to sign in</button>
             </div>
           </>
         )}

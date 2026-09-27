@@ -132,6 +132,13 @@ Deno.serve(async (req) => {
     /* ---------------------------------------------- a brand new portal */
     if (action === 'create-portal') {
       const { orgName, subtitle, championName, championEmail, password } = body;
+      // R4: every new portal starts a 30-day trial of the unlimited plan, with
+      // no card and no plan to pick. Its prices come from the platform defaults.
+      const plan = 'unlimited';
+      const cycle = null;
+      const trialEnds = new Date(Date.now() + 29 * 86400000).toISOString().slice(0, 10);
+      const { data: platform } = await admin.from('platform_settings').select('rates').eq('id', 1).maybeSingle();
+      const r = platform?.rates;
       const email = String(championEmail ?? '').trim().toLowerCase();
 
       if (!orgName?.trim()) return json({ error: 'Name the organization' }, 400);
@@ -147,7 +154,12 @@ Deno.serve(async (req) => {
         mission: 'Write the shared purpose with your team. This line is an example until you change it.',
         vision: 'Write the vision with your team. This line is an example until you change it.',
         creed: 'We name the behavior, practice it weekly, and build it into how we already run.',
-        plan: 'free', has_example_content: true, weekly_set_at: new Date().toISOString()
+        plan, billing_cycle: cycle, trial_ends_at: trialEnds, trial_used: true,
+        ...(r ? {
+          rate_small_monthly: r.small.monthly, rate_small_yearly: r.small.yearly,
+          rate_unlimited_monthly: r.unlimited.monthly, rate_unlimited_yearly: r.unlimited.yearly
+        } : {}),
+        has_example_content: true, weekly_set_at: new Date().toISOString()
       }).select().single();
       if (orgErr) return json({ error: orgErr.message }, 400);
 
@@ -190,6 +202,12 @@ Deno.serve(async (req) => {
       }
 
       await sendWelcome(org.name, email, championName.trim(), 'culture champion');
+      {
+        await admin.from('billing_events').insert({
+          org_id: org.id, kind: 'trial-started',
+          detail: { plan, cycle, until: trialEnds, by: championName.trim() }
+        });
+      }
 
       // Hand the browser a session so the champion lands inside their portal.
       const { data: session } = await admin.auth.signInWithPassword({ email, password });

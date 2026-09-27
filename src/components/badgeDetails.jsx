@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
-  sessionRitualId, recentWeeks, practicedByBehavior, connectionByBehavior, fluencyFor,
-  FLUENCY_STEPS, weekKey, lastWeeks
+  sessionRitualId, recentPeriods, practicedByBehavior, connectionByBehavior, fluencyFor,
+  FLUENCY_STEPS, weekKey, lastPeriods, cadenceOf, UNIT
 } from '../lib/gamify.js';
 import { Modal, N, Avatar, findPerson } from './ui.jsx';
 import { FluencyBadge, fluencyName, Medal, Metronome, Nodes, WeekMarks } from './badges.jsx';
@@ -17,9 +17,9 @@ export function useBehaviorBadges(ctx) {
     const team = teams.find((t) => t.id === myTeamId);
     const scope = team ? { kind: 'team', teamId: team.id } : { kind: 'org' };
     const scopeName = team ? team.name : org.name;
-    const rw = recentWeeks(org);
+    const rw = recentPeriods(org);
     const recentDays = org.recent_days ?? 45;
-    const practiced = practicedByBehavior(activity.iterations, behaviors, sessionId, scope, rw);
+    const practiced = practicedByBehavior(activity.iterations, behaviors, sessionId, scope, rw, new Date(), cadenceOf(org));
     const connection = connectionByBehavior(activity.recognitions, activity.stories, people, scope, recentDays);
     const fluency = Object.fromEntries(behaviors.map((b) => [b.id, fluencyFor(b, {
       marks: activity.fluencyMarks, iterations: activity.iterations,
@@ -64,8 +64,8 @@ export function FluencyDetail({ ctx, behavior, f, onClose }) {
   return (
     <Shell onClose={onClose} term={ctx.term} art={<FluencyBadge f={f} size={56} />} kicker="Clarity"
       title={fluencyName(f, ctx.term)}
-      status={<><N n={behavior.number} /> {behavior.title} · {f.done} of 4 steps · private to you</>}
-      how={<>Four steps, in any order. The ring always fills clockwise from the top, so the same
+      status={<><N n={behavior.number} /> {behavior.title} · {f.done} of {f.of} steps · private to you</>}
+      how={<>Five steps, in any order, including rating it at least once in a quick pulse. The ring always fills clockwise from the top, so the same
         percentage always looks the same. Fully Fluent arrives the moment someone recognizes you
         for this {ctx.term.one}, or you share a story about it, whatever the ring says.</>}>
       <div className="steprows">
@@ -92,7 +92,7 @@ export function FluencyDetail({ ctx, behavior, f, onClose }) {
 }
 
 export function PracticeDetail({ ctx, behavior, p, scopeName, sessionId, onClose }) {
-  const since = lastWeeks(p.of)[0].getTime();
+  const since = lastPeriods(p.of, p.cad)[0].getTime();
   const rows = ctx.activity.iterations
     .filter((it) => (it.behavior_ids ?? []).includes(behavior.id))
     .filter((it) => it.system_category_id || (it.ritual_id && it.ritual_id !== sessionId))
@@ -102,11 +102,11 @@ export function PracticeDetail({ ctx, behavior, p, scopeName, sessionId, onClose
     <Shell onClose={onClose} term={ctx.term} art={<Medal size={52}><Metronome size={26} /></Medal>} kicker="Cadence"
       title={`Practiced ${p.count} of ${p.of}`}
       status={<><N n={behavior.number} /> {behavior.title} · {scopeName}</>}
-      how={<>A ritual or a system recorded against this {ctx.term.one}, one mark per week across the
-        organization's recent window of {p.of} weeks. The weekly practice session counts as
+      how={<>A ritual or a system recorded against this {ctx.term.one}, one mark per {UNIT[p.cad?.kind ?? 'weekly'].one} across the
+        organization's recent window of {p.of} {UNIT[p.cad?.kind ?? 'weekly'].many}. The weekly practice session counts as
         discussion rather than practice.</>}>
       <div className="marksline">
-        <WeekMarks marks={p.marks} /><span className="meta">oldest week first</span>
+        <WeekMarks marks={p.marks} /><span className="meta">oldest {UNIT[p.cad?.kind ?? 'weekly'].one} first</span>
       </div>
       <RunList ctx={ctx} rows={rows} onClose={onClose} empty="Nothing recorded in the window yet." />
     </Shell>

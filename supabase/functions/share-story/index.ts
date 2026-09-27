@@ -103,9 +103,20 @@ Deno.serve(async (req) => {
     const kind: string = payload.kind ?? 'story';
     const id: string = payload.id ?? payload.storyId;
     const note: string | null = payload.note ?? null;
-    const to = (Array.isArray(payload.recipients) ? payload.recipients : String(payload.recipients ?? '').split(/[,;\s]+/))
+    let to = (Array.isArray(payload.recipients) ? payload.recipients : String(payload.recipients ?? '').split(/[,;\s]+/))
       .map((r: string) => r.trim())
       .filter(isEmail);
+
+    // R4: members who opted out of portal email are skipped.
+    {
+      const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const { data: out } = await svc.from('memberships').select('email').eq('email_opt_out', true)
+        .in('email', to.map((e: string) => e.toLowerCase()));
+      const skip = new Set((out ?? []).map((m: { email: string }) => String(m.email).toLowerCase()));
+      const kept = to.filter((e: string) => !skip.has(e.toLowerCase()));
+      if (to.length && !kept.length) return json({ error: 'Everyone on that list has opted out of portal email.' }, 400);
+      to = kept;
+    }
 
     if (!id) return json({ error: 'Which record to send is missing' }, 400);
     if (!to.length) return json({ error: 'At least one valid email address is required' }, 400);

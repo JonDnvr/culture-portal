@@ -3,13 +3,13 @@ import {
   getStory, getRecognition, getIteration, getRitual, signAttachment, listIterations,
   updateRitual, setRitualBehaviors
 } from '../lib/api.js';
-import { pad, Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
+import { Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
 import { GoldStar } from '../components/badges.jsx';
 import { ShareRecord } from './Connection.jsx';
 import { useToast } from '../components/ui.jsx';
 import { RecordActions, DraftTag } from '../components/records.jsx';
 import { RecordEditor } from './RecordEditor.jsx';
-import { dropRitual, RitualForm } from './Cadence.jsx';
+import { dropRitual, RitualForm, RecordIteration, PlacementForm, dropPlacement } from './Cadence.jsx';
 
 /** Shared header: the behavior a record belongs to, with its description. */
 function BehaviorHeader({ behavior, ctx }) {
@@ -310,6 +310,78 @@ export function RitualPage({ ctx, id }) {
             if (behaviorIds) await setRitualBehaviors(ritual.id, behaviorIds);
             toast('Ritual updated.'); setEditing(false); reload(); ctx.reload();
           }} />
+      )}
+    </article>
+  );
+}
+
+/**
+ * One behavior as built into one system: the system's counterpart to a
+ * ritual's page, with its template and the runs recorded against it.
+ */
+export function PlacementPage({ ctx, id }) {
+  const [modal, setModal] = useState(null);
+  const toast = useToast();
+  const b = ctx.behaviors.find((x) => (x.placements ?? []).some((p) => p.id === id));
+  const p = b?.placements.find((x) => x.id === id);
+  const sys = p ? ctx.systems.find((s) => s.id === p.systemId) : null;
+  if (!p) return <div className="empty">That system placement is no longer here.</div>;
+  const runs = (ctx.activity?.iterations ?? [])
+    .filter((it) => it.system_category_id === p.systemId && (it.behavior_ids ?? []).includes(b.id))
+    .sort((x, y) => String(y.held_at).localeCompare(String(x.held_at)));
+
+  return (
+    <article className="record">
+      <div className="dateline"><button className="btn ghost small" onClick={ctx.back}>Back</button></div>
+      <div className="detailhead">
+        <div className="kicker">System</div>
+        <div className="btnrow recordtools">
+          <button className="btn small" onClick={() => setModal('run')}>Practice It</button>
+          {ctx.canEdit && <button className="btn ghost small" onClick={() => setModal('edit')}>Edit</button>}
+          {ctx.canEdit && (
+            <button className="btn ghost small danger" onClick={async () => {
+              if (await dropPlacement(ctx, b, sys, p, toast)) ctx.back();
+            }}>Delete</button>
+          )}
+        </div>
+      </div>
+      <h2 className="recordbehavior">{sys?.name ?? p.system}</h2>
+      <p className="byline">{p.owner} &nbsp;/&nbsp; {p.cadence}</p>
+      <p className="recordbody">{p.artifact}</p>
+      <div className="tagrow"><BehaviorTag behavior={b} onClick={() => ctx.openBehavior(b.id)} /></div>
+
+      <div className="block">
+        <h4>The template</h4>
+        {p.template ? <pre>{p.template}</pre> : <p className="quiet">No template written yet.{ctx.canEdit ? ' Use Edit to add one.' : ''}</p>}
+      </div>
+
+      <section>
+        <div className="sectionhead"><h2>Runs</h2><span className="note">Recorded ({runs.length})</span></div>
+        {runs.length ? (
+          <div className="rowlist">
+            {runs.map((r) => (
+              <div key={r.id} className="row">
+                <div>
+                  <div className="t">{new Date(r.held_at).toLocaleDateString()}</div>
+                  <div className="s who2">
+                    <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
+                    {r.recorded_by_name}{r.notes ? ` / ${r.notes.slice(0, 80)}` : ''}
+                  </div>
+                </div>
+                <button className="btn ghost small" onClick={() => ctx.openRecord('iteration', r.id)}>Open</button>
+              </div>
+            ))}
+          </div>
+        ) : <div className="empty">Not run yet, or not recorded.</div>}
+      </section>
+
+      {modal === 'run' && (
+        <RecordIteration ctx={ctx} system={sys} placement={p} readFor={[b.id]}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); ctx.reload(); }} toast={toast} />
+      )}
+      {modal === 'edit' && (
+        <PlacementForm ctx={ctx} system={sys} placement={p} behavior={b} toast={toast}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); ctx.reload(); }} />
       )}
     </article>
   );

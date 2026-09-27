@@ -17,27 +17,19 @@ Production setup is in **DEPLOYMENT.md**, written for someone who has not used t
 
 ## Three ways in
 
-The sign-in page offers four things: signing in, starting a portal, asking to join one, and
-recovering a password.
+The sign-in page is Horizon Line Group's front door: the pitch for a prospect on the left,
+and three tabs on the right. It can sit in an iframe on horizonlinegroup.com; framed, its
+buttons open the portal full size.
 
-- **Create a new culture portal.** Organization name, the champion's name and email, and a
-  password. It stands up the organization, makes that person its culture champion, and seeds
-  three example values, three example behaviors, three system categories and the practice
-  session. Everything seeded carries an Example tag until someone edits it, and Admin has a
-  button to clear whatever is left. New portals start on the free tier, so adding people means
-  choosing a plan.
-- **Request access.** Name, email, organization and a password of their choosing. It lands in
-  that organization's Admin as a tentative member, where an admin picks a role and presses
-  "Make active". Until then the account cannot sign in: it has no membership, and every policy
-  is written against membership.
-- **Forgot password.** Hosted mode uses Supabase's own reset email. Local mode issues a six
-  digit code, good once and for thirty minutes, shown on screen since there is no mail server.
-  Both answer the same way whether or not the address has an account.
-
-Anyone who gains access gets a welcome email: how to sign in, what each section is for, and
-what the quick pulse will ask. In hosted mode it goes through Resend; in local mode it
-collects in an outbox an admin can read from the Admin page, so the wording can be checked
-without a mail server.
+- **Sign in.** Forgot password sits under the sign-in button. Hosted mode uses Supabase's
+  reset email. Local mode shows a six-digit code on screen, since it has no mail server.
+- **Start a free trial.** Organization name, the champion's name and email, and a password.
+  It creates the organization, makes that person its culture champion, and seeds example
+  values, behaviors, systems and the practice session. Every new portal gets 30 days of the
+  unlimited plan, with no card and no plan to pick. The two plans' prices show on the form;
+  the super user sets them.
+- **Request access.** It lands in that organization's Admin as a tentative member until an
+  admin turns it on.
 
 ## Accounts and tenancy
 
@@ -268,50 +260,31 @@ and `pulse_assignment`, so the rotation cannot be gamed from the browser.
 
 ## Billing
 
-Three tiers. The free one is not a trial: it is the culture champion's own access, which
-never lapses. An organization that stops paying keeps all of its content and its
-champion, and everyone else is locked out until the subscription is current again.
+The rules are in `src/lib/billing.js`. `access_state` in `supabase/schema.sql` and the
+`billing-notices` function apply the same rules; change them together.
 
-| Tier | Seats | Set by |
-|---|---|---|
-| Champion only, free | 1, the champion | Automatic fallback |
-| Up to 9 people | 9 | Chosen by the champion |
-| Unlimited people | no cap | Chosen by the champion |
+- **Trial.** Every new portal starts with 30 days of the unlimited plan. Before it ends, the
+  champion picks the plan to keep (Up to 9 people, or Unlimited; monthly or yearly) and adds
+  a card through Stripe Checkout. Stripe Tax adds any sales tax. Billing starts the day after
+  the trial and renews automatically.
+- **Seats.** Keeping Up to 9 people with more people in the portal inactivates the most
+  recently added when the plan starts. The champion never goes inactive. Moving to
+  Unlimited brings everyone back.
+- **Lapses.** No card by the end of the trial: champion only. A failed payment: 7 days of
+  grace, then champion only. A cancellation: runs to the paid-through date, then champion
+  only. Nothing is ever deleted.
+- **Notices.** Trial ending, renewals, expiring, payment overdue and access narrowed go by
+  email to the champion, with a copy to Horizon Line. A receipt goes after every payment.
+- **Prices.** Default prices (sign-in page and new organizations) and each organization's
+  own prices are set by the super user.
+- **Arrangements.** The super user can mark an organization "Invoiced outside Stripe" or
+  "Expiration extended" through a date. That wins over anything Stripe reports. The pilots
+  start that way.
 
-Rates are **per organization**, so a client can be quoted their own price. The super user
-sets a monthly and a yearly rate for each paid tier in Admin, along with the paid-through
-date. Whether payment is current is worked out from that date rather than toggled, so the
-two can never disagree. Cancelling sets `cancel_at_period_end`: the subscription keeps
-working until the paid-through date and then falls back to the free tier, and the super
-user sees which plan and cycle each organization chose, and whether they have cancelled. The champion sees those rates in their own Admin and
-picks a plan and a cycle.
+**Local mode** simulates Stripe: a demo checkout, a card that can be set to decline, and a
+demo clock under Super admin to move today forward and watch it all play out.
 
-Choosing a plan records the organization's choice; it does not move the paid-through date.
-The change shows as pending on both sides until the super user records a payment, which
-clears it and is written to the billing history. Cancelling and resuming work the same way:
-they record intent, never a date. When Stripe is live, its webhook records the payment
-instead of the super user.
-
-Payment goes through Stripe Checkout in subscription mode, recurring until cancelled.
-`supabase/functions/billing` creates the Checkout session with a price built from that
-organization's rate, and `supabase/functions/stripe-webhook` writes the result back onto
-the organization, so the app answers one cheap question: is this payment current?
-Cancelling sets `cancel_at_period_end`, so the organization keeps what it paid for.
-
-Seats are enforced in Postgres by a trigger on `memberships`, not only in the interface,
-and sign-in checks the effective plan, so a lapsed organization cannot be worked around
-from the browser.
-
-**In local mode there is no Stripe.** Choosing a plan records the choice and leaves the
-paid-through date alone, exactly as the hosted flow does before a payment clears. Everything else about the model,
-including the seat caps and the champion-always-works rule, behaves as it will in hosted
-mode.
-
-```bash
-supabase functions deploy billing
-supabase functions deploy stripe-webhook --no-verify-jwt
-supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
-```
+Setup is in **DEPLOY-R4.md**.
 
 ## Who can change what
 

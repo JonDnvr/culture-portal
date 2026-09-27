@@ -176,20 +176,20 @@ export function Medal({ size = 44, solid = false, children }) {
 
 /* ----------------------------------------------------------------- fluency */
 
-/** Four quarters that always fill clockwise from the top, whichever steps are done. */
-export function FluencyRing({ done, size = 48 }) {
-  const r = 17, c = 2 * Math.PI * r, seg = c / 4, dash = seg - 4;
+/** Segments (one per step) that always fill clockwise from the top, whichever steps are done. */
+export function FluencyRing({ done, of = 5, size = 48 }) {
+  const r = 17, c = 2 * Math.PI * r, seg = c / of, dash = seg - 4;
   return (
     <span className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox="0 0 46 46">
-        {[0, 1, 2, 3].map((i) => (
+        {Array.from({ length: of }, (_, i) => i).map((i) => (
           <circle key={i} cx="23" cy="23" r={r} fill="none" strokeWidth="5"
             stroke={i < done ? 'var(--spruce)' : 'var(--line)'}
             strokeDasharray={`${dash.toFixed(2)} ${(c - dash).toFixed(2)}`}
             strokeDashoffset={(-i * seg).toFixed(2)} />
         ))}
       </svg>
-      <span className="pct">{done * 25}%</span>
+      <span className="pct">{Math.round((done / of) * 100)}%</span>
     </span>
   );
 }
@@ -198,7 +198,7 @@ export function FluencyRing({ done, size = 48 }) {
 export function FluencyBadge({ f, size = 48 }) {
   if (f.full) return <Medal size={size} solid><Lens size={Math.round(size * 0.48)} /></Medal>;
   if (f.fluent) return <Medal size={size}><Lens size={Math.round(size * 0.48)} /></Medal>;
-  return <FluencyRing done={f.done} size={size} />;
+  return <FluencyRing done={f.done} of={f.of ?? 5} size={size} />;
 }
 
 export const fluencyName = (f, term) =>

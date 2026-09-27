@@ -185,6 +185,7 @@ function Summary({ ctx }) {
         </div>
       </section>
 
+{ctx.showCats && (
       <section>
         <div className="sectionhead">
           <h2>Categories</h2>
@@ -209,6 +210,7 @@ function Summary({ ctx }) {
           </table>
         </div>
       </section>
+      )}
     </>
   );
 }
@@ -332,7 +334,7 @@ function RhythmIterations({ ctx }) {
 /* ---------------------------------------------------------------- coverage */
 
 function Coverage({ ctx }) {
-  const { org, behaviors, systems, rituals, openBehavior } = ctx;
+  const { org, behaviors, systems, rituals, openBehavior, categories, showCats } = ctx;
   const [coverage, setCoverage] = useState([]);
   const [runs, setRuns] = useState([]);
   const [view, setView] = useState('system');
@@ -353,8 +355,14 @@ function Coverage({ ctx }) {
       <div className="tabs sub">
         <button className="tab" aria-pressed={view === 'system'} onClick={() => setView('system')}>By system</button>
         <button className="tab" aria-pressed={view === 'rhythm'} onClick={() => setView('rhythm')}>By rhythm</button>
+        {showCats && (
+          <button className="tab" aria-pressed={view === 'category'} onClick={() => setView('category')}>By category</button>
+        )}
       </div>
 
+      {view === 'category' && showCats ? (
+        <CategoryCoverage ctx={ctx} categories={categories} behaviors={behaviors} openBehavior={openBehavior} />
+      ) : (<>
       {gaps.length > 0 && (
         <div className="notice flagnotice">
           {ctx.term.count(gaps.length)} reinforced in fewer than two systems: <NumList items={gaps} />.
@@ -418,6 +426,60 @@ function Coverage({ ctx }) {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+      </>)}
+    </>
+  );
+}
+
+/**
+ * Which of the 5C categories each behavior sits in, and how many land in
+ * each. A category with none, or only one, is where the culture is thin.
+ */
+function CategoryCoverage({ ctx, categories, behaviors, openBehavior }) {
+  const counts = Object.fromEntries(categories.map((c) => [c.name, behaviors.filter((b) => b.category === c.name).length]));
+  const thin = categories.filter((c) => counts[c.name] < 2);
+  const none = behaviors.filter((b) => !categories.some((c) => c.name === b.category));
+  return (
+    <>
+      {thin.length > 0 && (
+        <div className="notice flagnotice">
+          Thin coverage: {thin.map((c) => `${c.name} (${counts[c.name]})`).join(', ')}. A category with
+          fewer than two {ctx.term.many} leaves that side of the culture to chance.
+        </div>
+      )}
+      <section>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>{ctx.term.One}</th>{categories.map((c) => <th key={c.name} className="cbox">{c.name}</th>)}</tr>
+            </thead>
+            <tbody>
+              {behaviors.map((b) => (
+                <tr key={b.id} className={categories.some((c) => c.name === b.category) ? '' : 'flagged'}>
+                  <td className="name"><span className="bnum">{pad(b.number)}</span></td>
+                  <td className="name btn2" onClick={() => openBehavior(b.id)}>{b.title}</td>
+                  {categories.map((c) => (
+                    <td key={c.name} className="ccell">
+                      {b.category === c.name ? <Tag type="category">{c.name}</Tag> : <span className="gap">&mdash;</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr className="ctotal">
+                <td /><td>{ctx.term.Many} per category</td>
+                {categories.map((c) => (
+                  <td key={c.name} className="ccell">
+                    {counts[c.name] < 2 ? <Tag type="warn">{counts[c.name]}</Tag> : counts[c.name]}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {none.length > 0 && (
+          <p className="meta">{ctx.term.count(none.length)} without a category. Set one on the {ctx.term.one}'s edit form.</p>
         )}
       </section>
     </>

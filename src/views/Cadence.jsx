@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   createRitual, updateRitual, deleteRitual, setRitualBehaviors, recordIteration, updateIteration, listIterations,
-  reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency
+  reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency,
+  updatePlacement, removePlacement
 } from '../lib/api.js';
 import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
 import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
@@ -10,22 +11,29 @@ import { BehaviorForm } from './Behavior.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
 import { termFor } from '../lib/term.js';
+import { cadenceOf, UNIT } from '../lib/gamify.js';
 
 const ALL = 'All';
 
 export default function Cadence({ ctx }) {
   const { term } = ctx;
-  const [tab, setTab] = useState('week');
+  // A tag clicked elsewhere lands here on Rituals or Systems, filtered to one behavior.
+  const [hint] = useState(() => { const h = window.__cpCadence; window.__cpCadence = null; return h ?? null; });
+  const [tab, setTab] = useState(hint?.tab ?? 'week');
   // Fluency rings and streaks read from recorded activity; opening Cadence,
   // or coming back to it, brings them up to date.
   useEffect(() => { ctx.refreshActivity(); }, []);
   return (
     <>
-      <div className="dateline">Week of {new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</div>
+      <div className="dateline">
+        {hint?.back
+          ? <button className="btn ghost small" onClick={ctx.back}>Back</button>
+          : `Week of ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
+      </div>
       <h1 className="pagetitle">Cadence</h1>
       <p className="lede">One {term.one} at a time, carried by practices nobody has to remember.</p>
       <div className="tabs">
-        <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>This week</button>
+        <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>{UNIT[cadenceOf(ctx.org).kind].this.replace(/^./, (c) => c.toUpperCase())}</button>
         <button className="tab" aria-pressed={tab === 'rotation'} onClick={() => setTab('rotation')}>Rotation</button>
         <button className="tab" aria-pressed={tab === 'rituals'} onClick={() => setTab('rituals')}>Rituals</button>
         <button className="tab" aria-pressed={tab === 'systems'} onClick={() => setTab('systems')}>Systems</button>
@@ -34,8 +42,8 @@ export default function Cadence({ ctx }) {
       {tab === 'week' && <ThisWeek ctx={ctx} />}
       {tab === 'sessions' && <Sessions ctx={ctx} />}
       {tab === 'rotation' && <Rotation ctx={ctx} />}
-      {tab === 'rituals' && <Rituals ctx={ctx} />}
-      {tab === 'systems' && <Systems ctx={ctx} />}
+      {tab === 'rituals' && <Rituals ctx={ctx} initialBehavior={hint?.tab === 'rituals' ? hint.behavior : null} />}
+      {tab === 'systems' && <Systems ctx={ctx} initialBehavior={hint?.tab === 'systems' ? hint.behavior : null} />}
     </>
   );
 }
@@ -401,10 +409,10 @@ function BehaviorValueFilters({ term, values, behaviors, counts, value, setValue
 
 /* ------------------------------------------------------------------ rituals */
 
-function Rituals({ ctx }) {
+function Rituals({ ctx, initialBehavior = null }) {
   const { org, behaviors, values, rituals, canEdit, openBehavior, openRecord, reload } = ctx;
   const [value, setValue] = useState(ALL);
-  const [behavior, setBehavior] = useState(ALL);
+  const [behavior, setBehavior] = useState(initialBehavior ?? ALL);
   const [modal, setModal] = useState(null);
   const [runs, setRuns] = useState([]);
   const [expanded, setExpanded] = useState(false);
@@ -524,11 +532,11 @@ export async function dropRitual(ctx, r, toast) {
 
 /* ------------------------------------------------------------------ systems */
 
-function Systems({ ctx }) {
+function Systems({ ctx, initialBehavior = null }) {
   const { org, behaviors, values, systems, categories, canEdit, openBehavior, reload } = ctx;
   const [value, setValue] = useState(ALL);
   const [category, setCategory] = useState(ALL);
-  const [behavior, setBehavior] = useState(ALL);
+  const [behavior, setBehavior] = useState(initialBehavior ?? ALL);
   const [system, setSystem] = useState(ALL);
   const [modal, setModal] = useState(null);
   const toast = useToast();
@@ -565,7 +573,7 @@ function Systems({ ctx }) {
 
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
         value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior}
-        categories={categories} category={category} setCategory={setCategory}
+        categories={ctx.showCats ? categories : null} category={category} setCategory={setCategory}
         extraLabel="System"
         extra={
           <select className="field inline" value={system} onChange={(e) => setSystem(e.target.value)}>
@@ -593,13 +601,18 @@ function Systems({ ctx }) {
                 <span className="pmeta">{p.owner} / {p.cadence}</span>
               </div>
               <p className="pact">{p.artifact}</p>
-              {b.is_example && <div className="tagrow"><Tag type="warn">Example</Tag></div>}
+              <div className="tagrow">
+                {b.is_example && <Tag type="warn">Example</Tag>}
+                {p.template ? <Tag type="system">Template written</Tag> : <Tag type="warn">No template yet</Tag>}
+              </div>
               <div className="btnrow">
-                {p.template
-                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', s, p, b })}>Open the template</button>
-                  : <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', s, p, b })}>Record a run</button>}
-                {!p.template && canEdit && (
-                  <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p })}>Write the template</button>
+                <button className="btn small" onClick={() => setModal({ kind: 'runSystem', s, p, b })}>Practice It</button>
+                <button className="btn ghost small" onClick={() => ctx.openRecord('placement', p.id)}>Details</button>
+                {canEdit && (
+                  <button className="btn ghost small" onClick={() => setModal({ kind: 'editPlacement', s, p, b })}>Edit</button>
+                )}
+                {canEdit && (
+                  <button className="btn ghost small danger" onClick={() => dropPlacement(ctx, b, s, p, toast)}>Delete</button>
                 )}
               </div>
             </div>
@@ -619,7 +632,50 @@ function Systems({ ctx }) {
         <WriteTemplate placement={modal.p} onClose={() => setModal(null)}
           onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
+      {modal?.kind === 'editPlacement' && (
+        <PlacementForm ctx={ctx} system={modal.s} placement={modal.p} behavior={modal.b} toast={toast}
+          onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} />
+      )}
     </section>
+  );
+}
+
+/** Takes a behavior out of a system, after asking. Recorded runs stay. */
+export async function dropPlacement(ctx, b, s, p, toast) {
+  const ok = await confirmAction({
+    title: `Remove ${pad(b.number)}. ${b.title} from ${s?.name ?? p.system}?`,
+    body: 'Its template for this system goes with it. Runs already recorded stay in the record. This cannot be undone.'
+  });
+  if (!ok) return false;
+  try { await removePlacement(p.id); toast('Removed from the system.'); await ctx.reload(); return true; }
+  catch (e) { toast(e.message); return false; }
+}
+
+/** Edit how a behavior is built into a system: who, how often, what happens, the template. */
+export function PlacementForm({ ctx, system, placement, behavior, toast, onClose, onDone }) {
+  const [f, setF] = useState({
+    owner: placement.owner ?? '', cadence: placement.cadence ?? '',
+    artifact: placement.artifact ?? '', template: placement.template ?? ''
+  });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  async function save() {
+    if (!f.owner.trim() || !f.cadence.trim() || !f.artifact.trim()) return toast('Owner, cadence and what happens are all required.');
+    try { await updatePlacement(placement.id, { ...f, template: f.template.trim() || null }); toast('System placement saved.'); onDone(); }
+    catch (e) { toast(e.message); }
+  }
+  return (
+    <Modal title={`Edit ${system?.name ?? placement.system}: ${pad(behavior.number)}. ${behavior.title}`} onClose={onClose} wide
+      footer={<><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" onClick={save}>Save</button></>}>
+      <div className="tworow">
+        <div><label className="fl">Owner</label><input type="text" value={f.owner} onChange={set('owner')} /></div>
+        <div><label className="fl">Cadence</label><input type="text" value={f.cadence} onChange={set('cadence')} /></div>
+      </div>
+      <label className="fl">What happens</label>
+      <input type="text" value={f.artifact} onChange={set('artifact')} />
+      <label className="fl">Template, optional</label>
+      <textarea rows={8} value={f.template} onChange={set('template')}
+        placeholder="The questions, checklist or script people follow when they run it." />
+    </Modal>
   );
 }
 
@@ -837,7 +893,7 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
         });
       }
       toast(mode === 'published' ? 'Changes saved.'
-        : asDraft ? 'Saved as a draft. It counts once you publish it.'
+        : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
           : ritual ? 'Iteration recorded.' : 'System run recorded.');
       await ctx.refreshActivity();
       onDone();

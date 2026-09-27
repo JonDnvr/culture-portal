@@ -45,6 +45,8 @@ export default defineConfig(({ command }) => {
         outDir: 'dist-single',
         cssCodeSplit: false,
         modulePreload: false,
+        // One file that opens from disk: images go inside it too.
+        assetsInlineLimit: 100000000,
         rollupOptions: {
           output: { format: 'iife', inlineDynamicImports: true, entryFileNames: 'app.js', assetFileNames: 'app.[ext]' }
         }

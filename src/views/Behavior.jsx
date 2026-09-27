@@ -79,7 +79,7 @@ export default function Behavior({ ctx, id }) {
         {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
         <Tag type="category">{b.category}</Tag>
         {b.placements.length
-          ? <Tag type="system">{b.placements.map((p) => p.system).join(', ')}</Tag>
+          ? <Tag type="system" behaviorId={b.id}>{b.placements.map((p) => p.system).join(', ')}</Tag>
           : <Tag type="warn">No system</Tag>}
         {b.placements.length === 1 && <Tag type="warn">Thin support</Tag>}
         {b.is_example && <Tag type="warn">Example, edit it to make it yours</Tag>}
@@ -178,7 +178,7 @@ export default function Behavior({ ctx, id }) {
           </span>
         </div>
         {b.placements.length ? b.placements.map((p) => (
-          <div key={p.id} className="placement">
+          <div key={p.id} className="placement sys">
             <div className="ph">
               <span className="psys">{p.system}</span>
               <span className="pmeta">{p.owner} / {p.cadence}</span>

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { N, Tag } from '../components/ui.jsx';
 import HomeBadges from './HomeBadges.jsx';
+import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
 
 export default function Home({ ctx }) {
-  const { org, behaviors, values, goto, openBehavior, term } = ctx;
+  const { org, behaviors, values, goto, openBehavior, term, showCats, categories } = ctx;
   const [openValue, setOpenValue] = useState(null);
+  const [openCat, setOpenCat] = useState(null);
   const week = behaviors.find((b) => b.id === org.weekly_behavior_id) ?? behaviors[0];
   const countFor = (v) => behaviors.filter((b) => b.values.some((x) => x.id === v.id)).length;
 
@@ -22,9 +24,9 @@ export default function Home({ ctx }) {
 
       {week && (
         <section>
-          <div className="sectionhead"><h2>This week</h2><span className="note">Rotates Monday</span></div>
+          <div className="sectionhead"><h2>{UNIT[cadenceOf(org).kind].this.replace(/^./, (c) => c.toUpperCase())}</h2><span className="note">{rotationNote(cadenceOf(org))}</span></div>
           <div className="bigcard">
-            <div className="kicker"><N n={week.number} dot={false} /> / {week.category} / {week.values.map((v) => v.name).join(', ')}</div>
+            <div className="kicker"><N n={week.number} dot={false} />{showCats && week.category ? ` / ${week.category}` : ''} / {week.values.map((v) => v.name).join(', ')}</div>
             <h2>{week.title}</h2>
             <p className="desc">{week.description}</p>
             <div className="btnrow">
@@ -36,6 +38,27 @@ export default function Home({ ctx }) {
       )}
 
       <HomeBadges ctx={ctx} />
+
+      <section>
+        <div className="sectionhead">
+          <h2>All {term.many}</h2>
+          <span className="note">{behaviors.length} in practice</span>
+        </div>
+        <p className="prose">
+          Every behavior, with its coaching, teaching points, discussion questions, the
+          systems that hold it and the rituals that carry it.
+        </p>
+        <div className="btnrow">
+          <button className="btn" onClick={() => goto('clarity')}>See the full list</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false, term, showCats)}>Open the handout</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true, term, showCats)}>Open the full handout</button>
+        </div>
+        <p className="meta" style={{ marginTop: 8 }}>
+          The handout is the one-line-per-{term.one} version for a meeting. The full handout adds
+          the coaching tips, teaching points, discussion questions, failure state and rule, for
+          whoever is leading. Both open as a clean page you can print or save as a PDF.
+        </p>
+      </section>
 
       <section>
         <div className="sectionhead"><h2>Purpose</h2></div>
@@ -50,7 +73,7 @@ export default function Home({ ctx }) {
             const carried = behaviors.filter((b) => b.values.some((x) => x.id === v.id));
             const open = openValue === v.id;
             return (
-              <div key={v.id} className="vcard">
+              <div key={v.id} className="vcard boxed">
                 <h3>{v.name}</h3>
                 {v.is_example && <div className="tagrow"><Tag type="warn">Example</Tag></div>}
                 <p>{v.description}</p>
@@ -76,26 +99,44 @@ export default function Home({ ctx }) {
         </div>
       </section>
 
-      <section>
-        <div className="sectionhead">
-          <h2>All {term.many}</h2>
-          <span className="note">{behaviors.length} in practice</span>
-        </div>
-        <p className="prose">
-          Every behavior, with its coaching, teaching points, discussion questions, the
-          systems that hold it and the rituals that carry it.
-        </p>
-        <div className="btnrow">
-          <button className="btn" onClick={() => goto('clarity')}>See the full list</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false, term)}>Open the handout</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true, term)}>Open the full handout</button>
-        </div>
-        <p className="meta" style={{ marginTop: 8 }}>
-          The handout is the one-line-per-{term.one} version for a meeting. The full handout adds
-          the coaching tips, teaching points, discussion questions, failure state and rule, for
-          whoever is leading. Both open as a clean page you can print or save as a PDF.
-        </p>
-      </section>
+
+      {showCats && (
+        <section>
+          <div className="sectionhead">
+            <h2>The 5C categories</h2>
+            <span className="note">How each {term.one} is sorted</span>
+          </div>
+          <p className="prose">
+            Our values and {term.many} sort into five categories. Together they cover who we are, how we
+            treat people, how we do the work, who it is for, and how we keep growing, so no side of
+            the culture is left to chance.
+          </p>
+          <div className="cgrid">
+            {(categories ?? []).map((c) => {
+              const inCat = values.filter((v) => v.category === c.name);
+              const open = openCat === c.name;
+              return (
+                <div key={c.name} className="ccard">
+                  <h3>{c.name}</h3>
+                  <div className="cq">{c.question}</div>
+                  {c.definition && <p>{c.definition}</p>}
+                  <button className="cnt" aria-expanded={open} onClick={() => setOpenCat(open ? null : c.name)}>
+                    Values ({inCat.length}) {open ? '▴' : '▾'}
+                  </button>
+                  {open && (
+                    <ul className="vlist">
+                      {inCat.map((v) => (
+                        <li key={v.id}><strong>{v.name}</strong>{v.description ? ` ${v.description}` : ''}</li>
+                      ))}
+                      {!inCat.length && <li className="quiet">No value in this category yet. Set one from Admin, About Us, Values.</li>}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -104,7 +145,7 @@ export default function Home({ ctx }) {
  * Builds the handout as its own page rather than printing the app. Two
  * depths: the short one for the room, the full one for whoever is leading.
  */
-function openHandout(org, values, behaviors, full, term) {
+function openHandout(org, values, behaviors, full, term, showCats = true) {
   const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const num = (n) => String(n).padStart(2, '0');
@@ -187,7 +228,7 @@ function openHandout(org, values, behaviors, full, term) {
       <h3><span class="bnum">${num(b.number)}.</span> ${esc(b.title)}</h3>
       <div class="tags">
         ${b.values.map((v) => `<span class="tag v">${esc(v.name)}</span>`).join('')}
-        <span class="tag c">${esc(b.category)}</span>
+        ${showCats && b.category ? `<span class="tag c">${esc(b.category)}</span>` : ''}
       </div>
       <p>${esc(b.description)}</p>
       ${full ? [

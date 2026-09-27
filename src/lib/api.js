@@ -61,16 +61,31 @@ export const setWeeklyBehavior = (...a) => impl.setWeeklyBehavior(...a);
 export const setRecentWindow = (...a) => impl.setRecentWindow(...a);
 export const setPulseCount = (...a) => impl.setPulseCount(...a);
 export const setAutoAdvance = (...a) => impl.setAutoAdvance(...a);
+export const setBotwCadence = (...a) => impl.setBotwCadence(...a);
+export const setEmailOptOut = (...a) => impl.setEmailOptOut(...a);
+export const getMyEmailOptOut = (...a) => impl.getMyEmailOptOut(...a);
 export const listMemberEmails = (...a) => impl.listMemberEmails(...a);
 
 /* billing */
 export const getBilling = (...a) => impl.getBilling(...a);
 export const setBillingRates = (...a) => impl.setBillingRates(...a);
 export const setBillingStatus = (...a) => impl.setBillingStatus(...a);
-export const startCheckout = (...a) => impl.startCheckout(...a);
 export const cancelSubscription = (...a) => impl.cancelSubscription(...a);
 export const resumeSubscription = (...a) => impl.resumeSubscription(...a);
 export const listBillingEvents = (...a) => impl.listBillingEvents(...a);
+export const choosePlan = (...a) => impl.choosePlan(...a);
+export const startTrial = (...a) => impl.startTrial(...a);
+export const addPaymentMethod = (...a) => impl.addPaymentMethod(...a);
+export const manageBilling = (...a) => impl.manageBilling(...a);
+export const setOverride = (...a) => impl.setOverride(...a);
+export const setOrgLogo = (...a) => impl.setOrgLogo(...a);
+export const getPlatformPricing = (...a) => impl.getPlatformPricing(...a);
+export const setPlatformPricing = (...a) => impl.setPlatformPricing(...a);
+export const setMemberActive = (...a) => impl.setMemberActive(...a);
+/* local demo only: a clock to move forward and a card that can decline */
+export const advanceClock = (...a) => (IS_LOCAL ? local.advanceClock(...a) : Promise.resolve(null));
+export const setCardFails = (...a) => (IS_LOCAL ? local.setCardFails(...a) : Promise.resolve(null));
+export const billingToday = () => (IS_LOCAL ? local.today() : new Date().toISOString().slice(0, 10));
 export const applySystemToBehaviors = (...a) => impl.applySystemToBehaviors(...a);
 export const setRitualBehaviors = (...a) => impl.setRitualBehaviors(...a);
 export const reorderBehaviors = (...a) => impl.reorderBehaviors(...a);
@@ -123,6 +138,7 @@ export const setBehaviorValues = (...a) => impl.setBehaviorValues(...a);
 /* systems */
 export const applySystem = (...a) => impl.applySystem(...a);
 export const savePlacementTemplate = (...a) => impl.savePlacementTemplate(...a);
+export const updatePlacement = (...a) => impl.updatePlacement(...a);
 export const removePlacement = (...a) => impl.removePlacement(...a);
 
 /* rituals */

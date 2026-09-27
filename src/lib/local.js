@@ -15,6 +15,11 @@
  * are recorded by name without their contents.
  */
 import seed from '../../scripts/seed-data.json';
+import {
+  accessState, effectivePlan, noticesDue, noticeEmail, receiptEmail, rateFor,
+  isoDay, addDays, periodEnd, TRIAL_DAYS, DEFAULT_RATES
+} from './billing.js';
+import { cadenceOf, periodsBetween, periodStart as cadenceStart } from './gamify.js';
 
 // Bump this whenever the store's shape changes. A store written by an older
 // build is discarded and rebuilt rather than half-read.
@@ -54,6 +59,53 @@ const SEED_USERS = [
   { email: 'reporter@vaildaily.com', name: 'Staff Reporter', org: 'vd', role: 'member',
     passwordHash: '9575a07301bcf33967a58948c6be8874f644bec5c6d7af59a710926d8ced0ce2' }
 ];
+
+/**
+ * The 5C categories, shared by every organization. The question and the
+ * short definition show on the home page when an organization turns the
+ * category tags on.
+ */
+export const FIVE_C = [
+  { name: 'Character', position: 1, question: 'Who are we when it costs us?',
+    definition: 'We keep our word when it is costly. What we say and what we do match, so people can trust both.' },
+  { name: 'Connection', position: 2, question: 'How do we treat people?',
+    definition: 'People feel safe, seen and free to speak up. Belonging is something we build on purpose.' },
+  { name: 'Craft', position: 3, question: 'How do we create clarity and excel?',
+    definition: 'Clear decisions, high standards, and getting better at the work every week.' },
+  { name: 'Cause', position: 4, question: 'Who is this for and why does it matter?',
+    definition: 'Everyone can see who the work serves and how their part makes a difference.' },
+  { name: 'Change', position: 5, question: 'How do we stay significant?',
+    definition: 'We name reality, adapt fast, and accept what we cannot control, so we keep mattering.' }
+];
+
+/**
+ * Prices Horizon Line quotes: shown on the sign-in page and copied onto each
+ * new organization, which the super user can then change on its own.
+ */
+function platformRates() {
+  // The store may still be building when this runs, so a missing one falls back.
+  try { return db?.platform?.rates || DEFAULT_RATES; } catch { return DEFAULT_RATES; }
+}
+function ratesFromDefaults() {
+  const r = platformRates();
+  return {
+    rate_small_monthly: r.small.monthly, rate_small_yearly: r.small.yearly,
+    rate_unlimited_monthly: r.unlimited.monthly, rate_unlimited_yearly: r.unlimited.yearly
+  };
+}
+
+/** R4 fields every organization carries. */
+const NEW_ORG_FIELDS = {
+  show_categories: true, logo_url: null, botw_cadence: 'weekly', botw_day: 1,
+  trial_ends_at: null, trial_used: false,
+  has_payment_method: false, card_last4: null, card_fails: false,
+  subscription_status: null, stripe_customer_id: null, stripe_subscription_id: null,
+  override_kind: null, override_plan: null, override_until: null, override_note: null
+};
+const PILOT_OVERRIDE = {
+  override_kind: 'invoiced', override_plan: 'unlimited', override_until: '2099-12-12',
+  override_note: 'Pilot. Invoiced outside Stripe until reset.'
+};
 
 /** Every organization starts with this one; it applies to every behavior. */
 export const DEFAULT_PRACTICE_RITUAL = {
@@ -104,10 +156,13 @@ function build() {
       // Billing. Rates are per organization, set by the super user; the plan
       // is chosen by that organization's champion.
       plan: 'unlimited', billing_cycle: 'yearly',
+      // The pilots keep the prices they were quoted.
       rate_small_monthly: 49, rate_small_yearly: 490,
       rate_unlimited_monthly: 149, rate_unlimited_yearly: 1490,
-      paid_through: new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10),
-      cancel_at_period_end: false, pending_change: null
+      paid_through: null, cancel_at_period_end: false, pending_change: null,
+      ...NEW_ORG_FIELDS,
+      // The two pilots are invoiced outside Stripe until Jon resets them.
+      ...PILOT_OVERRIDE
     });
 
     db.values[orgId] = src.values.map((v, i) => ({
@@ -238,6 +293,43 @@ function upgrade(store) {
   let changed = false;
   const need = (k, v) => { if (store[k] === undefined) { store[k] = v; changed = true; } };
   need('teams', {});
+  need('clockOffsetDays', 0);
+  need('platform', { rates: JSON.parse(JSON.stringify(DEFAULT_RATES)) });
+  // The pilots keep their quoted prices, even in a store an earlier build moved.
+  if (!store.pilotPricesKept) {
+    for (const org of store.orgs ?? []) {
+      if (['mv', 'vd'].includes(org.slug)) Object.assign(org, {
+        rate_small_monthly: 49, rate_small_yearly: 490, rate_unlimited_monthly: 149, rate_unlimited_yearly: 1490
+      });
+    }
+    store.pilotPricesKept = true; changed = true;
+  }
+  for (const org of store.orgs ?? []) {
+    // Organizations still on the first R4 prices move to the new defaults.
+    if (!['mv', 'vd'].includes(org.slug) && org.rate_small_monthly === 49 && org.rate_unlimited_monthly === 149 && org.rate_unlimited_yearly === 1490) {
+      Object.assign(org, {
+        rate_small_monthly: DEFAULT_RATES.small.monthly, rate_small_yearly: DEFAULT_RATES.small.yearly,
+        rate_unlimited_monthly: DEFAULT_RATES.unlimited.monthly, rate_unlimited_yearly: DEFAULT_RATES.unlimited.yearly
+      });
+      changed = true;
+    }
+  }
+  need('noticesSent', []);
+  // R4: each value can sit in one of the 5Cs. Seeded values get a first guess.
+  const VALUE_C = { Trust: 'Character', Commitment: 'Character', Humility: 'Character', Candor: 'Character',
+    Care: 'Connection', Vulnerability: 'Connection', Challenge: 'Craft', 'Leadership Excellence': 'Craft', Growth: 'Change' };
+  for (const list of Object.values(store.values ?? {})) {
+    for (const v of list) {
+      if (v.category === undefined) { v.category = VALUE_C[v.name] ?? null; changed = true; }
+    }
+  }
+  // R4: billing, logo and the 5C switch. The pilots start invoiced.
+  for (const org of store.orgs ?? []) {
+    if (org.override_kind === undefined) {
+      Object.assign(org, NEW_ORG_FIELDS, ['mv', 'vd'].includes(org.slug) ? PILOT_OVERRIDE : {});
+      changed = true;
+    }
+  }
   need('awardTypes', {});
   need('awardGrants', []);
   need('fluencyMarks', []);
@@ -451,15 +543,23 @@ export async function signIn(email, password) {
   // addresses have accounts.
   if (!u || u.passwordHash !== digest) throw new Error('That email and password do not match an account.');
   if (!u.is_super && !u.org_id) throw new Error('Your account is not attached to an organization yet. Ask your administrator.');
+  if (!u.is_super && u.inactive) {
+    const org = db.orgs.find((o) => o.id === u.org_id);
+    throw new Error(`Your account is inactive because ${org?.name ?? 'your organization'}'s plan covers fewer people. Ask your culture champion.`);
+  }
 
   // A lapsed organization keeps its champion, who is on the free tier, and
   // loses everyone else until the subscription is current again.
   // The champion's seat is the free tier and never lapses; everyone else,
   // admins included, is a paid seat.
   if (!u.is_super && u.role !== 'champion') {
+    tickBilling();
     const org = db.orgs.find((o) => o.id === u.org_id);
     const { lapsed } = planFor(org);
-    if (lapsed) throw new Error('Your organization\'s subscription is not current. Ask your culture champion.');
+    if (lapsed) {
+      const champ = championOf(org.id);
+      throw new Error(`${org.name}'s culture portal is paused, so only its culture champion${champ ? `, ${champ.name},` : ''} can sign in right now. Nothing has been deleted; ask them to bring the plan up to date.`);
+    }
   }
   db.sessionUserId = u.id;
   persist();
@@ -592,7 +692,7 @@ function exampleContent(orgId) {
  * Stands up a new organization with its culture champion and a little example
  * content, so the first sign-in is not an empty screen.
  */
-export async function createPortal({ orgName, subtitle, championName, championEmail, password }) {
+export async function createPortal({ orgName, subtitle, championName, championEmail, password, plan = null, cycle = null }) {
   const email = String(championEmail).trim().toLowerCase();
   if (!orgName?.trim()) throw new Error('Name the organization.');
   if (!championName?.trim()) throw new Error('Give the culture champion a name.');
@@ -611,12 +711,15 @@ export async function createPortal({ orgName, subtitle, championName, championEm
     weekly_behavior_id: null, weekly_set_at: now(),
     recent_days: 45, pulse_per_signin: 2, auto_advance: false,
     plan: 'free', billing_cycle: null,
-    rate_small_monthly: 49, rate_small_yearly: 490,
-    rate_unlimited_monthly: 149, rate_unlimited_yearly: 1490,
+    ...ratesFromDefaults(),
     paid_through: null, cancel_at_period_end: false, pending_change: null,
-    has_example_content: true
+    has_example_content: true,
+    ...NEW_ORG_FIELDS
   };
   db.orgs.push(org);
+  // Every new portal starts a 30-day trial of the unlimited plan. The plan
+  // they keep is picked later, in Admin, when they add a payment method.
+  beginTrial(org, 'unlimited', null, championName.trim());
 
   const seedContent = exampleContent(orgId);
   db.values[orgId] = seedContent.values;
@@ -693,7 +796,7 @@ export async function approveRequest(requestId, role = 'member') {
   const org = db.orgs.find((o) => o.id === req.org_id);
 
   const { effective } = planFor(org);
-  const used = db.users.filter((u) => u.org_id === org.id).length;
+  const used = activePeople(org.id).length;
   if (!me.is_super && used >= effective.seats) {
     throw new Error(effective.free
       ? 'This organization is on the free tier, which covers the culture champion only. Choose a plan to add people.'
@@ -770,6 +873,7 @@ export async function resetPassword({ email, code, password }) {
 export async function listMyOrganizations() {
   const u = currentUser();
   if (!u) return [];
+  tickBilling();
   const mine = u.is_super ? db.orgs : db.orgs.filter((o) => o.id === u.org_id);
   return mine.map((o) => ({
     ...o,
@@ -805,18 +909,32 @@ export async function maybeAdvanceWeekly(orgId) {
   const list = (db.behaviors[orgId] ?? []).slice().sort((a, b) => a.number - b.number);
   if (list.length < 2) return null;
 
-  const since = org.weekly_set_at ? Date.now() - new Date(org.weekly_set_at).getTime() : Infinity;
-  const weeks = Math.floor(since / (7 * 86400000));
-  if (weeks < 1) return null;
+  // Steps owed on the organization's cadence: each weekday, each Monday, or
+  // each month on the chosen day.
+  const cad = cadenceOf(org);
+  const steps = org.weekly_set_at ? periodsBetween(new Date(org.weekly_set_at), new Date(), cad) : 1;
+  if (steps < 1) return null;
 
   const at = Math.max(0, list.findIndex((b) => b.id === org.weekly_behavior_id));
-  const next = list[(at + weeks) % list.length];
+  const next = list[(at + steps) % list.length];
   org.weekly_behavior_id = next.id;
-  // Step the marker forward by whole weeks, so a missed week does not shift
-  // the day the rotation turns over.
-  org.weekly_set_at = new Date(new Date(org.weekly_set_at ?? Date.now()).getTime() + weeks * 7 * 86400000).toISOString();
+  // The marker sits at the start of the current period, so a missed visit
+  // does not shift the day the rotation turns over.
+  org.weekly_set_at = cadenceStart(new Date(), cad).toISOString();
   persist();
   return next.id;
+}
+
+/** How often the featured behavior turns over: daily, weekly, or monthly on a day. */
+export async function setBotwCadence(orgId, { cadence, day }) {
+  requireEditor(orgId);
+  const org = db.orgs.find((o) => o.id === orgId);
+  if (!['daily', 'weekly', 'monthly'].includes(cadence)) throw new Error('Pick daily, weekly or monthly.');
+  org.botw_cadence = cadence;
+  org.botw_day = Math.min(28, Math.max(1, Number(day) || 1));
+  // Restart the clock from the current period, so the change does not jump the rotation.
+  org.weekly_set_at = cadenceStart(new Date(), cadenceOf(org)).toISOString();
+  persist();
 }
 
 export async function setAutoAdvance(orgId, on) {
@@ -836,9 +954,10 @@ export async function setWeeklyBehavior(orgId, behaviorId) {
 }
 
 /* ------------------------------------------------------------------ billing */
-/* Two paid tiers plus a free one. The free tier is the culture champion's own
-   access, which never lapses: an organization that stops paying keeps its
-   content and its champion, and loses everyone else's sign-in.             */
+/* The rules live in billing.js and are shared with the hosted build. This is
+   the local stand-in for Stripe: a simulated checkout, a card that can be set
+   to fail, and a demo clock the super user can move forward to watch a trial
+   end, a renewal charge, a failed payment and the grace period play out.   */
 
 export const PLANS = {
   free:      { id: 'free', name: 'Champion only', seats: 1, free: true },
@@ -846,120 +965,372 @@ export const PLANS = {
   unlimited: { id: 'unlimited', name: 'Unlimited people', seats: Infinity }
 };
 
-export function planFor(org) {
-  const plan = PLANS[org?.plan] ?? PLANS.free;
-  const lapsed = !plan.free && !isCurrent(org);
-  return { plan, lapsed, effective: lapsed ? PLANS.free : plan };
+/** Today, as the demo clock sees it. */
+export function today() {
+  return isoDay(Date.now() + (db.clockOffsetDays ?? 0) * 86400000);
 }
 
-/** Current means paid through a date that has not passed. Nothing else. */
-function isCurrent(org) {
-  if (!org?.paid_through) return false;
-  return new Date(org.paid_through).getTime() >= new Date().setHours(0, 0, 0, 0);
+export function planFor(org) {
+  const state = accessState(org, today());
+  const plan = PLANS[state.plan] ?? PLANS.free;
+  const lapsed = !state.full;
+  return { plan, lapsed, state, effective: PLANS[effectivePlan(org, today())] ?? PLANS.free };
+}
+
+function orgById(orgId) {
+  const org = db.orgs.find((o) => o.id === orgId);
+  if (!org) throw new Error('No such organization.');
+  return org;
+}
+
+/** The champion and Horizon Line both get every billing email. */
+function billingMail(org, subject, body) {
+  const champ = championOf(org.id);
+  if (champ) queueMail(org.id, champ.email, subject, body);
+  queueMail(org.id, 'jon@horizonlinegroup.com', `[copy] ${subject}`, body);
+}
+
+function requireChampion(orgId) {
+  const me = currentUser();
+  if (!me) throw new Error('Not signed in.');
+  if (me.is_super) return me;
+  if (me.org_id !== orgId || !['champion', 'owner'].includes(me.role)) {
+    throw new Error('Only the culture champion can change the plan or payment.');
+  }
+  return me;
+}
+
+function requireSuper() {
+  const me = currentUser();
+  if (!me?.is_super) throw new Error('Only the super user can do that.');
+  return me;
+}
+
+function beginTrial(org, plan, cycle, by) {
+  org.plan = plan;
+  org.billing_cycle = cycle;
+  if (!org.trial_used) {
+    org.trial_used = true;
+    org.trial_ends_at = addDays(today(), TRIAL_DAYS - 1);
+    logBilling(org.id, 'trial-started', { plan, cycle, until: org.trial_ends_at, by });
+  } else {
+    logBilling(org.id, 'plan-selected', { plan, cycle, by });
+  }
+}
+
+/**
+ * Plays Stripe forward to today: charges a card at the end of a trial or a
+ * paid period, fails when the card is set to fail, and sends each notice
+ * once. Safe to call as often as you like.
+ */
+export function tickBilling() {
+  const t = today();
+  let changed = false;
+  db.noticesSent = db.noticesSent ?? [];
+
+  for (const org of db.orgs) {
+    // Stripe only charges a subscription it holds, and never while cancelling.
+    if (org.has_payment_method && org.plan !== 'free' && !org.cancel_at_period_end) {
+      for (let guard = 0; guard < 40; guard++) {
+        const start = org.paid_through
+          ? addDays(org.paid_through, 1)
+          : org.trial_ends_at ? addDays(org.trial_ends_at, 1) : null;
+        if (!start || start > t) break;
+        if (org.card_fails) {
+          if (!org.paid_through && org.trial_ends_at) org.paid_through = org.trial_ends_at;
+          const failKey = `failed:${start}`;
+          if (!db.noticesSent.includes(org.id + ':' + failKey)) {
+            db.noticesSent.push(org.id + ':' + failKey);
+            org.subscription_status = 'past_due';
+            logBilling(org.id, 'payment-failed', { due: start, amount: rateFor(org) });
+            changed = true;
+          }
+          break;
+        }
+        const through = periodEnd(start, org.billing_cycle);
+        org.paid_through = through;
+        org.subscription_status = 'active';
+        enforceSeats(org);
+        org.pending_change = null;
+        logBilling(org.id, 'payment', { amount: rateFor(org), plan: org.plan, cycle: org.billing_cycle, paid_through: through, at_day: start });
+        const r = receiptEmail(org, { amount: rateFor(org), paidThrough: through });
+        billingMail(org, r.subject, r.body);
+        changed = true;
+      }
+    }
+    for (const n of noticesDue(org, t)) {
+      const key = `${org.id}:${n.key}`;
+      if (db.noticesSent.includes(key)) continue;
+      db.noticesSent.push(key);
+      const m = noticeEmail(n.kind, org, t);
+      billingMail(org, m.subject, m.body);
+      logBilling(org.id, 'notice', { kind: n.kind, subject: m.subject });
+      changed = true;
+    }
+  }
+  if (changed) persist();
+  return changed;
 }
 
 export async function getBilling(orgId) {
-  const org = db.orgs.find((o) => o.id === orgId);
-  const { plan, lapsed, effective } = planFor(org);
-  const used = db.users.filter((u) => u.org_id === orgId).length;
+  tickBilling();
+  const org = orgById(orgId);
+  const t = today();
+  const state = accessState(org, t);
+  const eff = PLANS[effectivePlan(org, t)] ?? PLANS.free;
+  const used = activePeople(orgId).length;
   return {
+    today: t,
+    total_people: db.users.filter((u) => u.org_id === orgId).length,
+    state,
+    org: { ...org },
     plan: org.plan, cycle: org.billing_cycle, paid_through: org.paid_through,
-    current: isCurrent(org), lapsed,
-    // Cancelled but still inside the paid period: it expires, it has not lapsed.
+    current: state.full, lapsed: !state.full && org.plan !== 'free',
     cancel_at_period_end: !!org.cancel_at_period_end,
-    expiring: !!org.cancel_at_period_end && isCurrent(org),
+    expiring: state.status === 'cancelling',
     pending_change: org.pending_change ?? null,
+    trial_ends_at: org.trial_ends_at, trial_used: !!org.trial_used,
+    has_payment_method: !!org.has_payment_method, card_last4: org.card_last4, card_fails: !!org.card_fails,
+    override: org.override_kind ? {
+      kind: org.override_kind, plan: org.override_plan, until: org.override_until, note: org.override_note
+    } : null,
     seats_used: used,
-    seats_allowed: effective.seats === Infinity ? null : effective.seats,
+    seats_allowed: eff.seats === Infinity ? null : eff.seats,
     rates: {
       small: { monthly: org.rate_small_monthly, yearly: org.rate_small_yearly },
       unlimited: { monthly: org.rate_unlimited_monthly, yearly: org.rate_unlimited_yearly }
-    }
+    },
+    clock_offset: db.clockOffsetDays ?? 0
   };
 }
 
 /** Super user only: what this organization is charged. */
 export async function setBillingRates(orgId, rates) {
-  const me = currentUser();
-  if (!me?.is_super) throw new Error('Only the super user can set rates.');
-  Object.assign(db.orgs.find((o) => o.id === orgId), rates);
-  persist();
-}
-
-/** Super user only: record a payment state by hand. */
-export async function setBillingStatus(orgId, { paid_through, plan, billing_cycle, cancel_at_period_end }) {
-  const me = currentUser();
-  if (!me?.is_super) throw new Error('Only the super user can set payment status.');
-  const org = db.orgs.find((o) => o.id === orgId);
-  if (paid_through !== undefined) {
-    org.paid_through = paid_through || null;
-    // Recording a payment is what clears a pending plan change.
-    org.pending_change = null;
-    logBilling(orgId, 'payment-recorded', { paid_through: org.paid_through, plan: org.plan, cycle: org.billing_cycle });
-  }
-  if (plan !== undefined) org.plan = plan;
-  if (billing_cycle !== undefined) org.billing_cycle = billing_cycle;
-  if (cancel_at_period_end !== undefined) org.cancel_at_period_end = !!cancel_at_period_end;
+  requireSuper();
+  Object.assign(orgById(orgId), rates);
+  logBilling(orgId, 'rates-set', { ...rates });
   persist();
 }
 
 /**
- * In hosted mode this hands off to Stripe Checkout and the subscription
- * webhook writes the result back. Local mode has no server to talk to, so it
- * simulates a successful subscription and says so.
+ * Super user only: set any billing field by hand. Whatever is set here is
+ * what the rules read; an override (below) still wins over it.
  */
+export async function setBillingStatus(orgId, fields) {
+  const me = requireSuper();
+  const org = orgById(orgId);
+  const allowed = ['paid_through', 'plan', 'billing_cycle', 'cancel_at_period_end', 'trial_ends_at',
+    'trial_used', 'has_payment_method', 'subscription_status'];
+  const set = {};
+  for (const k of allowed) if (fields[k] !== undefined) set[k] = fields[k] === '' ? null : fields[k];
+  if (set.paid_through !== undefined) org.pending_change = null;
+  Object.assign(org, set);
+  logBilling(orgId, set.paid_through !== undefined ? 'payment-recorded' : 'set-by-super', { ...set, by: me.name });
+  persist();
+}
+
 /**
- * Records the plan an organization has chosen. It does not move the
- * paid-through date: that changes when the super user records a payment, and
- * later when Stripe confirms one. Until then the change shows as pending on
- * both sides.
+ * Super user only: an arrangement that wins over Stripe until its date.
+ * kind: 'invoiced' (paid outside Stripe) or 'extension' (access extended).
+ * Pass kind null to clear it.
  */
-export async function startCheckout(orgId, { plan, cycle }) {
-  const me = requireEditor(orgId);
-  const org = db.orgs.find((o) => o.id === orgId);
-  const previous = { plan: org.plan, cycle: org.billing_cycle };
-  org.plan = plan;
-  org.billing_cycle = cycle;
+export async function setOverride(orgId, { kind, plan, until, note }) {
+  const me = requireSuper();
+  const org = orgById(orgId);
+  if (kind && !until) throw new Error('Give the override an end date.');
+  org.override_kind = kind || null;
+  org.override_plan = kind ? (plan || 'unlimited') : null;
+  org.override_until = kind ? until : null;
+  org.override_note = kind ? (note ?? '') : null;
+  logBilling(orgId, kind ? 'override-set' : 'override-cleared', { kind, plan: org.override_plan, until, note, by: me.name });
+  persist();
+}
+
+/**
+ * The champion picks a plan and a term. The first time, this starts the
+ * 30-day trial; later it changes the plan, and with a card on file the next
+ * charge uses the new rate.
+ */
+export async function choosePlan(orgId, { plan, cycle }) {
+  const me = requireChampion(orgId);
+  if (!['small', 'unlimited'].includes(plan)) throw new Error('Pick one of the two plans.');
+  if (!['monthly', 'yearly'].includes(cycle)) throw new Error('Pick monthly or yearly.');
+  const org = orgById(orgId);
+  const wasTrial = !org.trial_used;
+  beginTrial(org, plan, cycle, me.name);
   org.cancel_at_period_end = false;
-  org.pending_change = { plan, cycle, at: now(), by: me.name, previous };
-  logBilling(orgId, 'plan-selected', { plan, cycle, previous, by: me.name });
+  // Outside the trial the new plan's seats apply now; inside it, at the first charge.
+  const changed = enforceSeats(org);
   persist();
-  return { recorded: true, plan, cycle, paid_through: org.paid_through };
+  tickBilling();
+  return { trialStarted: wasTrial, trial_ends_at: org.trial_ends_at, ...changed };
 }
+
+/** For an organization that has never had one: a trial of the unlimited plan. */
+export async function startTrial(orgId) {
+  const me = requireChampion(orgId);
+  const org = orgById(orgId);
+  if (org.trial_used) throw new Error('This organization has already had its free trial.');
+  beginTrial(org, 'unlimited', null, me.name);
+  enforceSeats(org);
+  persist();
+  return { trial_ends_at: org.trial_ends_at };
+}
+
+/** Active people in an organization, the culture champion counted. */
+const activePeople = (orgId) => db.users.filter((u) => u.org_id === orgId && !u.inactive);
+
+/**
+ * Keeps the people in an organization within its plan. The most recently
+ * added go inactive first; the culture champion never does. Moving to a
+ * bigger plan brings everyone back.
+ */
+function enforceSeats(org) {
+  const eff = PLANS[effectivePlan(org, today())] ?? PLANS.free;
+  const people = db.users.filter((u) => u.org_id === org.id);
+  let inactivated = 0, reactivated = 0;
+  if (eff.free) return { inactivated, reactivated };   // lapsed: sign-in handles it, nobody is marked
+  const keep = people.filter((u) => u.role === 'champion').concat(people.filter((u) => u.role !== 'champion'));
+  keep.forEach((u, i) => {
+    const should = i >= eff.seats;
+    if (should && !u.inactive) { u.inactive = true; inactivated++; }
+    if (!should && u.inactive) { u.inactive = false; reactivated++; }
+  });
+  if (inactivated) logBilling(org.id, 'people-inactivated', { count: inactivated, plan: effectivePlan(org, today()) });
+  if (reactivated) logBilling(org.id, 'people-reactivated', { count: reactivated });
+  return { inactivated, reactivated };
+}
+
+
+/**
+ * Local stand-in for Stripe Checkout. Hosted mode sends the champion to
+ * Stripe's own page, which collects the card and billing address, works out
+ * the tax, and starts the subscription with billing held until the trial ends.
+ */
+export async function addPaymentMethod(orgId, { last4 = '4242', fails = false } = {}) {
+  const me = requireChampion(orgId);
+  const org = orgById(orgId);
+  if (org.plan === 'free') throw new Error('Choose a plan first.');
+  const hadCard = org.has_payment_method;
+  org.has_payment_method = true;
+  org.card_last4 = String(last4).slice(-4);
+  org.card_fails = !!fails;
+  org.stripe_customer_id = org.stripe_customer_id ?? 'cus_demo_' + org.id.slice(-6);
+  org.stripe_subscription_id = org.stripe_subscription_id ?? 'sub_demo_' + org.id.slice(-6);
+  const t = today();
+  org.subscription_status = org.trial_ends_at && org.trial_ends_at >= t ? 'trialing' : 'active';
+  org.cancel_at_period_end = false;
+  logBilling(orgId, hadCard ? 'card-updated' : 'card-added', { last4: org.card_last4, by: me.name });
+  persist();
+  // A trial that already ended, or a lapsed plan, is charged straight away.
+  // A trial that ended or a plan that lapsed past its grace period starts a
+  // fresh subscription today. Inside the grace period Stripe retries the
+  // overdue invoice instead, so the dates do not move.
+  const s = accessState(org, t);
+  if (!s.full && org.plan !== 'free') org.paid_through = addDays(t, -1);
+  tickBilling();
+  return getBilling(orgId);
+}
+
+
+/** Demo only: make the card on file decline (or accept) the next charge. */
+export async function setCardFails(orgId, fails) {
+  requireSuper();
+  const org = orgById(orgId);
+  org.card_fails = !!fails;
+  persist();
+  tickBilling();
+}
+
+/** Demo only: move today forward (or back to the real date) to watch billing play out. */
+export async function advanceClock(days) {
+  requireSuper();
+  db.clockOffsetDays = days === null ? 0 : (db.clockOffsetDays ?? 0) + days;
+  persist();
+  tickBilling();
+  return today();
+}
+
 
 function logBilling(orgId, kind, detail) {
   db.billingEvents = db.billingEvents ?? [];
-  db.billingEvents.unshift({ id: uid(), org_id: orgId, kind, detail, at: now() });
+  db.billingEvents.unshift({ id: uid(), org_id: orgId, kind, detail, at: now(), day: today() });
+  db.billingEvents = db.billingEvents.slice(0, 400);
 }
 
 export async function listBillingEvents(orgId) {
-  return (db.billingEvents ?? []).filter((e) => e.org_id === orgId).slice(0, 12);
+  return (db.billingEvents ?? []).filter((e) => e.org_id === orgId).slice(0, 20);
 }
 
 /** Cancels at the end of the paid period; access runs to paid_through. */
 export async function cancelSubscription(orgId) {
-  const me = requireEditor(orgId);
-  const org = db.orgs.find((o) => o.id === orgId);
+  const me = requireChampion(orgId);
+  const org = orgById(orgId);
+  const s = accessState(org, today());
+  if (s.status === 'trial') {
+    // Cancelling in a trial stops it turning into a charge.
+    org.has_payment_method = false; org.card_last4 = null;
+    logBilling(orgId, 'cancelled', { until: org.trial_ends_at, by: me.name, inTrial: true });
+    persist();
+    return { cancel_at_period_end: true, until: org.trial_ends_at };
+  }
   org.cancel_at_period_end = true;
+  org.subscription_status = 'active';
   logBilling(orgId, 'cancelled', { until: org.paid_through, by: me.name });
   persist();
+  tickBilling();
   return { cancel_at_period_end: true, until: org.paid_through };
 }
 
 /** Resuming stops the cancellation. It does not extend the paid period. */
 export async function resumeSubscription(orgId) {
-  const me = requireEditor(orgId);
-  const org = db.orgs.find((o) => o.id === orgId);
+  const me = requireChampion(orgId);
+  const org = orgById(orgId);
   org.cancel_at_period_end = false;
-  org.pending_change = { plan: org.plan, cycle: org.billing_cycle, at: now(), by: me.name, resumed: true };
   logBilling(orgId, 'resumed', { plan: org.plan, cycle: org.billing_cycle, by: me.name });
   persist();
+  tickBilling();
   return { resumed: true, paid_through: org.paid_through };
+}
+
+/* --------------------------------------------------------------------- logo */
+
+/** An editor sets the organization's logo; it replaces the initials block. */
+export async function setOrgLogo(orgId, file) {
+  requireEditor(orgId);
+  const org = orgById(orgId);
+  if (!file) { org.logo_url = null; persist(); return null; }
+  if (!/^image\/(png|jpeg|svg\+xml|webp|gif)$/.test(file.type)) throw new Error('Use a PNG, JPG, SVG or WebP image.');
+  if (file.size > 400 * 1024) throw new Error('Keep the logo under 400 KB. A 256-pixel-high PNG is plenty.');
+  org.logo_url = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result); r.onerror = () => rej(new Error('Could not read that file.'));
+    r.readAsDataURL(file);
+  });
+  persist();
+  return org.logo_url;
 }
 
 /** Every member's email, for prefilling a share. */
 export async function listMemberEmails(orgId) {
-  return db.users.filter((u) => u.org_id === orgId).map((u) => u.email);
+  // People who opted out of portal email are left off shares and prompts.
+  return db.users.filter((u) => u.org_id === orgId && !u.email_opt_out).map((u) => u.email);
+}
+
+/**
+ * Anyone can stop portal email: the weekly practice prompts, and stories,
+ * recognition and awards shared with them. Account email (welcome, password
+ * reset) and the culture champion's billing notices still arrive.
+ */
+export async function setEmailOptOut(optOut) {
+  const me = currentUser();
+  if (!me) throw new Error('Not signed in.');
+  me.email_opt_out = !!optOut;
+  persist();
+}
+
+export async function getMyEmailOptOut() {
+  return !!currentUser()?.email_opt_out;
 }
 
 export async function setPulseCount(orgId, count) {
@@ -1018,9 +1389,9 @@ export async function reorderBehaviors(orgId, orderedIds) {
 
 /* ----------------------------------------------------------------- values */
 
-export async function createValue(orgId, { name, description }) {
+export async function createValue(orgId, { name, description, category = null }) {
   requireEditor(orgId);
-  const row = { id: uid(), org_id: orgId, name, description, position: (db.values[orgId] ?? []).length };
+  const row = { id: uid(), org_id: orgId, name, description, category, position: (db.values[orgId] ?? []).length };
   db.values[orgId] = [...(db.values[orgId] ?? []), row];
   persist();
   return row;
@@ -1106,8 +1477,19 @@ export async function listMembers(orgId) {
     .filter((u) => u.org_id === orgId)
     .map((u) => ({
       id: u.id, user_id: u.id, role: u.role, display_name: u.name, email: u.email,
-      team_id: u.team_id ?? null, avatar_url: avatarUrl(u)
+      team_id: u.team_id ?? null, avatar_url: avatarUrl(u), inactive: !!u.inactive
     }));
+}
+
+/** Platform prices: shown on the sign-in page, copied to new organizations. */
+export async function getPlatformPricing() {
+  return platformRates();
+}
+
+export async function setPlatformPricing(rates) {
+  requireSuper();
+  db.platform = { ...(db.platform ?? {}), rates };
+  persist();
 }
 
 /* -------------------------------------------------- administration of users */
@@ -1141,7 +1523,7 @@ export async function createUser(orgId, { email, name, role, password, sendWelco
 
   const org = db.orgs.find((o) => o.id === orgId);
   const { effective } = planFor(org);
-  const used = db.users.filter((u) => u.org_id === orgId).length;
+  const used = activePeople(orgId).length;
   if (!me.is_super && used >= effective.seats) {
     throw new Error(effective.free
       ? 'This organization is on the free tier, which covers the culture champion only. Choose a plan to add people.'
@@ -1197,6 +1579,20 @@ export async function updateUserRole(userId, role) {
   persist();
 }
 
+/** Bring an inactive person back, when the plan has room. */
+export async function setMemberActive(userId, active) {
+  const target = db.users.find((u) => u.id === userId);
+  if (!target) throw new Error('No such person.');
+  requireEditor(target.org_id);
+  if (active) {
+    const org = orgById(target.org_id);
+    const eff = PLANS[effectivePlan(org, today())] ?? PLANS.free;
+    if (activePeople(org.id).length >= eff.seats) throw new Error(`The plan covers ${eff.seats} people and all of those seats are in use.`);
+  }
+  target.inactive = !active;
+  persist();
+}
+
 export async function removeUser(userId) {
   const target = db.users.find((u) => u.id === userId);
   if (!target) return;
@@ -1226,9 +1622,9 @@ export async function createOrganization({ name, subtitle, initials, accent, mis
     weekly_behavior_id: null, weekly_set_at: null,
     recent_days: 45, pulse_per_signin: 2, auto_advance: false,
     plan: 'free', billing_cycle: null,
-    rate_small_monthly: 49, rate_small_yearly: 490,
-    rate_unlimited_monthly: 149, rate_unlimited_yearly: 1490,
-    paid_through: null, cancel_at_period_end: false, pending_change: null
+    ...ratesFromDefaults(),
+    paid_through: null, cancel_at_period_end: false, pending_change: null,
+    ...NEW_ORG_FIELDS
   };
   db.orgs.push(org);
   db.values[org.id] = [];
@@ -1252,13 +1648,7 @@ export async function listAllOrganizations() {
 }
 
 export async function listCategories() {
-  return [
-    { name: 'Character', question: 'Who are we when it costs us?', position: 1 },
-    { name: 'Connection', question: 'How do we treat people?', position: 2 },
-    { name: 'Craft', question: 'How do we make decisions and do our work?', position: 3 },
-    { name: 'Cause', question: 'Who is this for? What impact will we make?', position: 4 },
-    { name: 'Change', question: 'How do we adapt, grow, and accept to stay significant?', position: 5 }
-  ];
+  return FIVE_C;
 }
 
 export async function listValues(orgId) { return db.values[orgId] ?? []; }
@@ -1312,6 +1702,22 @@ export async function applySystem(orgId, behaviorId, { systemId, owner, cadence,
   const b = findBehavior(behaviorId);
   b.placements.push({ id: uid(), systemId, owner, cadence, artifact, template: template || null });
   persist();
+}
+
+/** Edit where a behavior sits in a system: owner, cadence, what happens, template. */
+export async function updatePlacement(placementId, fields) {
+  for (const orgId of Object.keys(db.behaviors)) {
+    for (const b of db.behaviors[orgId]) {
+      const p = b.placements.find((x) => x.id === placementId);
+      if (p) {
+        requireEditor(orgId);
+        for (const k of ['owner', 'cadence', 'artifact', 'template']) if (fields[k] !== undefined) p[k] = fields[k];
+        persist();
+        return p;
+      }
+    }
+  }
+  throw new Error('No such system placement.');
 }
 
 export async function savePlacementTemplate(placementId, template) {
@@ -1559,43 +1965,55 @@ export async function recordMeasureEntry(orgId, { period, values }) {
 }
 
 /* ------------------------------------------------------------------- pulse */
-/* Two behaviors per sign-in, rotating through the list, until each behavior
-   has been scored by a quarter of the organization. Then a new round opens. */
+/* A few behaviors per sign-in, rotating through the list. A round is complete
+   once 80% of the organization's members have each rated every behavior;
+   then the next round opens. */
+
+export const PULSE_SHARE = 0.8;
+
+const pulseMembers = (orgId) => db.users.filter((u) => u.org_id === orgId && !u.is_super);
+const realBehaviors = (orgId) => (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
 
 function pulseTarget(orgId) {
-  const members = db.users.filter((u) => u.org_id === orgId).length || 1;
-  return Math.max(1, Math.ceil(members * 0.25));
+  return Math.max(1, Math.ceil(pulseMembers(orgId).length * PULSE_SHARE));
+}
+
+/** Members who have rated every behavior in this round. */
+function finishedIn(orgId, round) {
+  const ids = new Set(realBehaviors(orgId).map((b) => b.id));
+  if (!ids.size) return 0;
+  return pulseMembers(orgId).filter((u) => {
+    const mine = new Set(db.pulse.filter((p) => p.org_id === orgId && p.user_id === u.id && (p.round ?? 1) === round).map((p) => p.behavior_id));
+    return [...ids].every((id) => mine.has(id));
+  }).length;
 }
 
 function currentRound(orgId) {
   const rounds = db.pulse.filter((p) => p.org_id === orgId).map((p) => p.round ?? 1);
   const round = rounds.length ? Math.max(...rounds) : 1;
-  const behaviors = (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
-  const target = pulseTarget(orgId);
-  const complete = behaviors.length > 0 && behaviors.every((b) =>
-    db.pulse.filter((p) => p.behavior_id === b.id && (p.round ?? 1) === round).length >= target);
-  return complete ? round + 1 : round;
+  return finishedIn(orgId, round) >= pulseTarget(orgId) ? round + 1 : round;
 }
 
-/** The two behaviors to put in front of this person right now, or none. */
+function myUnrated(orgId, round, userId) {
+  const mine = new Set(db.pulse
+    .filter((p) => p.org_id === orgId && (p.round ?? 1) === round && p.user_id === userId)
+    .map((p) => p.behavior_id));
+  return realBehaviors(orgId).filter((b) => !mine.has(b.id));
+}
+
+/** The behaviors to put in front of this person right now, or none. */
 export async function getPulseAssignment(orgId) {
   const me = currentUser();
   if (!me) return { behaviors: [], round: 1, target: 0 };
   const perSignin = db.orgs.find((o) => o.id === orgId)?.pulse_per_signin ?? 2;
   const round = currentRound(orgId);
   const target = pulseTarget(orgId);
-  const mine = new Set(db.pulse
-    .filter((p) => p.org_id === orgId && (p.round ?? 1) === round && p.user_id === me.id)
-    .map((p) => p.behavior_id));
-
-  const counts = (id) => db.pulse.filter((p) => p.behavior_id === id && (p.round ?? 1) === round).length;
   // Example content is not worth rating, and a portal with nothing real in it
   // is not ready to be asked.
-  const real = (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
-  if (!real.length) return { behaviors: [], round, target, waiting: true };
+  if (!realBehaviors(orgId).length) return { behaviors: [], round, target, waiting: true };
 
-  const candidates = real
-    .filter((b) => !mine.has(b.id) && counts(b.id) < target)
+  const counts = (id) => db.pulse.filter((p) => p.behavior_id === id && (p.round ?? 1) === round).length;
+  const candidates = myUnrated(orgId, round, me.id)
     .sort((a, b) => counts(a.id) - counts(b.id) || a.number - b.number)
     .slice(0, perSignin)
     .map((b) => ({ id: b.id, number: b.number, title: b.title, description: b.description, category: b.category }));
@@ -1617,13 +2035,21 @@ export async function submitPulse(orgId, answers) {
   persist();
 }
 
+/**
+ * Where the round stands: how many members have rated everything, against
+ * the 80% needed, and how many the signed-in person still has to rate.
+ */
 export async function getPulseStatus(orgId) {
   const round = currentRound(orgId);
   const target = pulseTarget(orgId);
-  const behaviors = (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
-  const scored = behaviors.filter((b) =>
-    db.pulse.filter((p) => p.behavior_id === b.id && (p.round ?? 1) === round).length >= target).length;
-  return { round, target, scored, total: behaviors.length };
+  const done = finishedIn(orgId, round);
+  const me = currentUser();
+  return {
+    round, target, done, members: pulseMembers(orgId).length,
+    total: realBehaviors(orgId).length,
+    mine_left: me && !me.is_super ? myUnrated(orgId, round, me.id).length : 0,
+    scored: done
+  };
 }
 
 /* ----------------------------------------------------------------- stories */
@@ -1970,7 +2396,11 @@ export async function grantAward(orgId, { awardTypeId, recipientUserId = null, t
 
 export async function listMyFluencyMarks(orgId) {
   const me = currentUser();
-  return db.fluencyMarks.filter((m) => m.user_id === me?.id && m.org_id === orgId);
+  const marks = db.fluencyMarks.filter((m) => m.user_id === me?.id && m.org_id === orgId);
+  // Having rated a behavior in any pulse round is a fluency step too.
+  const rated = [...new Set(db.pulse.filter((p) => p.org_id === orgId && p.user_id === me?.id).map((p) => p.behavior_id))]
+    .map((behavior_id) => ({ behavior_id, step: 'rated', org_id: orgId, user_id: me?.id }));
+  return [...marks, ...rated];
 }
 
 export async function markFluency(orgId, behaviorId, step) {
@@ -2179,4 +2609,9 @@ export async function deleteAwardGrant(id) {
 function allowLeave() {
   window.__cpAllowUnload = true;
   setTimeout(() => { window.__cpAllowUnload = false; }, 1500);
+}
+
+/** Hosted mode opens Stripe's customer page; locally there is nothing to open. */
+export async function manageBilling() {
+  return { local: true };
 }
