@@ -42,7 +42,7 @@ const SALT = 'culture-portal-v1';
  * documented in the README.
  */
 const SEED_USERS = [
-  { email: 'jon@horizonlinegroup.com', name: 'Jon Strickler', is_super: true, org: null, role: 'owner',
+  { email: 'jon@horizonlinegroup.com', name: 'Super Admin', is_super: true, org: null, role: 'owner',
     passwordHash: '65f0d143f3c976394834e260d6cf201f4b494287dd5cb8454efdbb6ee8cf0cff' },
 
   { email: 'chair@mountainvistage.com', name: 'Group Chair', org: 'mv', role: 'champion',
@@ -294,6 +294,9 @@ function upgrade(store) {
   const need = (k, v) => { if (store[k] === undefined) { store[k] = v; changed = true; } };
   need('teams', {});
   need('clockOffsetDays', 0);
+  for (const u of store.users ?? []) {
+    if (u.is_super && u.name === 'Jon Strickler') { u.name = 'Super Admin'; changed = true; }
+  }
   need('platform', { rates: JSON.parse(JSON.stringify(DEFAULT_RATES)) });
   // The pilots keep their quoted prices, even in a store an earlier build moved.
   if (!store.pilotPricesKept) {
@@ -609,7 +612,7 @@ function welcomeBody(org, user, password) {
     'What you will find',
     '  Culture home: the purpose, the values, and the behavior being practised this week.',
     '  Clarity: every behavior, with coaching tips, teaching points and discussion questions.',
-    '  Cadence: the weekly practice session, the rotation, the rituals and the systems that carry them.',
+    '  Cadence: the weekly practice session, the rituals and the systems that carry them.',
     '  Connection: recognize someone by name, and add stories of the behaviors happening.',
     '',
     'When you sign in you will be asked to rate a couple of behaviors. It takes about thirty',

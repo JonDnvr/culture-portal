@@ -61,7 +61,7 @@ export async function listMyOrganizations() {
   if (isSuper) {
     const { data, error } = await supabase.from('organizations').select('*').order('name');
     if (error) throw error;
-    return data.map((o) => ({ ...o, role: 'owner', displayName: 'Super user', isSuper: true }));
+    return data.map((o) => ({ ...o, role: 'owner', displayName: 'Super Admin', isSuper: true }));
   }
 
   const { data, error } = await supabase

@@ -200,6 +200,8 @@ input[type=file]{font-family:"Archivo";font-size:13px}
 /* --- wide modal --- */
 .modal.wide{max-width:min(920px,94vw)}
 .modal.wide .form{max-height:78vh}
+
+/* --- recent columns on a behavior --- */
 .quiet.small{font-size:14px}
 
 /* --- record pages --- */
@@ -490,7 +492,7 @@ html,body{overflow-x:clip;max-width:100%}
 .mebtn small{color:#93A9A1;font-size:10.5px}
 .mebtn:hover small{color:#DCE6E1;text-decoration:underline}
 
-/* --- navigation: the wall sits apart{margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14)}
+/* --- navigation: the wall sits apart, at the foot --- */
 
 /* --- section marks and medals --- */
 .flame{position:relative;display:inline-block;flex:none}
@@ -517,7 +519,7 @@ html,body{overflow-x:clip;max-width:100%}
 .ofdots i{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.25}
 .ofdots i.on{opacity:1}
 
-/* --- two click zones on a Foundation card: name opens it{display:flex;gap:16px;flex-wrap:wrap;font-family:"Archivo";font-size:11.5px;color:var(--muted);margin:0 0 12px}
+/* --- two click zones on a Foundation card: name opens it, badge explains the badge --- */
 .fcard{cursor:default}
 .fcard:hover{border-color:var(--line)}
 .fcardtop{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
@@ -746,7 +748,6 @@ html,body{overflow-x:clip;max-width:100%}
   .toast{bottom:calc(76px + env(safe-area-inset-bottom));z-index:60}
 }
 @media print{.topbar{display:none !important}}
-
 /* =================================================================== R4 */
 /* --- the rail: just wide enough for "Recognition, Stories" --- */
 @media (min-width:541px){
@@ -927,3 +928,23 @@ td.ccell{text-align:center}
 .pricebox span{font-size:12.5px;color:var(--muted)}
 @media (max-width:540px){.pricebox{grid-template-columns:1fr}}
 .row.inactiverow{opacity:.7}
+
+/* R4.4: confetti when a session is published */
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:100;overflow:hidden}
+.confetti i{position:absolute;top:28%;width:9px;height:14px;border-radius:2px;opacity:0;
+  animation:confetti var(--d,2s) cubic-bezier(.2,.7,.4,1) forwards}
+@keyframes confetti{
+  0%{opacity:1;transform:translate(0,0) rotate(0)}
+  15%{opacity:1;transform:translate(calc(var(--x) * .35),-18vh) rotate(calc(var(--r) * .3))}
+  100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r))}
+}
+
+/* the rotation list: the description follows the title, running to one more row at most */
+.rotline{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.rotdesc{font-family:"Archivo";font-size:13px;font-weight:400;color:var(--muted);margin-left:8px}
+
+/* the sign-on page body text, one size smaller */
+.hlg-lede{font-size:17px}
+.hlg-four li{font-size:14px}
+.hlg-trial p,.hlg-members{font-size:14px}
+@media (max-width:540px){.hlg-lede{font-size:15.5px}}

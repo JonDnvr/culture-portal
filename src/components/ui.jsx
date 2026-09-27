@@ -263,3 +263,32 @@ export function OrgMark({ org }) {
   if (org?.logo_url) return <img className="orglogo" src={org.logo_url} alt={`${org.name} logo`} />;
   return <span className="chip" style={{ background: org?.accent }}>{org?.initials}</span>;
 }
+
+/**
+ * A short burst of confetti when a session is published. Plain DOM and CSS,
+ * no library; skipped for anyone who asks their system for reduced motion.
+ */
+export function celebrate() {
+  if (typeof window === 'undefined') return;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  const colors = [accent || '#9C7A3C', '#E8A820', '#2F6B6B', '#B5541C', '#6E4B86', '#4F7052'];
+  const layer = document.createElement('div');
+  layer.className = 'confetti';
+  layer.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 90; i++) {
+    const p = document.createElement('i');
+    const x = (Math.random() - 0.5) * 2;
+    p.style.setProperty('--x', `${x * 46}vw`);
+    p.style.setProperty('--y', `${60 + Math.random() * 40}vh`);
+    p.style.setProperty('--r', `${Math.random() * 900 - 450}deg`);
+    p.style.setProperty('--d', `${1.4 + Math.random() * 1.2}s`);
+    p.style.left = `${50 + x * 8}%`;
+    p.style.background = colors[i % colors.length];
+    p.style.animationDelay = `${Math.random() * 0.15}s`;
+    if (i % 3 === 0) p.style.borderRadius = '50%';
+    layer.appendChild(p);
+  }
+  document.body.appendChild(layer);
+  setTimeout(() => layer.remove(), 3000);
+}

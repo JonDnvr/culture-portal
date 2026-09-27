@@ -1,5 +1,5 @@
 import React from 'react';
-import { confirmAction, Tag } from './ui.jsx';
+import { confirmAction, Tag, celebrate } from './ui.jsx';
 import {
   deleteStory, deleteRecognition, deleteIteration, deleteAwardGrant,
   updateStory, updateRecognition, updateIteration, updateAwardGrant
@@ -55,6 +55,7 @@ export async function publishRecord(ctx, kind, row, toast) {
   try {
     await UPDATE[kind](row.id, { isDraft: false });
     toast(`${upper(NOUN[kind])} published. Everyone can see it now.`);
+    if (kind === 'iteration') celebrate();
     await ctx.refreshActivity();
     return true;
   } catch (e) { toast(e.message); return false; }

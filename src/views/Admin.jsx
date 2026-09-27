@@ -14,6 +14,7 @@ import {
   resetLocalData, signOut
 } from '../lib/api.js';
 import { ChampionBilling, SuperBilling } from './Billing.jsx';
+import { Rotation } from './Cadence.jsx';
 import { accessState, STATUS_LABEL, STATUS_TONE, longDate } from '../lib/billing.js';
 import { pad, N, Tag, Modal, Avatar, findPerson, useToast, confirmAction, OrgMark } from '../components/ui.jsx';
 import { Crest, GoldStar } from '../components/badges.jsx';
@@ -357,6 +358,8 @@ export default function Admin({ ctx }) {
       </>
       )}
 
+      {tab === 'rotation' && <Rotation ctx={ctx} />}
+
       {tab === 'people' && (
       <>
       <PlanSummary ctx={ctx} billing={billing} onOpen={() => { setTab('billing'); window.scrollTo(0, 0); }} />
@@ -679,6 +682,7 @@ function AdminTabs({ tab, setTab, orgName, foot, isSuper }) {
     <div className={foot ? 'tabs foot' : 'tabs admintabs'}>
       {isSuper && <button className="tab" aria-pressed={tab === 'super'} onClick={() => go('super')}>Super admin</button>}
       <button className="tab" aria-pressed={tab === 'about'} onClick={() => go('about')}>About Us</button>
+      <button className="tab" aria-pressed={tab === 'rotation'} onClick={() => go('rotation')}>Rotation</button>
       <button className="tab" aria-pressed={tab === 'people'} onClick={() => go('people')}>People</button>
       <button className="tab" aria-pressed={tab === 'billing'} onClick={() => go('billing')}>Plan and billing</button>
       <button className="tab" aria-pressed={tab === 'settings'} onClick={() => go('settings')}>Settings</button>

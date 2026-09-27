@@ -1,5 +1,8 @@
 # Deploying R4: self-serve plans and billing, logos, the 5C switch, the new sign-on page
 
+> **For the steps, use DEPLOYMENT.md.** This file records what R4 changes. Its numbered
+> steps below are the earlier draft of those instructions.
+
 **Starting point:** R3 is live (its migration has run and its code is on GitHub). If not,
 deploy R3 first with DEPLOY-R3.md, then this.
 
@@ -146,23 +149,30 @@ then code.
 ## 1. Database (Supabase SQL editor)
 
 1. Project `scypggscxntpaakdjelr`, **SQL Editor**, **New query**.
-2. Paste all of `supabase/migrations/2026-09-26-r4-billing-logo-5c.sql` and **Run**.
+2. Paste all of `supabase/migrations/2026-09-26-r4.sql` and **Run**.
    It is one transaction and safe to run twice.
 3. Check: run the query at the bottom of the file (remove the `--`). Both pilots
    should read `override`.
 
-What it adds:
-- Organization columns for the trial, card, subscription status, arrangement, logo
-  and the 5C switch.
-- A `billing_notices` table, so each email goes out once.
-- The `logos` storage bucket, public read. Only editors of that organization can write.
-- The 5C questions updated to the latest model, each with a short definition.
+It contains only what changed since R3, each change once:
+- **New columns.** Organizations get the trial, card, subscription status, super user
+  arrangement, logo, 5C switch and featured-behavior cadence. Memberships get email
+  opt-out and inactive. Values get a 5C category. Categories get a definition.
+- **New tables:** `billing_notices` (each email goes out once) and `platform_settings`
+  (default prices).
+- **Access rules:**
+  - trial, grace, lapse, arrangements and seat limits
+  - a pulse round completes at 80% of members
+  - the featured behavior rotates on the org's cadence
+- **Storage:** the `logos` bucket, public read, written only by that org's editors.
+- **Pilots:** Mountain Vistage and Vail Daily are set to invoiced outside Stripe until
+  2099-12-12. Their prices are not touched.
 
 One behavior change: **when a plan is not current, members other than the culture
 champion read nothing.** Their role resolves to none. Signing in tells them the portal
 is paused and names the champion.
 
-Tested on Postgres 16 against the R3 schema. The checks covered each access state in
+Tested on Postgres 16 against the R3 schema, run twice. The checks covered each access state in
 turn: trial, trial ended, grace, lapsed and cancelled. They also covered:
 - a super user override winning over everything
 - the paused message

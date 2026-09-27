@@ -4,7 +4,7 @@ import {
   reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency,
   updatePlacement, removePlacement
 } from '../lib/api.js';
-import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
+import { pad, N, Tag, BNum, BehaviorTag, Modal, Avatar, findPerson, useToast, confirmAction, celebrate } from '../components/ui.jsx';
 import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
 import { DraftsPanel, RecordEditor } from './RecordEditor.jsx';
 import { BehaviorForm } from './Behavior.jsx';
@@ -34,14 +34,12 @@ export default function Cadence({ ctx }) {
       <p className="lede">One {term.one} at a time, carried by practices nobody has to remember.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>{UNIT[cadenceOf(ctx.org).kind].this.replace(/^./, (c) => c.toUpperCase())}</button>
-        <button className="tab" aria-pressed={tab === 'rotation'} onClick={() => setTab('rotation')}>Rotation</button>
         <button className="tab" aria-pressed={tab === 'rituals'} onClick={() => setTab('rituals')}>Rituals</button>
         <button className="tab" aria-pressed={tab === 'systems'} onClick={() => setTab('systems')}>Systems</button>
         <button className="tab" aria-pressed={tab === 'sessions'} onClick={() => setTab('sessions')}>Sessions</button>
       </div>
       {tab === 'week' && <ThisWeek ctx={ctx} />}
       {tab === 'sessions' && <Sessions ctx={ctx} />}
-      {tab === 'rotation' && <Rotation ctx={ctx} />}
       {tab === 'rituals' && <Rituals ctx={ctx} initialBehavior={hint?.tab === 'rituals' ? hint.behavior : null} />}
       {tab === 'systems' && <Systems ctx={ctx} initialBehavior={hint?.tab === 'systems' ? hint.behavior : null} />}
     </>
@@ -66,7 +64,7 @@ function ThisWeek({ ctx }) {
     listIterations(org.id, { ritualId: session.id }).then(setRuns).catch(() => setRuns([]));
   }, [org.id, session?.id, modal]);
 
-  if (!week) return <div className="empty">No {term.many} yet. Add the first one from the Rotation tab.</div>;
+  if (!week) return <div className="empty">No {term.many} yet. Add the first one from Admin, Rotation.</div>;
 
   return (
     <>
@@ -140,7 +138,7 @@ function ThisWeek({ ctx }) {
                 </p>
                 <div className="btnrow">
                   <button className="btn" onClick={() => setModal({ kind: 'run', ritual: session, readFor: [week.id], preselect: [week.id] })}>
-                    Record an iteration
+                    Run a Session
                   </button>
                 </div>
               </>
@@ -274,7 +272,7 @@ function Sessions({ ctx }) {
 
 /* ----------------------------------------------------------------- rotation */
 
-function Rotation({ ctx }) {
+export function Rotation({ ctx }) {
   const { org, behaviors, values, categories, canEdit, openBehavior, reload, term } = ctx;
   const [order, setOrder] = useState(behaviors.map((b) => b.id));
   const [editing, setEditing] = useState(false);
@@ -335,14 +333,15 @@ function Rotation({ ctx }) {
               onDragEnd={() => setDragging(null)}
               onDragOver={(e) => { e.preventDefault(); drop(id); }}>
               <div>
-                <div className="t">
+                <div className="t rotline">
                   {editing && <span className="grip">⠿</span>}
-                  <span className="bnum">{editing ? pad(i + 1) : pad(b.number)}.</span> {b.title}
+                  <span className="rottitle"><span className="bnum">{editing ? pad(i + 1) : pad(b.number)}.</span> {b.title}</span>
+                  {b.description && <span className="rotdesc">{b.description}</span>}
                 </div>
                 <div className="tagrow">
                   {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
                   <Tag type="category">{b.category}</Tag>
-                  {b.id === org.weekly_behavior_id && <Tag type="live">This week</Tag>}
+                  {b.id === org.weekly_behavior_id && <Tag type="live">Featured now</Tag>}
                   {b.is_example && <Tag type="warn">Example</Tag>}
                 </div>
               </div>
@@ -894,7 +893,8 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
       }
       toast(mode === 'published' ? 'Changes saved.'
         : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
-          : ritual ? 'Iteration recorded.' : 'System run recorded.');
+          : ritual ? 'Session published.' : 'System run published.');
+      if (!asDraft && mode !== 'published') celebrate();
       await ctx.refreshActivity();
       onDone();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
@@ -906,7 +906,7 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
 
   return (
     <Modal title={heading} onClose={onClose} wide
-      footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save} publishLabel="Mark it done" />}>
+      footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save} publishLabel="Publish Session" />}>
       {ritual && <p className="meta">{ritual.owner} / {ritual.cadence}</p>}
       {placement && <p className="meta">{placement.artifact} / {placement.owner} / {placement.cadence}</p>}
       {script

@@ -13,7 +13,7 @@ doing the enforcing. `src/lib/api.js` picks between them based on whether
 The front end is Vite and React, so it also runs as-is in Bolt, StackBlitz, Vercel or
 Netlify.
 
-Production setup is in **DEPLOYMENT.md**, written for someone who has not used these tools before: every click, every command, and what you should see after each one.
+Updating the live portal from R3 to R4 is in **DEPLOYMENT.md**. Setting up from nothing, written for someone who has not used these tools before, is in **DEPLOYMENT-FIRST-TIME.md**.
 
 ## Three ways in
 
@@ -284,7 +284,7 @@ The rules are in `src/lib/billing.js`. `access_state` in `supabase/schema.sql` a
 **Local mode** simulates Stripe: a demo checkout, a card that can be set to decline, and a
 demo clock under Super admin to move today forward and watch it all play out.
 
-Setup is in **DEPLOY-R4.md**.
+Setup is in **DEPLOYMENT.md**.
 
 ## Who can change what
 
