@@ -94,8 +94,8 @@ export function ChampionBilling({ ctx, billing, events, reload, toast }) {
       ? ` ${over} ${over === 1 ? 'person' : 'people'} will be inactivated ${inTrial ? 'when the trial ends and the plan starts' : 'right away'}, most recently added first. You can reactivate them by moving to Unlimited.`
       : '';
     const ok = await confirmAction({
-      title: `Keep ${PLAN_INFO[plan].name}, billed ${cycle}?`,
-      action: over ? `Keep it, inactivate ${over}` : 'Keep this plan', danger: !!over,
+      title: `Choose ${PLAN_INFO[plan].name}, billed ${cycle}?`,
+      action: over ? `Choose it, inactivate ${over}` : 'Choose this plan', danger: !!over,
       body: (inTrial
         ? `You keep the unlimited plan until the trial ends ${longDate(s.until)}. Then ${price} a ${per}, plus any tax, once you add a payment method.`
         : `${price} a ${per}, plus any tax, from your next charge. Stripe credits any unused time on the old plan.`) + warning
@@ -192,7 +192,7 @@ export function ChampionBilling({ ctx, billing, events, reload, toast }) {
                     {canAct && (
                       <button className={mine && billing.cycle === cycle ? 'btn small chosen' : 'btn small'}
                         disabled={mine && billing.cycle === cycle} onClick={() => pick(p)}>
-                        {mine && billing.cycle === cycle ? 'Your plan' : s.status === 'trial' ? 'Keep this plan' : 'Choose this plan'}
+                        {mine && billing.cycle === cycle ? 'Your plan' : 'Choose this plan'}
                       </button>
                     )}
                   </div>

@@ -9,11 +9,12 @@ import {
   getBilling,
   sendWelcomeEmail,
   listBillingEvents, listAccessRequests, approveRequest, declineRequest,
-  clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL,
+  listOutbox, setAutoAdvance, IS_LOCAL,
   createTeam, setMemberTeam, saveAwardType, setOrgLogo, billingToday, setBotwCadence, setMemberActive, getPlatformPricing, setPlatformPricing,
   resetLocalData, signOut, getPulseStatus, setPulseClosePct, closePulseRound
 } from '../lib/api.js';
 import { ChampionBilling, SuperBilling } from './Billing.jsx';
+import { ClearExamplesButton } from '../components/examples.jsx';
 import { Rotation } from './Cadence.jsx';
 import { accessState, STATUS_LABEL, STATUS_TONE, longDate } from '../lib/billing.js';
 import { pad, N, Tag, Modal, Avatar, findPerson, useToast, confirmAction, OrgMark, PasswordInput } from '../components/ui.jsx';
@@ -167,6 +168,21 @@ export default function Admin({ ctx }) {
         : <div className="empty">Loading the plan…</div>)}
       {tab === 'about' && (
       <>
+      {/* First on the tab, so it is found while there is anything to clear. */}
+      {org.has_example_content && (
+        <section>
+          <div className="sectionhead">
+            <h2>Example content</h2>
+            <span className="note"><ClearExamplesButton ctx={ctx} /></span>
+          </div>
+          <div className="notice">
+            This portal still has example content: values, {term.many}, the systems they are built
+            into, a ritual, sessions (ritual and system runs), recognition, a story, and a Value
+            award given to an example team. Editing one makes it yours and removes its Example tag.
+            Clear example content deletes every example that is left, in one step.
+          </div>
+        </section>
+      )}
       <section>
         <div className="sectionhead"><h2>Look</h2><span className="note">How {org.name} appears in the portal</span></div>
         <div className="settinggrid two">
@@ -335,27 +351,6 @@ export default function Admin({ ctx }) {
           {!measures.length && <div className="row"><div className="s">No measures defined yet.</div></div>}
         </div>
       </section>
-
-      {org.has_example_content && (
-        <section>
-          <div className="sectionhead">
-            <h2>Example content clearer</h2>
-            <span className="note">
-              <button className="btn small" onClick={async () => {
-                if (!(await confirmAction({ title: 'Delete everything still marked as an example?', body: `Example values, ${term.many}, systems, rituals, sessions, recognition, stories and awards go. This cannot be undone.` }))) return;
-                try { await clearExampleContent(org.id); toast('Example content cleared.'); await refreshOrgs(); reload(); }
-                catch (e) { toast(e.message); }
-              }}>Clear example content</button>
-            </span>
-          </div>
-          <div className="notice">
-            This portal still has example content: values, {term.many}, the systems they are built
-            into, a ritual, sessions (ritual and system runs), recognition, a story, and a Value
-            award given to an example team. Editing one makes it yours and removes its Example tag.
-            Clear example content deletes every example that is left, in one step.
-          </div>
-        </section>
-      )}
       </>
       )}
 

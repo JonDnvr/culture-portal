@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { N, Tag } from '../components/ui.jsx';
 import HomeBadges from './HomeBadges.jsx';
+import { ClearExamplesButton } from '../components/examples.jsx';
 import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
 
 export default function Home({ ctx }) {
@@ -17,8 +18,14 @@ export default function Home({ ctx }) {
       <p className="lede">{org.creed}</p>
       {org.has_example_content && (
         <div className="notice examplenotice">
-          Some of this is example content, marked with an Example tag. Edit a value or a {term.one}
-          to make it yours, or clear the rest from Admin.
+          Some of this is example content, marked with an Example tag. Edit a value or
+          a {term.one} to make it yours
+          {ctx.canEdit ? (
+            <>, or <button className="linkbtn" onClick={() => goto('admin', { tab: 'about' })}>clear the rest from Admin</button>.</>
+          ) : '. An admin or the culture champion can clear the rest.'}
+          {ctx.canEdit && (
+            <div className="btnrow" style={{ marginTop: 8 }}><ClearExamplesButton ctx={ctx} /></div>
+          )}
         </div>
       )}
 
@@ -126,7 +133,7 @@ export default function Home({ ctx }) {
                   {open && (
                     <ul className="vlist">
                       {inCat.map((v) => (
-                        <li key={v.id}><strong>{v.name}</strong>{v.description ? ` ${v.description}` : ''}</li>
+                        <li key={v.id}>{v.name}</li>
                       ))}
                       {!inCat.length && <li className="quiet">No value in this category yet. Set one from Admin, About Us, Values.</li>}
                     </ul>
