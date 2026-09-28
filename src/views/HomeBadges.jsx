@@ -99,7 +99,7 @@ export default function HomeBadges({ ctx }) {
 
         <div className="hcard">
           <div className="hlabel">Survey cadence</div>
-          <div className="hsub">Round {cairn?.round ?? 1}: complete when 80% of members have rated every {term.one}</div>
+          <div className="hsub">Round {cairn?.round ?? 1}: complete when {cairn?.pct ?? 80}% of members have rated every {term.one}</div>
           {cairn && cairn.total > 0 ? (
             <>
               <div className="milerow">
@@ -123,7 +123,12 @@ export default function HomeBadges({ ctx }) {
               </div>
               {!isSuper && mineLeft > 0 && (
                 <div className="btnrow" style={{ marginTop: 8 }}>
-                  <button className="btn small" onClick={openPulse}>Rate now</button>
+                  <button className="btn small" onClick={() => openPulse()}>Rate now</button>
+                  {mineLeft > (org.pulse_per_signin ?? 2) && (
+                    <button className="btn ghost small" onClick={() => openPulse({ all: true })}>
+                      Rate what's left ({mineLeft})
+                    </button>
+                  )}
                 </div>
               )}
             </>

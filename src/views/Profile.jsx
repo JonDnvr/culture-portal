@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { uploadMyAvatar, removeMyAvatar } from '../lib/api.js';
-import { Modal, Avatar, useToast, confirmAction } from '../components/ui.jsx';
+import { uploadMyAvatar, removeMyAvatar, changeOwnPassword } from '../lib/api.js';
+import { Modal, Avatar, useToast, confirmAction, PasswordInput } from '../components/ui.jsx';
 
 /**
  * Crops the middle square of a photo and shrinks it to 256 pixels, so a phone
@@ -88,6 +88,55 @@ export default function ProfileDialog({ ctx, onClose }) {
       </p>
       <label className="fl" htmlFor="avatarFile">Choose a picture</label>
       <input id="avatarFile" type="file" accept="image/*" onChange={pick} />
+    </Modal>
+  );
+}
+
+/**
+ * Anyone changes their own password here. The current one is asked for first,
+ * so an unlocked screen is not enough to take the account.
+ */
+export function ChangePasswordDialog({ onClose }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function save() {
+    if (!current) return setErr('Enter your current password.');
+    if (next.length < 8) return setErr('Use at least eight characters.');
+    if (next !== confirm) return setErr('Those two passwords do not match.');
+    if (next === current) return setErr('Choose a password different from the current one.');
+    setBusy(true); setErr(null);
+    try {
+      await changeOwnPassword(current, next);
+      toast('Password changed.');
+      onClose();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <Modal title="Change password" onClose={onClose}
+      footer={<>
+        <button className="btn ghost" onClick={onClose}>Cancel</button>
+        <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Change password'}</button>
+      </>}>
+      <label className="fl">Current password</label>
+      <PasswordInput autoComplete="current-password" value={current}
+        onChange={(e) => setCurrent(e.target.value)} />
+      <label className="fl">New password</label>
+      <PasswordInput autoComplete="new-password" value={next}
+        onChange={(e) => setNext(e.target.value)} placeholder="At least eight characters" />
+      <label className="fl">Type it again</label>
+      <PasswordInput autoComplete="new-password" value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && save()} />
+      {err && <p className="err">{err}</p>}
+      <p className="meta">
+        You stay signed in here. Forgot the current one? Sign out and use Forgot password.
+      </p>
     </Modal>
   );
 }

@@ -379,6 +379,28 @@ function upgrade(store) {
     store.r1Seeded = true;
     changed = true;
   }
+
+  // R5: rounds are closed on record. Before, a round ended when the next one
+  // started, so every round below the latest one with answers is recorded as
+  // closed on its last answer.
+  need('pulseRounds', []);
+  if (!store.pulseRoundsBackfilled) {
+    for (const org of store.orgs) {
+      const rows = (store.pulse ?? []).filter((p) => p.org_id === org.id);
+      const latest = rows.reduce((m, p) => Math.max(m, p.round ?? 1), 0);
+      for (let r = 1; r < latest; r++) {
+        const inRound = rows.filter((p) => (p.round ?? 1) === r);
+        if (!inRound.length || store.pulseRounds.some((x) => x.org_id === org.id && x.round === r)) continue;
+        store.pulseRounds.push({
+          org_id: org.id, round: r, reason: 'participation', closed_by: null, closed_by_name: null,
+          closed_at: inRound.map((p) => p.created_at).sort().pop(),
+          finished: null, members: null, close_pct: null
+        });
+      }
+    }
+    store.pulseRoundsBackfilled = true;
+    changed = true;
+  }
   return changed;
 }
 
@@ -581,6 +603,7 @@ export async function changeOwnPassword(current, next) {
   if (!u) throw new Error('Not signed in.');
   if (u.passwordHash !== await hash(current)) throw new Error('Current password is wrong.');
   if (!next || next.length < 8) throw new Error('Use at least eight characters.');
+  if (next === current) throw new Error('Choose a password different from the current one.');
   u.passwordHash = await hash(next);
   persist();
 }
@@ -1968,17 +1991,21 @@ export async function recordMeasureEntry(orgId, { period, values }) {
 }
 
 /* ------------------------------------------------------------------- pulse */
-/* A few behaviors per sign-in, rotating through the list. A round is complete
-   once 80% of the organization's members have each rated every behavior;
-   then the next round opens. */
+/* A few behaviors per sign-in, rotating through the list. A round closes when
+   the organization's setting for participation is reached (80% of active
+   members having rated every behavior, unless an admin changes it), or when an
+   admin closes it. A round is dated only when it closes; the open round is the
+   one after the last closed round. The same rules as supabase/schema.sql, R5. */
 
-export const PULSE_SHARE = 0.8;
+const DEFAULT_CLOSE_PCT = 80;
 
-const pulseMembers = (orgId) => db.users.filter((u) => u.org_id === orgId && !u.is_super);
+const pulseMembers = (orgId) => db.users.filter((u) => u.org_id === orgId && !u.is_super && !u.inactive);
 const realBehaviors = (orgId) => (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
+const closePct = (orgId) => db.orgs.find((o) => o.id === orgId)?.pulse_close_pct ?? DEFAULT_CLOSE_PCT;
+const closedRounds = (orgId) => (db.pulseRounds ?? []).filter((r) => r.org_id === orgId);
 
 function pulseTarget(orgId) {
-  return Math.max(1, Math.ceil(pulseMembers(orgId).length * PULSE_SHARE));
+  return Math.max(1, Math.ceil((pulseMembers(orgId).length * closePct(orgId)) / 100));
 }
 
 /** Members who have rated every behavior in this round. */
@@ -1992,10 +2019,25 @@ function finishedIn(orgId, round) {
 }
 
 function currentRound(orgId) {
-  const rounds = db.pulse.filter((p) => p.org_id === orgId).map((p) => p.round ?? 1);
-  const round = rounds.length ? Math.max(...rounds) : 1;
-  return finishedIn(orgId, round) >= pulseTarget(orgId) ? round + 1 : round;
+  return closedRounds(orgId).reduce((m, r) => Math.max(m, r.round), 0) + 1;
 }
+
+/** Closes the open round if participation has reached the setting. */
+function syncPulse(orgId) {
+  const round = currentRound(orgId);
+  if (!realBehaviors(orgId).length) return false;
+  const finished = finishedIn(orgId, round);
+  if (finished < pulseTarget(orgId)) return false;
+  db.pulseRounds.push({
+    org_id: orgId, round, closed_at: now(), reason: 'participation',
+    closed_by: null, closed_by_name: null,
+    finished, members: pulseMembers(orgId).length, close_pct: closePct(orgId)
+  });
+  persist();
+  return true;
+}
+
+const roundAnswers = (orgId, round) => db.pulse.filter((p) => p.org_id === orgId && (p.round ?? 1) === round);
 
 function myUnrated(orgId, round, userId) {
   const mine = new Set(db.pulse
@@ -2004,55 +2046,133 @@ function myUnrated(orgId, round, userId) {
   return realBehaviors(orgId).filter((b) => !mine.has(b.id));
 }
 
-/** The behaviors to put in front of this person right now, or none. */
-export async function getPulseAssignment(orgId) {
+/** The person answers this organization's pulse: a member of it, and active. */
+const answersPulse = (me, orgId) => !!me && !me.is_super && me.org_id === orgId && !me.inactive;
+
+/**
+ * The behaviors to put in front of this person right now, or none. With
+ * { all: true }, every one they have left this round.
+ */
+export async function getPulseAssignment(orgId, { all = false } = {}) {
   const me = currentUser();
-  if (!me) return { behaviors: [], round: 1, target: 0 };
+  if (!me) return { behaviors: [], round: 1, target: 0, mine_left: 0 };
+  syncPulse(orgId);
   const perSignin = db.orgs.find((o) => o.id === orgId)?.pulse_per_signin ?? 2;
   const round = currentRound(orgId);
   const target = pulseTarget(orgId);
   // Example content is not worth rating, and a portal with nothing real in it
   // is not ready to be asked.
-  if (!realBehaviors(orgId).length) return { behaviors: [], round, target, waiting: true };
+  if (!realBehaviors(orgId).length) return { behaviors: [], round, target, mine_left: 0, waiting: true };
+  if (!answersPulse(me, orgId)) return { behaviors: [], round, target, mine_left: 0 };
 
-  const counts = (id) => db.pulse.filter((p) => p.behavior_id === id && (p.round ?? 1) === round).length;
-  const candidates = myUnrated(orgId, round, me.id)
+  const left = myUnrated(orgId, round, me.id);
+  const counts = (id) => roundAnswers(orgId, round).filter((p) => p.behavior_id === id).length;
+  const candidates = left
     .sort((a, b) => counts(a.id) - counts(b.id) || a.number - b.number)
-    .slice(0, perSignin)
+    .slice(0, all ? left.length : perSignin)
     .map((b) => ({ id: b.id, number: b.number, title: b.title, description: b.description, category: b.category }));
 
-  return { behaviors: candidates, round, target };
+  return { behaviors: candidates, round, target, mine_left: left.length };
 }
 
+/** The round is the open one, whatever was asked; each behavior must be real. */
 export async function submitPulse(orgId, answers) {
   const me = currentUser();
+  if (!answersPulse(me, orgId)) throw new Error('Only people in this organization answer its pulse.');
+  syncPulse(orgId);
   const round = currentRound(orgId);
+  const real = new Set(realBehaviors(orgId).map((b) => b.id));
+  for (const [behavior_id, raw] of Object.entries(answers)) {
+    const score = Number(raw);
+    if (!Number.isInteger(score) || score < 1 || score > 5) throw new Error('A rating is a whole number from 1 to 5.');
+    if (!real.has(behavior_id)) throw new Error(`That is not one of this organization's current behaviors.`);
+  }
   for (const [behavior_id, score] of Object.entries(answers)) {
     db.pulse = db.pulse.filter((p) =>
-      !(p.behavior_id === behavior_id && p.user_id === me?.id && (p.round ?? 1) === round));
+      !(p.behavior_id === behavior_id && p.user_id === me.id && (p.round ?? 1) === round));
     db.pulse.push({
-      id: uid(), org_id: orgId, behavior_id, user_id: me?.id ?? null,
+      id: uid(), org_id: orgId, behavior_id, user_id: me.id,
       score: Number(score), round, created_at: now()
     });
   }
   persist();
+  return getPulseStatus(orgId);
 }
 
 /**
- * Where the round stands: how many members have rated everything, against
- * the 80% needed, and how many the signed-in person still has to rate.
+ * Where the round stands: how many active members have rated everything,
+ * against the share the organization set, and how many the signed-in person
+ * still has to rate.
  */
 export async function getPulseStatus(orgId) {
+  syncPulse(orgId);
   const round = currentRound(orgId);
-  const target = pulseTarget(orgId);
+  const members = pulseMembers(orgId).length;
   const done = finishedIn(orgId, round);
   const me = currentUser();
   return {
-    round, target, done, members: pulseMembers(orgId).length,
+    round, target: pulseTarget(orgId), done, scored: done, members,
     total: realBehaviors(orgId).length,
-    mine_left: me && !me.is_super ? myUnrated(orgId, round, me.id).length : 0,
-    scored: done
+    mine_left: answersPulse(me, orgId) ? myUnrated(orgId, round, me.id).length : 0,
+    pct: closePct(orgId),
+    answers: roundAnswers(orgId, round).length,
+    participation: members ? Math.round((100 * done) / members) : 0,
+    closed: closedRounds(orgId).length
   };
+}
+
+export async function setPulseClosePct(orgId, pct) {
+  requireEditor(orgId);
+  const n = Number(pct);
+  if (!Number.isInteger(n) || n < 10 || n > 100) throw new Error('Choose between 10% and 100%.');
+  db.orgs.find((o) => o.id === orgId).pulse_close_pct = n;
+  persist();
+  // Lowering it can close the round on the spot.
+  return getPulseStatus(orgId);
+}
+
+export async function closePulseRound(orgId) {
+  const me = requireEditor(orgId);
+  const round = currentRound(orgId);
+  if (!roundAnswers(orgId, round).length) throw new Error(`Round ${round} has no answers yet, so there is nothing to close.`);
+  db.pulseRounds.push({
+    org_id: orgId, round, closed_at: now(), reason: 'manual',
+    closed_by: me.id, closed_by_name: me.name,
+    finished: finishedIn(orgId, round), members: pulseMembers(orgId).length, close_pct: closePct(orgId)
+  });
+  persist();
+  return getPulseStatus(orgId);
+}
+
+/** Average and spread of a set of scores, as the database rounds them. */
+function scoreStats(scores) {
+  if (!scores.length) return { avg_score: null, spread: null };
+  const avg = scores.reduce((t, s) => t + s, 0) / scores.length;
+  const variance = scores.length > 1
+    ? scores.reduce((t, s) => t + (s - avg) ** 2, 0) / (scores.length - 1) : 0;
+  return { avg_score: avg.toFixed(2), spread: Math.sqrt(variance).toFixed(2) };
+}
+
+/** Every round, newest first: the open one, then each closed one with its date. */
+export async function listPulseRounds(orgId) {
+  requireLeader(orgId);
+  syncPulse(orgId);
+  const open = currentRound(orgId);
+  const row = (round, closed) => {
+    const answers = roundAnswers(orgId, round);
+    return {
+      round, is_open: !closed,
+      closed_at: closed?.closed_at ?? null, reason: closed?.reason ?? null,
+      closed_by_name: closed?.closed_by_name ?? null,
+      finished: closed ? closed.finished ?? null : finishedIn(orgId, round),
+      members: closed ? closed.members ?? null : pulseMembers(orgId).length,
+      close_pct: closed ? closed.close_pct ?? null : closePct(orgId),
+      raters: new Set(answers.map((p) => p.user_id)).size,
+      responses: answers.length,
+      ...scoreStats(answers.map((p) => p.score))
+    };
+  };
+  return [row(open, null), ...closedRounds(orgId).sort((a, b) => b.round - a.round).map((r) => row(r.round, r))];
 }
 
 /* ----------------------------------------------------------------- stories */
@@ -2195,17 +2315,15 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
 /* ------------------------------------------------------------- measurement */
 
 /** Real responses only. No responses means no score, which is the honest state. */
-export async function getPulse(orgId) {
-  return (db.behaviors[orgId] ?? []).map((b) => {
-    const own = db.pulse.filter((p) => p.behavior_id === b.id);
-    if (!own.length) {
-      return { behavior_id: b.id, org_id: orgId, number: b.number, title: b.title,
-        avg_score: null, spread: null, responses: 0 };
-    }
-    const avg = own.reduce((t, p) => t + p.score, 0) / own.length;
-    const variance = own.reduce((t, p) => t + (p.score - avg) ** 2, 0) / Math.max(1, own.length - 1);
-    return { behavior_id: b.id, org_id: orgId, number: b.number, title: b.title,
-      avg_score: avg.toFixed(2), spread: Math.sqrt(variance).toFixed(2), responses: own.length };
+/** Average and spread per behavior for one round; the open round when none is given. */
+export async function getPulse(orgId, round = null) {
+  requireLeader(orgId);
+  const r = round ?? currentRound(orgId);
+  const answers = roundAnswers(orgId, r);
+  return realBehaviors(orgId).map((b) => {
+    const own = answers.filter((p) => p.behavior_id === b.id);
+    return { behavior_id: b.id, number: b.number, title: b.title,
+      ...scoreStats(own.map((p) => p.score)), responses: own.length };
   });
 }
 

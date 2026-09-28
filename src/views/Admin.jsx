@@ -11,7 +11,7 @@ import {
   listBillingEvents, listAccessRequests, approveRequest, declineRequest,
   clearExampleContent, listOutbox, setAutoAdvance, IS_LOCAL,
   createTeam, setMemberTeam, saveAwardType, setOrgLogo, billingToday, setBotwCadence, setMemberActive, getPlatformPricing, setPlatformPricing,
-  resetLocalData, signOut
+  resetLocalData, signOut, getPulseStatus, setPulseClosePct, closePulseRound
 } from '../lib/api.js';
 import { ChampionBilling, SuperBilling } from './Billing.jsx';
 import { Rotation } from './Cadence.jsx';
@@ -564,6 +564,8 @@ export default function Admin({ ctx }) {
             </select>
             <p className="meta">How many {term.many} a person is asked to rate when they sign in.</p>
           </div>
+
+          <PulseRounds ctx={ctx} toast={toast} />
 
         </div>
       </section>
@@ -1274,6 +1276,83 @@ function AwardTypeForm({ award, values, onSave, onClose, toast }) {
  * What this organization calls its behaviors. Every screen takes its wording
  * from here: a portal set to Foundations says Foundations everywhere.
  */
+const CLOSE_PCTS = [10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 85, 90, 95, 100];
+
+/**
+ * When a pulse round closes: the share of active members who must rate every
+ * behavior, where participation stands now, and closing the round by hand.
+ * The database checks that only an admin does either.
+ */
+function PulseRounds({ ctx, toast }) {
+  const { org, term, refreshOrgs, refreshActivity } = ctx;
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = () => getPulseStatus(org.id).then(setSt).catch(() => setSt(null));
+  useEffect(() => { load(); }, [org.id]);
+
+  // After a change, say so if the round closed because of it.
+  const after = async (next, before, said) => {
+    setSt(next);
+    await refreshOrgs();
+    refreshActivity();
+    toast(next && before && next.round > before.round
+      ? `Round ${before.round} closed. Round ${next.round} is open.`
+      : said);
+  };
+
+  async function setPct(pct) {
+    setBusy(true);
+    try { await after(await setPulseClosePct(org.id, pct), st, `Rounds close at ${pct}%.`); }
+    catch (e) { toast(e.message); } finally { setBusy(false); }
+  }
+
+  async function closeNow() {
+    const ok = await confirmAction({
+      title: `Close round ${st.round} now?`,
+      body: `Its results are kept as they are, dated today, and round ${st.round + 1} opens. ` +
+        `Everyone is then asked about every ${term.one} again.`,
+      action: `Close round ${st.round}`
+    });
+    if (!ok) return;
+    setBusy(true);
+    try { await after(await closePulseRound(org.id), st, `Round ${st.round} closed.`); }
+    catch (e) { toast(e.message); } finally { setBusy(false); }
+  }
+
+  const pct = st?.pct ?? org.pulse_close_pct ?? 80;
+  return (
+    <div className="panel">
+      <label className="fl" htmlFor="pulseClose">Close a pulse round at</label>
+      <select id="pulseClose" className="field" value={pct} disabled={busy}
+        onChange={(e) => setPct(Number(e.target.value))}>
+        {!CLOSE_PCTS.includes(pct) && <option value={pct}>{pct}% of members</option>}
+        {CLOSE_PCTS.map((n) => <option key={n} value={n}>{n}% of members</option>)}
+      </select>
+      <p className="meta">
+        A round closes, and gets its date, once this share of active members have each rated
+        every {term.one}. Inactive members are not counted.
+      </p>
+      {!st ? null : !st.total ? (
+        <p className="meta">The pulse starts once your {term.many} are written.</p>
+      ) : (
+        <>
+          <p className="meta">
+            <b>Round {st.round} is open.</b> {st.done} of {st.members} active members ({st.participation}%)
+            have rated every {term.one}. It closes at {st.target} {st.target === 1 ? 'person' : 'people'}.
+          </p>
+          <div className="btnrow">
+            <button className="btn ghost small danger" onClick={closeNow} disabled={busy || !st.answers}
+              title={st.answers ? '' : 'Nothing has been answered in this round yet'}>
+              Close round {st.round} now
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function TermSetting({ ctx, toast }) {
   const { org, refreshOrgs, term } = ctx;
   const [one, setOne] = useState(org.behavior_label ?? '');

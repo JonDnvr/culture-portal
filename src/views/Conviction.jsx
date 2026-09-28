@@ -1,12 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import {
   getPulse, getCoverage, listMeasures, listMeasureEntries, recordMeasureEntry,
-  listIterations, getPulseStatus
+  listIterations, listPulseRounds
 } from '../lib/api.js';
 import { pad, N, NumList, PulseBar, CategoryBadge, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
 
 export default function Conviction({ ctx }) {
   const [tab, setTab] = useState('measures');
+  // Pulse rounds, newest first, and the one the score tabs show. The open
+  // round when nothing is picked.
+  const [rounds, setRounds] = useState([]);
+  const [roundNo, setRoundNo] = useState(null);
+  useEffect(() => {
+    listPulseRounds(ctx.org.id).then(setRounds).catch(() => setRounds([]));
+  }, [ctx.org.id]);
+  const round = rounds.find((r) => r.round === roundNo) ?? rounds[0] ?? null;
+  const pick = { rounds, round, onPick: setRoundNo };
+
   return (
     <>
       <div className="dateline">Does it hold when it costs something?</div>
@@ -16,15 +26,87 @@ export default function Conviction({ ctx }) {
         <button className="tab" aria-pressed={tab === 'measures'} onClick={() => setTab('measures')}>Measures</button>
         <button className="tab" aria-pressed={tab === 'summary'} onClick={() => setTab('summary')}>Summary ratings</button>
         <button className="tab" aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>Detail scores</button>
+        <button className="tab" aria-pressed={tab === 'rounds'} onClick={() => setTab('rounds')}>Pulse rounds</button>
         <button className="tab" aria-pressed={tab === 'rhythm'} onClick={() => setTab('rhythm')}>Rhythm iterations</button>
         <button className="tab" aria-pressed={tab === 'coverage'} onClick={() => setTab('coverage')}>Coverage</button>
       </div>
       {tab === 'measures' && <Measures ctx={ctx} />}
-      {tab === 'summary' && <Summary ctx={ctx} />}
-      {tab === 'detail' && <DetailScores ctx={ctx} />}
+      {tab === 'summary' && <Summary ctx={ctx} {...pick} />}
+      {tab === 'detail' && <DetailScores ctx={ctx} {...pick} />}
+      {tab === 'rounds' && <PulseRounds ctx={ctx} rounds={rounds}
+        onOpen={(n) => { setRoundNo(n); setTab('detail'); }} />}
       {tab === 'rhythm' && <RhythmIterations ctx={ctx} />}
       {tab === 'coverage' && <Coverage ctx={ctx} />}
     </>
+  );
+}
+
+/* ------------------------------------------------------------- pulse rounds */
+
+const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const roundLabel = (r) => (r.is_open ? `Round ${r.round}, open now` : `Round ${r.round}, closed ${day(r.closed_at)}`);
+
+/** Which round the scores below are for. */
+function RoundPicker({ rounds, round, onPick }) {
+  if (!round) return null;
+  return (
+    <div className="btnrow" style={{ marginBottom: 12 }}>
+      <label className="fl" htmlFor="roundPick" style={{ margin: 0 }}>Showing</label>
+      <select id="roundPick" className="field" style={{ width: 'auto' }} value={round.round}
+        onChange={(e) => onPick(Number(e.target.value))}>
+        {rounds.map((r) => <option key={r.round} value={r.round}>{roundLabel(r)}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** How a round ended, in a few words. */
+function howClosed(r) {
+  if (r.is_open) return 'Open';
+  if (r.reason === 'manual') return `Closed by ${r.closed_by_name ?? 'an admin'}`;
+  return r.close_pct ? `Reached ${r.close_pct}%` : 'Reached the target';
+}
+
+/** Participation: people who rated everything, of the active members then. */
+const participation = (r) => (r.finished != null && r.members
+  ? `${r.finished} of ${r.members} (${Math.round((100 * r.finished) / r.members)}%)` : '—');
+
+/** Every round, open and closed, with what came in. */
+function PulseRounds({ ctx, rounds, onOpen }) {
+  if (!rounds.length) return <section><div className="empty">No pulse rounds yet.</div></section>;
+  return (
+    <section>
+      <div className="sectionhead">
+        <h2>Pulse rounds</h2>
+        <span className="note">A round is dated when it closes. Open one to see its scores.</span>
+      </div>
+      <div className="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Round</th><th>Closed</th><th>How</th>
+              <th>Rated every {ctx.term.one}</th><th>People who answered</th><th>Answers</th>
+              <th>Average</th><th>Spread</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rounds.map((r) => (
+              <tr key={r.round}>
+                <td className="name">Round {r.round}</td>
+                <td>{r.is_open ? <Tag>open now</Tag> : day(r.closed_at)}</td>
+                <td className="meta">{howClosed(r)}</td>
+                <td>{participation(r)}</td>
+                <td>{r.raters}</td>
+                <td>{r.responses}</td>
+                <td>{r.avg_score != null ? Number(r.avg_score).toFixed(1) : '—'}</td>
+                <td>{r.spread != null && r.responses ? Number(r.spread).toFixed(1) : '—'}</td>
+                <td><button className="btn ghost small" onClick={() => onOpen(r.round)} disabled={!r.responses}>See scores</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -131,15 +213,14 @@ function RecordPeriod({ measures, onSave, onClose, toast }) {
 
 /* --------------------------------------------------------- summary ratings */
 
-function Summary({ ctx }) {
-  const { org, behaviors, values, categories } = ctx;
+function Summary({ ctx, rounds, round, onPick }) {
+  const { org, behaviors, values, categories, term } = ctx;
   const [pulse, setPulse] = useState([]);
-  const [status, setStatus] = useState(null);
 
   useEffect(() => {
-    getPulse(org.id).then(setPulse).catch(() => setPulse([]));
-    getPulseStatus(org.id).then(setStatus).catch(() => setStatus(null));
-  }, [org.id]);
+    if (!round) return;
+    getPulse(org.id, round.round).then(setPulse).catch(() => setPulse([]));
+  }, [org.id, round?.round]);
 
   const scored = pulse.filter((p) => p.responses > 0);
   const avg = scored.length
@@ -152,8 +233,20 @@ function Summary({ ctx }) {
     return (rows.reduce((s, r) => s + Number(r.avg_score), 0) / rows.length).toFixed(1);
   };
 
+  // People who rated every behavior, against the active members: for the open
+  // round, now; for a closed one, when it closed. Rounds closed before that
+  // was recorded show how many people answered instead.
+  const known = round && round.finished != null && round.members;
+  const people = !round ? null : known
+    ? { n: `${round.finished}/${round.members}`,
+        l: round.is_open
+          ? `People have rated every ${term.one} in round ${round.round}. It closes at ${round.close_pct}%.`
+          : `People had rated every ${term.one} when round ${round.round} closed` }
+    : { n: String(round.raters), l: `People answered in round ${round.round}` };
+
   return (
     <>
+      <RoundPicker rounds={rounds} round={round} onPick={onPick} />
       <section>
         <div className="metrics">
           <div className="metric"><div className="n">{avg ?? '—'}</div><div className="l">Average, out of 5</div></div>
@@ -162,8 +255,8 @@ function Summary({ ctx }) {
             <div className="l">{widest ? <>Widest split: <N n={widest.number} /> {widest.title}</> : 'No responses yet'}</div>
           </div>
           <div className="metric">
-            <div className="n">{status ? `${status.scored}/${status.total}` : '—'}</div>
-            <div className="l">{status ? `${ctx.term.Many} covered in round ${status.round}, target ${status.target} responses each` : 'Pulse not started'}</div>
+            <div className="n">{people?.n ?? '—'}</div>
+            <div className="l">{people?.l ?? 'Pulse not started'}</div>
           </div>
         </div>
       </section>
@@ -217,18 +310,23 @@ function Summary({ ctx }) {
 
 /* ----------------------------------------------------------- detail scores */
 
-function DetailScores({ ctx }) {
-  const { org, openBehavior } = ctx;
+function DetailScores({ ctx, rounds, round, onPick }) {
+  const { org, openBehavior, term } = ctx;
   const [pulse, setPulse] = useState([]);
-  useEffect(() => { getPulse(org.id).then(setPulse).catch(() => setPulse([])); }, [org.id]);
+  useEffect(() => {
+    if (!round) return;
+    getPulse(org.id, round.round).then(setPulse).catch(() => setPulse([]));
+  }, [org.id, round?.round]);
 
   const scored = pulse.filter((p) => p.responses > 0).sort((a, b) => a.avg_score - b.avg_score);
   const unscored = pulse.filter((p) => !p.responses);
+  const perSignin = org.pulse_per_signin ?? 2;
 
   return (
     <section>
+      <RoundPicker rounds={rounds} round={round} onPick={onPick} />
       <div className="sectionhead">
-        <h2>{ctx.term.One} pulse</h2>
+        <h2>{term.One} pulse</h2>
         <span className="note">The gold band is the spread of answers, not the average</span>
       </div>
       {scored.length ? scored.map((p) => (
@@ -243,14 +341,16 @@ function DetailScores({ ctx }) {
         </div>
       )) : (
         <div className="empty">
-          No responses yet. Each person is asked about two {ctx.term.many} when they sign in, so the
-          first numbers arrive as people come through.
+          {round && !round.is_open
+            ? `No responses in round ${round.round}.`
+            : `No responses yet. Each person is asked about ${term.count(perSignin)} when they sign in, so the
+               first numbers arrive as people come through.`}
         </div>
       )}
 
-      {unscored.length > 0 && (
+      {unscored.length > 0 && scored.length > 0 && (
         <div className="notice">
-          Not yet scored this round: <NumList items={unscored} />.
+          {round && !round.is_open ? `Not scored in round ${round.round}` : 'Not yet scored this round'}: <NumList items={unscored} />.
         </div>
       )}
     </section>

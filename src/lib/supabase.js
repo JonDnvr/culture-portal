@@ -39,9 +39,26 @@ export async function signIn(email, password) {
   return data.user;
 }
 
-export async function changeOwnPassword(_current, next) {
+/**
+ * Supabase would change the password on the session alone, so someone at an
+ * unlocked screen could take the account. Signing in again with the current
+ * password proves it first, goes through Supabase's own rate limit, and gives
+ * a fresh session, which "Secure password change" in the project settings wants.
+ */
+export async function changeOwnPassword(current, next) {
+  if (!next || next.length < 8) throw new Error('Use at least eight characters.');
+  const { data: { session } } = await supabase.auth.getSession();
+  const email = session?.user?.email;
+  if (!email) throw new Error('Not signed in.');
+
+  const { error: wrong } = await supabase.auth.signInWithPassword({ email, password: current ?? '' });
+  if (wrong) throw new Error('Current password is wrong.');
+
   const { error } = await supabase.auth.updateUser({ password: next });
-  if (error) throw error;
+  if (!error) return;
+  if (error.code === 'same_password') throw new Error('Choose a password different from the current one.');
+  if (error.code === 'weak_password') throw new Error(`That password is too weak. ${error.message}`);
+  throw error;
 }
 
 export async function signOut() {
@@ -581,8 +598,9 @@ export async function recordMeasureEntry(orgId, { period, values }) {
 
 /* ------------------------------------------------------------------- pulse */
 
-export async function getPulseAssignment(orgId) {
-  const { data, error } = await supabase.rpc('pulse_assignment', { p_org: orgId });
+/** A few behaviors to rate now, or with { all: true } every one left this round. */
+export async function getPulseAssignment(orgId, { all = false } = {}) {
+  const { data, error } = await supabase.rpc('pulse_assignment', { p_org: orgId, p_all: all });
   if (error) throw error;
   return data;
 }
@@ -593,15 +611,36 @@ export async function getPulseStatus(orgId) {
   return data;
 }
 
+/**
+ * The database picks the round and checks each behavior, so the browser only
+ * says which behaviors and what score. Returns where the pulse stands after.
+ */
 export async function submitPulse(orgId, answers) {
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data: status } = await supabase.rpc('pulse_status', { p_org: orgId });
-  const rows = Object.entries(answers).map(([behavior_id, score]) => ({
-    org_id: orgId, behavior_id, user_id: user.id, score: Number(score), round: status?.round ?? 1
-  }));
-  const { error } = await supabase
-    .from('pulse_responses').upsert(rows, { onConflict: 'round,behavior_id,user_id' });
+  const scores = Object.fromEntries(Object.entries(answers).map(([id, s]) => [id, Number(s)]));
+  const { data, error } = await supabase.rpc('submit_pulse', { p_org: orgId, p_answers: scores });
   if (error) throw error;
+  return data;
+}
+
+/** Admins: the share of active members who must rate everything to close a round. */
+export async function setPulseClosePct(orgId, pct) {
+  const { data, error } = await supabase.rpc('set_pulse_close_pct', { p_org: orgId, p_pct: pct });
+  if (error) throw error;
+  return data;
+}
+
+/** Admins: close the open round now, with the answers it has. */
+export async function closePulseRound(orgId) {
+  const { data, error } = await supabase.rpc('close_pulse_round', { p_org: orgId });
+  if (error) throw error;
+  return data;
+}
+
+/** Every round, newest first: the open one, then each closed one with its date. */
+export async function listPulseRounds(orgId) {
+  const { data, error } = await supabase.rpc('pulse_round_history', { p_org: orgId });
+  if (error) throw error;
+  return data ?? [];
 }
 
 /* -------------------------------------------- bulk apply and reordering */
@@ -1037,14 +1076,11 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
 
 /* ------------------------------------------------------------- measurement */
 
-export async function getPulse(orgId) {
-  const { data, error } = await supabase
-    .from('behavior_pulse')
-    .select('*')
-    .eq('org_id', orgId)
-    .order('avg_score');
+/** Average and spread per behavior for one round; the open round when none is given. */
+export async function getPulse(orgId, round = null) {
+  const { data, error } = await supabase.rpc('pulse_results', { p_org: orgId, p_round: round });
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
 export async function getCoverage(orgId) {

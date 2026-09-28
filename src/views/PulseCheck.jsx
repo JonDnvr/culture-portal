@@ -64,12 +64,13 @@ function scaleFor(term) {
  * page, clearly labelled, and can be dismissed for the session. How many
  * behaviors appear is set by an administrator.
  */
-export default function PulseCheck({ ctx, ask = 0 }) {
+export default function PulseCheck({ ctx, ask = { n: 0, all: false } }) {
   const { org, reload, term } = ctx;
   const SCALE = scaleFor(term);
   const [assignment, setAssignment] = useState(null);
   const [answers, setAnswers] = useState({});
   const [guide, setGuide] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     try { return sessionStorage.getItem(`pulse-skip-${org.id}`) === '1'; } catch { return false; }
   });
@@ -79,12 +80,12 @@ export default function PulseCheck({ ctx, ask = 0 }) {
     getPulseAssignment(org.id).then(setAssignment).catch(() => setAssignment(null));
   }, [org.id]);
 
-  // "Rate now" from the home page: bring the pulse back with fresh questions,
-  // even if it was dismissed earlier in this session.
+  // "Rate now" or "Rate what's left" from the home page: bring the pulse back
+  // with fresh questions, even if it was dismissed earlier in this session.
   useEffect(() => {
-    if (!ask) return;
+    if (!ask.n) return;
     setAnswers({});
-    getPulseAssignment(org.id).then((a) => {
+    getPulseAssignment(org.id, { all: ask.all }).then((a) => {
       setAssignment(a);
       if (!a?.behaviors?.length) {
         toast(a?.waiting
@@ -95,25 +96,38 @@ export default function PulseCheck({ ctx, ask = 0 }) {
       setDismissed(false);
       try { sessionStorage.removeItem(`pulse-skip-${org.id}`); } catch { /* fine */ }
     }).catch((e) => toast(e.message));
-  }, [ask]);
+  }, [ask.n]);
 
   // Nothing to ask about until the organization has written its own behaviors.
   if (dismissed || assignment?.waiting || !assignment?.behaviors?.length) return null;
 
+  const shown = assignment.behaviors.length;
   const done = assignment.behaviors.every((b) => answers[b.id]);
+  const moreLeft = (assignment.mine_left ?? shown) > shown;
+  const seconds = shown * 15;
+  const howLong = seconds < 60 ? 'about 30 seconds' : `about ${Math.ceil(seconds / 60)} minutes`;
 
   function skip() {
     setDismissed(true);
     try { sessionStorage.setItem(`pulse-skip-${org.id}`, '1'); } catch { /* fine */ }
   }
 
+  /** Every behavior left this round, keeping any answers already picked. */
+  async function rateAll() {
+    try { setAssignment(await getPulseAssignment(org.id, { all: true })); }
+    catch (e) { toast(e.message); }
+  }
+
   async function save() {
+    setBusy(true);
     try {
-      await submitPulse(org.id, answers);
-      toast(`Thank you. That is ${term.count(assignment.behaviors.length)} more covered.`);
+      const after = await submitPulse(org.id, answers);
+      toast(after && after.round > assignment.round
+        ? `Thank you. That finished round ${assignment.round}, and round ${after.round} is open.`
+        : `Thank you. That is ${term.count(shown)} more covered.`);
       setDismissed(true);
       reload();
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
   return (
@@ -122,7 +136,7 @@ export default function PulseCheck({ ctx, ask = 0 }) {
         <div className="pulsebar">
           <span className="pulsetag">Quick pulse</span>
           <span className="meta">
-            Round {assignment.round} &nbsp;/&nbsp; {term.count(assignment.behaviors.length)}, about 30 seconds
+            Round {assignment.round} &nbsp;/&nbsp; {term.count(shown)}, {howLong}
           </span>
           <button className="linkbtn" onClick={skip}>Dismiss</button>
         </div>
@@ -151,7 +165,12 @@ export default function PulseCheck({ ctx, ask = 0 }) {
         ))}
 
         <div className="btnrow">
-          <button className="btn" onClick={save} disabled={!done}>Submit</button>
+          <button className="btn" onClick={save} disabled={!done || busy}>{busy ? 'Saving…' : 'Submit'}</button>
+          {moreLeft && (
+            <button className="btn ghost" onClick={rateAll}>
+              Rate what's left ({assignment.mine_left})
+            </button>
+          )}
           <button className="btn ghost" onClick={skip}>Not now</button>
         </div>
       </div>

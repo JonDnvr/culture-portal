@@ -251,7 +251,7 @@ function GroupWall({ ctx, team, setModal }) {
             onClick={() => setModal({ kind: 'info', title: 'Survey cadence', kicker: 'Conviction',
               art: <CairnDone size={56} rounds={d.cairn.completed} />,
               status: `${d.cairn.completed} round${d.cairn.completed === 1 ? '' : 's'} complete · round ${d.cairn.round} under way`,
-              how: `A pulse round is complete when 80% of the organization's members have each rated every ${ctx.term.one}. The cairn on the home page fills from the bottom as people finish; each finished round adds one to the number on the base stone.` })} />
+              how: `A pulse round is complete when ${d.cairn.pct}% of the organization's active members have each rated every ${ctx.term.one}, or when an admin closes it. The cairn on the home page fills from the bottom as people finish; each finished round adds one to the number on the base stone.` })} />
         )}
         {!team && d.gap.earned && (
           <Trophy art={<Medal size={44} solid><Converge size={22} /></Medal>} kicker="Trust view"

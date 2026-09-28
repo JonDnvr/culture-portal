@@ -13,7 +13,7 @@ doing the enforcing. `src/lib/api.js` picks between them based on whether
 The front end is Vite and React, so it also runs as-is in Bolt, StackBlitz, Vercel or
 Netlify.
 
-Updating the live portal from R3 to R4 is in **DEPLOYMENT.md**. Setting up from nothing, written for someone who has not used these tools before, is in **DEPLOYMENT-FIRST-TIME.md**.
+Updating the live portal from R4 to R5 is in **DEPLOY-R5.md** (R3 to R4 is in **DEPLOYMENT.md**). Setting up from nothing, written for someone who has not used these tools before, is in **DEPLOYMENT-FIRST-TIME.md**.
 
 ## Three ways in
 
@@ -40,7 +40,7 @@ organization's data. Roles are assigned by an administrator; nobody chooses thei
 |---|---|
 | Member | Read everything, post recognition and stories, share a story, answer the pulse |
 | Leader | The above, plus log rituals and see Conviction |
-| Admin | The above, plus edit content, manage people, and choose the plan. Several people can hold it. |
+| Admin | The above, plus edit content, manage people, set and close pulse rounds, and choose the plan. Several people can hold it. |
 | Culture champion | Admin rights, plus the one seat that survives a lapsed subscription. Exactly one per organization, enforced by a unique index. |
 | Super user | Every organization: create organizations, create users at any role, edit any content |
 
@@ -98,7 +98,7 @@ file after a change:
 **Local mode limits.** Data lives in this one browser's localStorage, roughly 5 MB, so
 attachments over 2 MB are recorded by name without their contents. Sharing a story
 opens your own mail client with the message written, since there is no server to send
-from. Pulse scores are sample values until a real cycle runs. Nothing is shared between
+from. The seeded pulse history is sample answers until people rate for real. Nothing is shared between
 people, and the tenant separation is enforced by the app rather than by a server; that
 is what hosted mode is for.
 
@@ -151,7 +151,14 @@ src/
    ```
 
    The account list is `scripts/seed-users.json`. The super user is created once and
-   added to `platform_admins`; everyone else gets one membership row.
+   added to `platform_admins`; everyone else gets one membership row, and an optional
+   `"team"` puts them on one of the organization's teams.
+
+   For a sample organization, add `--with-activity` to also write a history: runs of
+   rituals and systems, stories, recognition and awards given, dated in days before
+   today so it always looks recent. The format is at the top of `scripts/seed.mjs`,
+   and the script checks every reference in the data before it writes anything. Leave
+   the flag off for a client's real organization.
 
 4. **Deploy the functions.**
 
@@ -194,6 +201,12 @@ src/
 - Only a platform admin can insert an organization.
 - Storage keys are `{org_id}/{story_id}/{filename}` and the bucket policies read the
   first path segment, so attachments are separated the same way rows are.
+- Views are created with `security_invoker = true`, so they read through the caller's
+  row level security like a table does. A view without it runs as its owner and skips
+  RLS, which would show every organization's rows to anyone signed in.
+- Some writes are allowed only through a function that checks them, with no insert
+  policy on the table: pulse answers go through `submit_pulse`, and closed rounds are
+  written only by the pulse functions.
 
 ## Data model notes
 
@@ -209,9 +222,13 @@ src/
   and a placement template: the template belongs to one placement, the practice belongs
   to the ritual.
 - **`behavior_coverage`** flags any behavior reinforced in fewer than two systems.
-  **`behavior_pulse`** returns average and standard deviation per behavior; the spread
-  is the diagnostic, since it shows people living in different versions of the same
-  organization.
+  **`pulse_results`** returns average and standard deviation per behavior for one pulse
+  round; the spread is the diagnostic, since it shows people living in different versions
+  of the same organization. (`behavior_pulse`, the same across every round, is kept for
+  older queries.)
+- **Pulse rounds are dated when they close.** `pulse_rounds` has a row per closed round,
+  with the date, whether participation or an admin closed it, and participation at that
+  moment. The open round is the one after the last row.
 
 ## Story attachments
 
@@ -251,12 +268,26 @@ Rather than a survey, each person is asked about a few behaviors when they sign 
 as an add-on above the page and dismissible for the session. How many appear is set in
 Admin, one to five. The prompt asks how well the behavior drives the culture, on a five
 point scale from Rarely to Exemplary, with the full rubric behind a link. The rotation
-hands out the least-answered behaviors the person has not scored yet. Example content is
-never rated, and a new portal is not asked anything until it has written a behavior of its
-own. A round
-closes once every behavior has been scored by a quarter of the organization, and the
-next round opens. In hosted mode this lives in two Postgres functions, `pulse_status`
-and `pulse_assignment`, so the rotation cannot be gamed from the browser.
+hands out the least-answered behaviors the person has not scored yet. "Rate what's left",
+at the foot of the pulse and on the home page, puts every behavior the person has not yet
+rated this round in front of them at once. Example content is never rated, and a new
+portal is not asked anything until it has written a behavior of its own.
+
+**Rounds.** A round closes when a set share of the organization's active members have
+each rated every behavior: 80% unless an admin changes it in Admin, Settings, which also
+shows where participation stands. An admin can also close the open round by hand. A round
+is dated only when it closes, and the next round opens at once. Inactive members, over a
+plan's seat limit, are not counted.
+
+**Reports.** Conviction's Summary ratings and Detail scores show one round at a time,
+the open one unless another is picked, and the Pulse rounds tab lists every round with
+when and how it closed, participation, and the average and spread of its answers.
+
+In hosted mode all of this lives in Postgres functions (`pulse_status`, `pulse_assignment`,
+`submit_pulse`, `close_pulse_round`, `set_pulse_close_pct`, `pulse_results`,
+`pulse_round_history`). Answers go in only through `submit_pulse`, which picks the round
+itself and checks each behavior, so the rotation and the rounds cannot be gamed from the
+browser. Closing a round and changing the share are checked for an admin there too.
 
 ## Billing
 
@@ -303,7 +334,8 @@ A culture champion has full editorial control of their own organization:
 - **Measures**: defined in Admin. Recording a value for a period is separate, done from
   Conviction, so definitions stay stable while values accumulate
 - **Settings** in Admin: what counts as recent, how many behaviors the quick pulse asks
-  about per sign-in, and the highlight color, which can be changed at any time
+  about per sign-in, the participation that closes a pulse round (with a button to close
+  the open round now), and the highlight color, which can be changed at any time
 - **People**: add, assign roles, reset passwords, remove
 
 The super user does all of that in any organization, plus creating organizations and
@@ -311,11 +343,9 @@ assigning the super user role.
 
 ## What is not built yet
 
-- Pulse cycle scheduling and the response form (the tables and the view exist)
 - The weekly email, which wants a scheduled function on the same pattern as `share-story`
 - Printable cards as PDF
 - Reminders when a ritual has not been run within its own cadence
 - Email invitations, so a new person sets their own password instead of being handed one
 - Dunning emails when a payment fails
-- Self-service password change from inside the app (the function exists in `api.js`)
 - Cloning an organization's behavior set as a template for a new client

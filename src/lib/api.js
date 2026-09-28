@@ -127,6 +127,9 @@ export const getRitual = (...a) => impl.getRitual(...a);
 /* pulse rotation */
 export const getPulseAssignment = (...a) => impl.getPulseAssignment(...a);
 export const getPulseStatus = (...a) => impl.getPulseStatus(...a);
+export const setPulseClosePct = (...a) => impl.setPulseClosePct(...a);
+export const closePulseRound = (...a) => impl.closePulseRound(...a);
+export const listPulseRounds = (...a) => impl.listPulseRounds(...a);
 export const createValue = (...a) => impl.createValue(...a);
 export const updateValue = (...a) => impl.updateValue(...a);
 export const deleteValue = (...a) => impl.deleteValue(...a);

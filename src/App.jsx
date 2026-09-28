@@ -14,7 +14,7 @@ import {
   getPulseStatus, getPulseSpreadByRound,
   resetLocalData, ARRIVED_FROM_RESET, onPasswordRecovery
 } from './lib/api.js';
-import ProfileDialog from './views/Profile.jsx';
+import ProfileDialog, { ChangePasswordDialog } from './views/Profile.jsx';
 import { Avatar, ConfirmHost, confirmAction, OrgMark, Modal, useToast, TagActionsHost } from './components/ui.jsx';
 import { DraftsDialog, draftCount } from './views/RecordEditor.jsx';
 import { NavIcon } from './components/badges.jsx';
@@ -104,12 +104,14 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [draftsOpen, setDraftsOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   // What the browser's Back button should do, read fresh on every press.
   const navRef = useRef(null);
   // On every screen, signed in or not: Back never leaves the portal without asking.
   useBackGuard(true, navRef);
-  // Bumped by "Rate now" to bring the pulse back even after it was dismissed.
-  const [pulseAsk, setPulseAsk] = useState(0);
+  // Bumped by "Rate now" to bring the pulse back even after it was dismissed;
+  // `all` asks for every behavior the person has left this round.
+  const [pulseAsk, setPulseAsk] = useState({ n: 0, all: false });
 
   useEffect(() => {
     getSession().then(setSession);
@@ -240,7 +242,7 @@ function App() {
 
   const ctx = {
     org, role, isSuper, ...data, reload: load, refreshActivity, term,
-    openPulse: () => { setPulseAsk((n) => n + 1); window.scrollTo(0, 0); },
+    openPulse: (opts) => { setPulseAsk((a) => ({ n: a.n + 1, all: !!opts?.all })); window.scrollTo(0, 0); },
     userId, me, myTeamId: me?.team_id ?? null,
     openBehavior: (id) => {
       setHistory((h) => [...h, { view, behaviorId, detail }]);
@@ -310,7 +312,8 @@ function App() {
             </button>
           ))}
           <MeMenu ctx={ctx} me={me} orgs={orgs} draftCount={count}
-            onPicture={() => setProfileOpen(true)} onDrafts={() => setDraftsOpen(true)} onEmail={() => setEmailOpen(true)} />
+            onPicture={() => setProfileOpen(true)} onDrafts={() => setDraftsOpen(true)} onEmail={() => setEmailOpen(true)}
+            onPassword={() => setPasswordOpen(true)} />
         </div>
       </header>
       <div className="frame">
@@ -344,6 +347,7 @@ function App() {
       {profileOpen && <ProfileDialog ctx={ctx} onClose={() => setProfileOpen(false)} />}
       {draftsOpen && <DraftsDialog ctx={ctx} onClose={() => setDraftsOpen(false)} />}
       {emailOpen && <EmailPrefs onClose={() => setEmailOpen(false)} />}
+      {passwordOpen && <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />}
       <ConfirmHost />
       <TagActionsHost ctx={ctx} />
     </div>
@@ -358,7 +362,7 @@ const drafts = (rows) => (rows ?? []).filter((r) => r.is_draft);
  * You, in the header: your picture, then a short menu. The organization
  * switcher lives here for the super admin.
  */
-function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts, onEmail }) {
+function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts, onEmail, onPassword }) {
   const [open, setOpen] = useState(false);
   const box = useRef(null);
   const { org, isSuper } = ctx;
@@ -378,7 +382,7 @@ function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts, onEmail }) {
   return (
     <div className="memenu" ref={box}>
       <button className="topbtn mebtn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}
-        title="Your picture, drafts and sign out">
+        title="Your picture, password, drafts and sign out">
         <Avatar person={me} name={org.displayName} size={28} />
         <span className="tlabel">{first}</span>
         {draftCount > 0 && <span className="countchip" aria-label={`${draftCount} drafts`}>{draftCount}</span>}
@@ -387,6 +391,7 @@ function MeMenu({ ctx, me, orgs, draftCount, onPicture, onDrafts, onEmail }) {
         <div className="menupop" role="menu">
           <div className="menuhead">{org.displayName}</div>
           <button className="mi" role="menuitem" onClick={act(onPicture)}>Change picture</button>
+          <button className="mi" role="menuitem" onClick={act(onPassword)}>Change password</button>
           <button className="mi" role="menuitem" onClick={act(onEmail)}>Email preferences</button>
           <button className="mi" role="menuitem" onClick={act(onDrafts)}>
             Your drafts{draftCount ? ` (${draftCount})` : ''}

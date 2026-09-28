@@ -322,12 +322,14 @@ export function fullSet(behaviors, iterations, sessionId, scope) {
  * are quarters of that target; a full cairn marks a finished round.
  */
 export function cairnFor(status) {
-  if (!status || !status.total) return { round: status?.round ?? 1, completed: 0, filled: 0, done: 0, target: 0, total: 0, mineLeft: 0 };
-  const completed = Math.max(0, (status.round ?? 1) - 1);
+  const pct = status?.pct ?? 80;
+  if (!status || !status.total) return { round: status?.round ?? 1, completed: 0, filled: 0, done: 0, target: 0, total: 0, mineLeft: 0, pct };
+  // Rounds closed on record; older backends only knew the round number.
+  const completed = status.closed ?? Math.max(0, (status.round ?? 1) - 1);
   const done = status.done ?? status.scored ?? 0;
   const target = status.target || 1;
   return {
-    round: status.round, completed,
+    round: status.round, completed, pct,
     filled: Math.min(4, Math.floor((4 * done) / target)),
     done, target, members: status.members ?? target, total: status.total,
     mineLeft: status.mine_left ?? 0,
