@@ -870,7 +870,7 @@ export async function setOrgLogo(orgId, file) {
   if (file.size > 1024 * 1024) throw new Error('Keep the logo under 1 MB.');
   const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
   const path = `${orgId}/logo-${Date.now()}.${ext}`;
-  const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: true, contentType: file.type });
+  const { error: upErr } = await supabase.storage.from('logos').upload(path, file, { upsert: false, contentType: file.type, cacheControl: '31536000' });
   if (upErr) throw upErr;
   const { data } = supabase.storage.from('logos').getPublicUrl(path);
   const { error } = await supabase.from('organizations').update({ logo_url: data.publicUrl }).eq('id', orgId);

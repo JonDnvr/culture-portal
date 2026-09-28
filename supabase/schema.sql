@@ -1763,6 +1763,11 @@ insert into storage.buckets (id, name, public)
 values ('logos', 'logos', true)
 on conflict (id) do nothing;
 
+drop policy if exists "anyone reads logos" on storage.objects;
+
+create policy "anyone reads logos" on storage.objects for select
+  using (bucket_id = 'logos');
+
 drop policy if exists "editors upload logo" on storage.objects;
 
 create policy "editors upload logo" on storage.objects for insert
@@ -1771,7 +1776,8 @@ create policy "editors upload logo" on storage.objects for insert
 drop policy if exists "editors replace logo" on storage.objects;
 
 create policy "editors replace logo" on storage.objects for update
-  using (bucket_id = 'logos' and can_edit(((storage.foldername(name))[1])::uuid));
+  using (bucket_id = 'logos' and can_edit(((storage.foldername(name))[1])::uuid))
+  with check (bucket_id = 'logos' and can_edit(((storage.foldername(name))[1])::uuid));
 
 drop policy if exists "editors delete logo" on storage.objects;
 

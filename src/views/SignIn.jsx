@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import stone from '../assets/horizon-stone.webp';
 import hlgLogo from '../assets/hlg-logo.webp';
+import { PasswordInput } from '../components/ui.jsx';
 import { TRIAL_DAYS, DEFAULT_RATES, money } from '../lib/billing.js';
 import {
   signIn, signOut, createPortal, requestAccess, requestPasswordReset, resetPassword,
@@ -47,13 +48,13 @@ export default function SignIn() {
 
       <div className="hlg-grid">
         <section className="hlg-pitch" aria-labelledby="hlg-h1">
-          <div className="hlg-hero" style={{ backgroundImage: `url(${stone})` }} role="img"
-            aria-label="A stone with a single white line across it, the sea behind." />
+          <img className="hlg-hero" src={stone} width="1400" height="283"
+            alt="A stone with a single white line across it, the sea behind." />
           <h1 id="hlg-h1" className="hlg-h1">Your culture, practiced regularly.</h1>
           <p className="hlg-lede">
             Most culture lives on a wall. The Culture Portal turns your values into defined behaviors
-            people can name, practice together, and recognize in each other, with a clear read on
-            whether it is holding.
+            people can name, practice together, and recognize in each other, with a read on
+            what's working. A couple of minutes a week is enough.
           </p>
 
           <div className="hlg-trial">
@@ -79,13 +80,13 @@ export default function SignIn() {
               good visible. Fluency tracking, and awards keep people engaged.</li>
             <li><strong>Conviction</strong> Ratings, measures, coverage gaps and team streaks show
               where culture is strong and where it is thin.</li>
-            <li><strong>Engagement</strong> Email with practice prompts, and printable handouts bring
+            <li><strong>Engagement</strong> Emails with practice prompts, and printable handouts bring
               culture outside the portal.</li>
           </ul>
 
           <p className="hlg-members">
             <strong>Already part of a portal?</strong> Sign in with the account set up for you or
-            request access from your company. A couple of minutes a week is enough.
+            request access from your company.
           </p>
         </section>
 
@@ -156,7 +157,7 @@ function SignInForm({ onForgot }) {
         <Field label="Email" autoComplete="username" value={email}
           onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
         <label className="fl">Password</label>
-        <input type="password" autoComplete="current-password" value={password}
+        <PasswordInput autoComplete="current-password" value={password}
           onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
         <div className="btnrow">
           <button className="btn" onClick={submit} disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
@@ -205,10 +206,10 @@ function CreatePortal() {
         </p>
 
         <Field label="Organization name" value={f.orgName} onChange={set('orgName')} />
-        <Field label="Your name" hint="Who's the Culture Champion." value={f.championName} onChange={set('championName')} />
+        <Field label="Your name" value={f.championName} onChange={set('championName')} />
         <Field label="Your email" autoComplete="username" value={f.championEmail} onChange={set('championEmail')} />
         <label className="fl">Choose a password</label>
-        <input type="password" autoComplete="new-password" value={f.password} onChange={set('password')} />
+        <PasswordInput autoComplete="new-password" value={f.password} onChange={set('password')} />
         <p className="meta">At least eight characters.</p>
         <div className="btnrow">
           <button className="btn hlg-gold" onClick={submit} disabled={busy}>
@@ -276,7 +277,7 @@ function RequestAccess({ onDone }) {
             placeholder="Type the name as your champion gave it to you" />
         )}
         <label className="fl">Choose a password</label>
-        <input type="password" autoComplete="new-password" value={f.password} onChange={set('password')} />
+        <PasswordInput autoComplete="new-password" value={f.password} onChange={set('password')} />
         <p className="meta">It starts working once an admin approves you.</p>
         <Field label="Anything they should know, optional" value={f.note} onChange={set('note')} />
         <div className="btnrow">
@@ -354,10 +355,10 @@ function ForgotPassword({ onDone }) {
             )}
             <Field label="Code" value={code} onChange={(e) => setCode(e.target.value)} />
             <label className="fl">New password</label>
-            <input type="password" autoComplete="new-password" value={password}
+            <PasswordInput autoComplete="new-password" value={password}
               onChange={(e) => setPassword(e.target.value)} />
             <label className="fl">Type it again</label>
-            <input type="password" autoComplete="new-password" value={confirm}
+            <PasswordInput autoComplete="new-password" value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && finish()} />
             <div className="btnrow">
@@ -406,10 +407,10 @@ export function SetNewPassword({ onDone }) {
       <p className="lede">You followed a reset link. Set your new password to continue.</p>
       <div className="panel" style={{ maxWidth: 420 }}>
         <label className="fl">New password</label>
-        <input type="password" autoComplete="new-password" value={password}
+        <PasswordInput autoComplete="new-password" value={password}
           onChange={(e) => setPassword(e.target.value)} />
         <label className="fl">Type it again</label>
-        <input type="password" autoComplete="new-password" value={confirm}
+        <PasswordInput autoComplete="new-password" value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && save()} />
         <div className="btnrow">

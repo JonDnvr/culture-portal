@@ -292,3 +292,22 @@ export function celebrate() {
   document.body.appendChild(layer);
   setTimeout(() => layer.remove(), 3000);
 }
+
+/**
+ * A password box with a Show / Hide switch. Used on every place a password
+ * is typed: signing in, starting a trial, asking to join, resets, and the
+ * admin's starting and reset passwords.
+ */
+export function PasswordInput({ value, onChange, autoComplete = 'new-password', ...rest }) {
+  const [shown, setShown] = React.useState(false);
+  return (
+    <div className="pwbox">
+      <input {...rest} type={shown ? 'text' : 'password'} autoComplete={autoComplete}
+        value={value} onChange={onChange} autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+      <button type="button" className="pwtoggle" onClick={() => setShown(!shown)}
+        aria-pressed={shown} aria-label={shown ? 'Hide password' : 'Show password'}>
+        {shown ? 'Hide' : 'Show'}
+      </button>
+    </div>
+  );
+}

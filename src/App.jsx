@@ -121,7 +121,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!session) { setOrgs([]); setOrg(null); setData(null); return; }
+    if (!session) { setOrgs([]); setOrg(null); setData(null); setView('home'); setBehaviorId(null); setDetail(null); setHistory([]); return; }
     listMyOrganizations()
       .then((list) => {
         setOrgs(list);
@@ -219,7 +219,7 @@ function App() {
   );
   if (!org && orgs.length > 1) {
     navRef.current = null;
-    return (<><ChooseOrg orgs={orgs} onPick={(o) => { setOrg(o); setView('admin'); }} /><ConfirmHost /></>);
+    return (<><ChooseOrg orgs={orgs} onPick={(o) => { setOrg(o); setView(o.isSuper ? 'admin' : 'home'); }} /><ConfirmHost /></>);
   }
   if (!org) return (
     <div className="pad">
@@ -285,9 +285,9 @@ function App() {
     },
     switchOrg: (id) => {
       const next = orgs.find((o) => o.id === id);
-      // A super user switching organizations is doing administration, so land
-      // them where that work happens.
-      if (next) { setOrg(next); setBehaviorId(null); setDetail(null); setHistory([]); setView('admin'); }
+      // The super admin works on the organization they pick, so they land in
+      // Admin. Everyone else, admins included, lands on the culture home page.
+      if (next) { setOrg(next); setBehaviorId(null); setDetail(null); setHistory([]); setView(next.isSuper ? 'admin' : 'home'); }
     },
     chooseOrg: () => { setOrg(null); setBehaviorId(null); setDetail(null); setHistory([]); }
   };

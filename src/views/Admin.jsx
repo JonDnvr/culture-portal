@@ -16,7 +16,7 @@ import {
 import { ChampionBilling, SuperBilling } from './Billing.jsx';
 import { Rotation } from './Cadence.jsx';
 import { accessState, STATUS_LABEL, STATUS_TONE, longDate } from '../lib/billing.js';
-import { pad, N, Tag, Modal, Avatar, findPerson, useToast, confirmAction, OrgMark } from '../components/ui.jsx';
+import { pad, N, Tag, Modal, Avatar, findPerson, useToast, confirmAction, OrgMark, PasswordInput } from '../components/ui.jsx';
 import { Crest, GoldStar } from '../components/badges.jsx';
 import { recentPeriods, cadenceOf, UNIT } from '../lib/gamify.js';
 import { termFor } from '../lib/term.js';
@@ -59,9 +59,9 @@ const money = (n) => (n || n === 0 ? `$${Number(n).toLocaleString()}` : '—');
 
 const ROLES = [
   { id: 'member', label: 'Member', can: 'Reads everything, posts recognition and stories, answers the pulse' },
-  { id: 'leader', label: 'Leader', can: 'The above, plus records iterations and sees Conviction' },
+  { id: 'leader', label: 'Leader', can: 'The above, plus can make value awards and sees Conviction' },
   { id: 'admin', label: 'Admin', can: 'The above, plus edits content and manages people. Several people can hold this.' },
-  { id: 'champion', label: 'Culture champion', can: 'Admin rights, and the one seat that keeps working if the subscription lapses. Only one person holds it.' }
+  { id: 'champion', label: 'Culture champion', can: 'Admin rights, plus manages subscription, and the one seat that keeps working if the subscription lapses. Only one person holds it.' }
 ];
 
 export default function Admin({ ctx }) {
@@ -1090,7 +1090,7 @@ function AddPerson({ ctx, onClose, onDone, toast }) {
           } catch (e) { toast(e.message); }
         }} />
       <label className="fl">Starting password</label>
-      <input type="text" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })}
+      <PasswordInput value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })}
         placeholder="At least eight characters" />
       <label className="checkrow">
         <input type="checkbox" checked={f.sendWelcome}
@@ -1118,7 +1118,7 @@ function SetPassword({ member, onClose, toast }) {
         }}>Set password</button>
       </>}>
       <label className="fl">New password</label>
-      <input type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least eight characters" />
+      <PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least eight characters" />
     </Modal>
   );
 }

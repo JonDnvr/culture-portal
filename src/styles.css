@@ -854,7 +854,7 @@ td.ccell{text-align:center}
 .hlg-product{font-family:"Archivo";font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--hlg-soft)}
 .hlg-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:36px;max-width:1120px;margin:0 auto;
   padding:14px 24px 20px;align-items:start}
-.hlg-hero{height:170px;border-radius:10px;background-size:cover;background-position:center 55%;margin-bottom:22px;
+.hlg-hero{display:block;width:100%;height:auto;border-radius:10px;margin-bottom:22px;
   box-shadow:0 1px 0 rgba(0,0,0,.04)}
 .hlg-h1{font-size:42px;line-height:1.08;letter-spacing:-.015em;color:var(--hlg-navy)}
 .hlg-lede{font-size:19px;color:var(--hlg-soft);margin:12px 0 18px;max-width:58ch}
@@ -889,7 +889,7 @@ td.ccell{text-align:center}
   .hlg-mark{font-size:18px}
   .hlg-product{font-size:10.5px}
   .hlg-grid{padding:10px 16px 16px}
-  .hlg-hero{height:110px;margin-bottom:16px}
+  .hlg-hero{margin-bottom:16px}
   .hlg-h1{font-size:30px}
   .hlg-lede{font-size:16.5px}
   .hlg-four{grid-template-columns:1fr}
@@ -948,3 +948,9 @@ td.ccell{text-align:center}
 .hlg-four li{font-size:14px}
 .hlg-trial p,.hlg-members{font-size:14px}
 @media (max-width:540px){.hlg-lede{font-size:15.5px}}
+/* password box with Show / Hide */
+.pwbox{position:relative}
+.pwbox input{padding-right:64px}
+.pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;
+  font-family:"Archivo",system-ui,sans-serif;font-size:12px;font-weight:600;color:var(--muted);padding:6px 8px;cursor:pointer;border-radius:4px}
+.pwtoggle:hover,.pwtoggle:focus-visible{color:var(--ink);background:var(--line)}

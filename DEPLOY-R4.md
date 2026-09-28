@@ -326,3 +326,23 @@ In test mode first, with a new test organization rather than a pilot.
 - [ ] **Connection, What's Good** lists recognition, stories and Value awards together.
 - [ ] Supabase, Integrations, Cron, the `billing-notices` job, **Run**. The run log shows
       today's date and a list, usually empty.
+
+## R4 touch-ups (September 27)
+
+Website code only. There is no SQL and there are no functions to redeploy. Upload the
+changed files to GitHub and Cloudflare publishes them.
+
+- Start a free trial: the "Who's the Culture Champion." line under Your name is gone.
+- Sign-in page: the new wide beach-stone picture, shown whole at its own 5:1 shape.
+  Copy: "with a read on what's working. A couple of minutes a week is enough." and
+  "Emails with practice prompts".
+- Browser tab: the square stone picture is the tab icon (and the phone home-screen icon,
+  `public/apple-touch-icon.png`). The tab reads "Culture Portal".
+- Every password box (sign in, free trial, request access, reset, new password, and the
+  admin's starting and reset passwords) has a **Show / Hide** switch.
+- The super admin picks an organization and lands on its Admin page. Everyone else,
+  admins included, lands on Culture home.
+- Running and publishing a ritual or system session is open to every member (the
+  database already allowed this since R3; confirmed).
+- Role descriptions in Admin, People: Leader "can make value awards and sees
+  Conviction"; Culture champion "plus manages subscription".
