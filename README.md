@@ -110,6 +110,7 @@ scripts/
   seed.mjs                       loads an organization, and optionally its people
   seed-data.json                 Mountain Vistage CE Team and Vail Daily content
   seed-users.json                the accounts, without passwords
+  purge-org.mjs                  deletes a test organization, its files and its accounts
 src/
   lib/api.js                     every query in one place
   views/                         Home, Clarity, Behavior, Cadence, Connection, Conviction, Admin

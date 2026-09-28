@@ -110,9 +110,11 @@ export default function Home({ ctx }) {
             <span className="note">How each {term.one} is sorted</span>
           </div>
           <p className="prose">
-            Our values and {term.many} sort into five categories. Together they cover who we are, how we
-            treat people, how we do the work, who it is for, and how we keep growing, so no side of
-            the culture is left to chance.
+            Our values and {term.many} sort into five categories.{' '}
+            <a href="https://horizonlinegroup.com/5cs/" target="_blank" rel="noopener noreferrer">
+              Together they cover how we build personal centeredness, inspiration across people, and
+              ensure no part of strong culture is left to chance.
+            </a>
           </p>
           <div className="cgrid">
             {(categories ?? []).map((c) => {

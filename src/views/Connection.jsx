@@ -43,9 +43,12 @@ export default function Connection({ ctx }) {
   );
 }
 
-/** Value pills and a behavior dropdown, the same pattern as Clarity. */
-function Filters({ ctx, value, setValue, behavior, setBehavior }) {
-  const { values, behaviors } = ctx;
+/**
+ * Value pills, 5C category pills (when the organization shows them) and a
+ * behavior dropdown, the same pattern as Clarity and Cadence, Systems.
+ */
+function Filters({ ctx, value, setValue, category, setCategory, behavior, setBehavior }) {
+  const { values, behaviors, categories } = ctx;
   return (
     <div className="filters">
       <div className="filterline">
@@ -57,6 +60,16 @@ function Filters({ ctx, value, setValue, behavior, setBehavior }) {
           </button>
         ))}
       </div>
+      {ctx.showCats && setCategory && (
+        <div className="filterline">
+          <span className="fl2">Category</span>
+          <button className="pill" aria-pressed={category === ALL} onClick={() => setCategory(ALL)}>All</button>
+          {(categories ?? []).map((c) => (
+            <button key={c.name} className="pill" aria-pressed={category === c.name}
+              onClick={() => setCategory(c.name)}>{c.name}</button>
+          ))}
+        </div>
+      )}
       <div className="filterline">
         <span className="fl2">{ctx.term.One}</span>
         <select className="field inline" value={behavior} onChange={(e) => setBehavior(e.target.value)}>
@@ -70,19 +83,19 @@ function Filters({ ctx, value, setValue, behavior, setBehavior }) {
 
 function useFilter(ctx, rows) {
   const [value, setValue] = useState(ALL);
+  const [category, setCategory] = useState(ALL);
   const [behavior, setBehavior] = useState(ALL);
   const byId = Object.fromEntries(ctx.behaviors.map((b) => [b.id, b]));
 
   const filtered = rows.filter((r) => {
+    const b = byId[r.behavior_id];
     if (behavior !== ALL && r.behavior_id !== behavior) return false;
-    if (value !== ALL) {
-      const b = byId[r.behavior_id];
-      if (!b || !b.values.some((v) => v.name === value)) return false;
-    }
+    if (category !== ALL && b?.category !== category) return false;
+    if (value !== ALL && (!b || !b.values.some((v) => v.name === value))) return false;
     return true;
   });
 
-  return { value, setValue, behavior, setBehavior, filtered };
+  return { value, setValue, category, setCategory, behavior, setBehavior, filtered };
 }
 
 /* ----------------------------------------------------------------- stories */
@@ -455,12 +468,14 @@ function WhatsGood({ ctx }) {
   const { activity, grants, behaviors, values, teams, people, openRecord, openBehavior, term } = ctx;
   const [kind, setKind] = useState(ALL);
   const [value, setValue] = useState(ALL);
+  const [category, setCategory] = useState(ALL);
   const [behavior, setBehavior] = useState(ALL);
   const [editing, setEditing] = useState(null);
   const [open, setOpen] = useState(null);
   const toast = useToast();
   const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
   const valueName = Object.fromEntries(values.map((v) => [v.id, v.name]));
+  const valueCat = Object.fromEntries(values.map((v) => [v.id, v.category]));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
 
   const all = [
@@ -475,13 +490,16 @@ function WhatsGood({ ctx }) {
     ...(grants ?? []).map((g) => ({
       kind: 'award', row: g, id: g.id, at: g.granted_at, by: g.granted_by_name, byId: g.granted_by,
       to: g.team_id ? `${g.recipient_name} team` : g.recipient_name, toId: g.recipient_user_id, team: g.team_id,
-      title: g.award?.name, text: g.citation, valueNames: (g.award?.valueIds ?? []).map((id) => valueName[id]).filter(Boolean)
+      title: g.award?.name, text: g.citation, valueNames: (g.award?.valueIds ?? []).map((id) => valueName[id]).filter(Boolean),
+      valueCats: (g.award?.valueIds ?? []).map((id) => valueCat[id]).filter(Boolean)
     }))
   ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
 
   const rows = all.filter((x) => {
     if (kind !== ALL && x.kind !== kind) return false;
     if (behavior !== ALL && x.behavior?.id !== behavior) return false;
+    // A behavior's own category; an award has no behavior, so its Values' categories.
+    if (category !== ALL && !(x.behavior ? x.behavior.category === category : (x.valueCats ?? []).includes(category))) return false;
     if (value !== ALL) {
       const names = x.behavior ? x.behavior.values.map((v) => v.name) : (x.valueNames ?? []);
       if (!names.includes(value)) return false;
@@ -513,7 +531,8 @@ function WhatsGood({ ctx }) {
           ))}
         </div>
       </div>
-      <Filters ctx={ctx} value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
+      <Filters ctx={ctx} value={value} setValue={setValue} category={category} setCategory={setCategory}
+        behavior={behavior} setBehavior={setBehavior} />
       <ListBar ctx={ctx} tools={tools} placeholder={`Search: a person, a ${term.one}, a word from the story`} />
 
       <div className="rowlist">

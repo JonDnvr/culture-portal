@@ -195,17 +195,25 @@ function ThisWeek({ ctx }) {
  * and "See more" that Recognition and Stories use.
  */
 function Sessions({ ctx }) {
-  const { behaviors, values, teams, activity, openRecord, openBehavior, term } = ctx;
+  const { behaviors, values, systems, categories, teams, activity, openRecord, openBehavior, term } = ctx;
+  const [kind, setKind] = useState(ALL);
   const [value, setValue] = useState(ALL);
+  const [category, setCategory] = useState(ALL);
   const [behavior, setBehavior] = useState(ALL);
+  const [system, setSystem] = useState(ALL);
   const [editing, setEditing] = useState(null);
   const toast = useToast();
   const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
+  const isSystem = (it) => !!(it.system_category_id ?? it.system);
 
   const rows = activity.iterations.filter((it) => {
     const bs = (it.behavior_ids ?? []).map((id) => byId[id]).filter(Boolean);
+    if (kind === 'ritual' && isSystem(it)) return false;
+    if (kind === 'system' && !isSystem(it)) return false;
+    if (system !== ALL && (it.system_category_id ?? it.system?.id) !== system) return false;
     if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
+    if (category !== ALL && !bs.some((b) => b.category === category)) return false;
     if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
     return true;
   });
@@ -227,8 +235,31 @@ function Sessions({ ctx }) {
         <span className="note">Every ritual and system run that has been recorded</span>
       </div>
       <DraftsPanel ctx={ctx} kind="iteration" title="Your draft sessions" />
+      <div className="filters">
+        <div className="filterline">
+          <span className="fl2">Show</span>
+          {[ALL, 'ritual', 'system'].map((k) => (
+            <button key={k} className="pill" aria-pressed={kind === k} onClick={() => {
+              setKind(k);
+              // Rituals only: a system picked below would leave nothing to show.
+              if (k === 'ritual') setSystem(ALL);
+            }}>
+              {k === ALL ? 'All' : k === 'ritual' ? 'Rituals' : 'Systems'}
+            </button>
+          ))}
+        </div>
+      </div>
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
-        value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
+        value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior}
+        categories={ctx.showCats ? categories : null} category={category} setCategory={setCategory}
+        extraLabel="System"
+        extra={
+          <select className="field inline" value={system} disabled={kind === 'ritual'}
+            onChange={(e) => { setSystem(e.target.value); if (e.target.value !== ALL) setKind('system'); }}>
+            <option value={ALL}>All systems</option>
+            {systems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        } />
       <ListBar ctx={ctx} tools={tools} placeholder={`Search sessions: a ritual, a person, a ${term.one}, a note`} />
 
       <div className="rowlist">
@@ -409,8 +440,9 @@ function BehaviorValueFilters({ term, values, behaviors, counts, value, setValue
 /* ------------------------------------------------------------------ rituals */
 
 function Rituals({ ctx, initialBehavior = null }) {
-  const { org, behaviors, values, rituals, canEdit, openBehavior, openRecord, reload } = ctx;
+  const { org, behaviors, values, rituals, categories, canEdit, openBehavior, openRecord, reload } = ctx;
   const [value, setValue] = useState(ALL);
+  const [category, setCategory] = useState(ALL);
   const [behavior, setBehavior] = useState(initialBehavior ?? ALL);
   const [modal, setModal] = useState(null);
   const [runs, setRuns] = useState([]);
@@ -422,9 +454,11 @@ function Rituals({ ctx, initialBehavior = null }) {
   const carriers = (r) => behaviors.filter((b) => r.applies_to_all || b.rituals.some((x) => x.id === r.id));
   const runsFor = (r) => runs.filter((x) => x.ritual_id === r.id);
 
+  // A ritual matches when any behavior it carries does.
   const list = rituals.filter((r) => {
     const bs = carriers(r);
     if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
+    if (category !== ALL && !bs.some((b) => b.category === category)) return false;
     if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
     return true;
   });
@@ -443,7 +477,8 @@ function Rituals({ ctx, initialBehavior = null }) {
       </p>
 
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
-        value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior} />
+        value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior}
+        categories={ctx.showCats ? categories : null} category={category} setCategory={setCategory} />
 
       {list.map((r) => {
         const bs = carriers(r);

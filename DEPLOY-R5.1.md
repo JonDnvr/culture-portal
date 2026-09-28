@@ -9,8 +9,8 @@ A small update on top of R5. Allow about ten minutes. Do the three steps in orde
   ("Friday wins round"), and a little history in the champion's name (a practice session,
   a ritual run, a system run dated today, a recognition and a story). All of it is tagged
   Example, and **Admin, Clear example content** removes all of it.
-- **Example values have a 5C category:** Trust is Change, Candor is Character, Care is
-  Connection. Portals made earlier that still have the untouched example Trust value move
+- **Example values have a 5C category:** Challenge is Change, Candor is Character, Care is
+  Connection. (Challenge replaced the example value Trust.) Portals made earlier that still have the untouched example Trust value move
   it to Change.
 - **Home page, Survey cadence:** shows how much of the round is rated (every rating in so
   far, divided by every active member rating every behavior), and the cairn fills with
@@ -41,7 +41,7 @@ Cloudflare deployment to turn green.
 
 ## R5.2: example awards
 
-New trials also get an example Value award ("The Keystone Award", for Trust and Care) given
+New trials also get an example Value award ("The Keystone Award", for Challenge and Care) given
 to an empty "Example team", and Clear example content removes the award, the award given
 and the team. Editing an example award, team, session, recognition or story makes it yours.
 

@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "seed": "node scripts/seed.mjs",
+    "purge-org": "node scripts/purge-org.mjs",
     "build:single": "SINGLE_FILE=1 vite build && node scripts/bundle-single.mjs",
     "deploy": "npm run build && npx wrangler deploy",
     "preview:dist": "npm run build && npx wrangler dev"

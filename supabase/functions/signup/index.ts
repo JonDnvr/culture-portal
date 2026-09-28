@@ -26,7 +26,7 @@ const admin = createClient(
 /** A little content so the first sign-in is not an empty screen. */
 const EXAMPLE = {
   values: [
-    { name: 'Trust', category: 'Change', description: 'What is said here is safe here, and what is promised here happens.' },
+    { name: 'Challenge', category: 'Change', description: 'Hold a high bar, and push each other to reach it.' },
     { name: 'Candor', category: 'Character', description: 'Say the hard thing early, to the person who can act on it.' },
     { name: 'Care', category: 'Connection', description: 'Full attention, real regard, and a team that is good to be on.' }
   ],
@@ -82,7 +82,7 @@ const EXAMPLE = {
     type: {
       name: 'The Keystone Award', grantable_to: 'both',
       description: 'For carrying our values when it would have been easier not to.',
-      values: ['Trust', 'Care']
+      values: ['Challenge', 'Care']
     },
     grant: {
       daysAgo: 5,
@@ -99,7 +99,7 @@ const EXAMPLE = {
       questions: ['What commitment are you carrying that will slip?', 'Where do dates get assumed instead of stated?'],
       failure_state: 'The date passes and nobody mentions it.',
       hard_rule: 'Any date that will be missed is reset before it passes, in writing.',
-      values: ['Trust']
+      values: ['Challenge']
     },
     {
       number: 2, title: 'Say the hard thing early', category: 'Character',
@@ -110,7 +110,7 @@ const EXAMPLE = {
       questions: ['What are you sitting on right now?', 'What would make it safer to speak up here?'],
       failure_state: 'It comes out in a resignation, or in a meeting where it is too late.',
       hard_rule: 'Anything raised in good faith is heard without consequence.',
-      values: ['Candor', 'Trust']
+      values: ['Candor', 'Challenge']
     },
     {
       number: 3, title: 'Credit people out loud', category: 'Connection',
