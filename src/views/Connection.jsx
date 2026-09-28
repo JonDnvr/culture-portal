@@ -9,6 +9,7 @@ import { pad, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../c
 import { GoldStar } from '../components/badges.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
+import { inCategory } from '../lib/categories.js';
 
 const PREVIEW = 260;
 
@@ -90,7 +91,7 @@ function useFilter(ctx, rows) {
   const filtered = rows.filter((r) => {
     const b = byId[r.behavior_id];
     if (behavior !== ALL && r.behavior_id !== behavior) return false;
-    if (category !== ALL && b?.category !== category) return false;
+    if (category !== ALL && !inCategory(b, category)) return false;
     if (value !== ALL && (!b || !b.values.some((v) => v.name === value))) return false;
     return true;
   });
@@ -499,7 +500,7 @@ function WhatsGood({ ctx }) {
     if (kind !== ALL && x.kind !== kind) return false;
     if (behavior !== ALL && x.behavior?.id !== behavior) return false;
     // A behavior's own category; an award has no behavior, so its Values' categories.
-    if (category !== ALL && !(x.behavior ? x.behavior.category === category : (x.valueCats ?? []).includes(category))) return false;
+    if (category !== ALL && !(x.behavior ? inCategory(x.behavior, category) : (x.valueCats ?? []).includes(category))) return false;
     if (value !== ALL) {
       const names = x.behavior ? x.behavior.values.map((v) => v.name) : (x.valueNames ?? []);
       if (!names.includes(value)) return false;

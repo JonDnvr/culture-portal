@@ -301,7 +301,7 @@ export async function listBehaviors(orgId) {
     .from('behaviors')
     .select(`
       *,
-      behavior_values ( values_ ( id, name ) ),
+      behavior_values ( values_ ( id, name, category ) ),
       placements ( id, owner, cadence, artifact, template,
                    system_categories ( id, name ) ),
       behavior_rituals ( rituals ( id, name, cadence, owner, description, practice ) )

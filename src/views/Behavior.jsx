@@ -9,6 +9,7 @@ import { RecordIteration } from './Cadence.jsx';
 import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
 import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
 import { termFor } from '../lib/term.js';
+import { categoriesOf } from '../lib/categories.js';
 
 const DEFAULT_TERM = termFor(null);
 
@@ -77,7 +78,7 @@ export default function Behavior({ ctx, id }) {
       </div>
       <div className="tagrow">
         {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-        <Tag type="category">{b.category}</Tag>
+        {categoriesOf(b).map((c) => <Tag key={c} type="category">{c}</Tag>)}
         {b.placements.length
           ? <Tag type="system" behaviorId={b.id}>{b.placements.map((p) => p.system).join(', ')}</Tag>
           : <Tag type="warn">No system</Tag>}
@@ -339,7 +340,8 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
     number: behavior?.number ?? '',
     title: behavior?.title ?? '',
     description: behavior?.description ?? '',
-    category: behavior?.category ?? categories[0]?.name,
+    // An additional category, beyond those its values bring. Empty is fine.
+    category: behavior ? behavior.category ?? '' : '',
     quick_tip: behavior?.quick_tip ?? '',
     coaching_tips: (behavior?.coaching_tips ?? []).join('\n'),
     teaching_points: (behavior?.teaching_points ?? []).join('\n'),
@@ -351,6 +353,9 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
   const [busy, setBusy] = useState(false);
 
   const lines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+  // The categories the picked values already bring, in the 5C order.
+  const valueCats = categories.map((c) => c.name).filter((name) =>
+    values.some((v) => f.valueIds.includes(v.id) && v.category === name));
   const toggleValue = (id) => setF({
     ...f,
     valueIds: f.valueIds.includes(id) ? f.valueIds.filter((x) => x !== id) : [...f.valueIds, id]
@@ -364,7 +369,7 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
         number: Number(f.number) || undefined,
         title: f.title.trim(),
         description: f.description.trim(),
-        category: f.category,
+        category: f.category || null,
         quick_tip: f.quick_tip.trim(),
         coaching_tips: lines(f.coaching_tips),
         teaching_points: lines(f.teaching_points),
@@ -382,18 +387,8 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
         <button className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save behavior'}</button>
       </>}>
-      <div className="tworow">
-        <div>
-          <label className="fl">Number</label>
-          <input type="text" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} />
-        </div>
-        <div>
-          <label className="fl">Category</label>
-          <select className="field" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
-            {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-          </select>
-        </div>
-      </div>
+      <label className="fl">Number</label>
+      <input type="text" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} />
       <label className="fl">Title, a verb phrase</label>
       <input type="text" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
       <label className="fl">Description</label>
@@ -405,6 +400,18 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
             onClick={() => toggleValue(v.id)}>{v.name}</button>
         ))}
       </div>
+      <label className="fl">Additional 5C category</label>
+      <select className="field" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
+        <option value="">None, only the values' categories</option>
+        {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+      </select>
+      <p className="meta">
+        {valueCats.length
+          ? `From its values, this ${term.one} is already in ${valueCats.join(' and ')}. `
+          : `The values picked above bring no category yet. `}
+        Pick a category here only to add one beyond those. It shows under every one of them in the
+        category filters and counts.
+      </p>
       <label className="fl">Try this</label>
       <input type="text" value={f.quick_tip} onChange={(e) => setF({ ...f, quick_tip: e.target.value })} />
       <label className="fl">Coaching tips, one per line</label>

@@ -273,32 +273,6 @@ export default function Admin({ ctx }) {
       </section>
 
       <section>
-        <div className="sectionhead"><h2>5C Value Categories</h2><span className="note">Character, Connection, Craft, Cause, Change</span></div>
-        <div className="settinggrid two">
-          <div className="panel">
-            <label className="fl">5C Value Categories</label>
-            <label className="toggle">
-              <input type="checkbox" checked={org.show_categories !== false}
-                onChange={async (e) => {
-                  const on = e.target.checked;
-                  try {
-                    await updateOrganization(org.id, { show_categories: on });
-                    toast(on ? 'Category tags are on.' : 'Category tags are off.');
-                    await refreshOrgs();
-                  } catch (err) { toast(err.message); }
-                }} />
-              <span>Show the Character, Connection, Craft, Cause and Change categories on values and {term.many}</span>
-            </label>
-            <p className="meta">
-              On, the home page explains the five categories and Conviction adds coverage by category.
-              Off, the tags and category filters are hidden. Each {term.one} keeps its category either way.
-            </p>
-          </div>
-
-        </div>
-      </section>
-
-      <section>
         <div className="sectionhead">
           <h2>Our Systems</h2>
           <span className="note"><button className="btn small" onClick={() => setModal({ kind: 'system' })}>Add a system</button></span>
@@ -548,6 +522,26 @@ export default function Admin({ ctx }) {
           </div>
 
           <TermSetting ctx={ctx} toast={toast} />
+
+          <div className="panel">
+            <label className="fl">5C Value Categories</label>
+            <label className="toggle">
+              <input type="checkbox" checked={org.show_categories !== false}
+                onChange={async (e) => {
+                  const on = e.target.checked;
+                  try {
+                    await updateOrganization(org.id, { show_categories: on });
+                    toast(on ? 'Category tags are on.' : 'Category tags are off.');
+                    await refreshOrgs();
+                  } catch (err) { toast(err.message); }
+                }} />
+              <span>Show the Character, Connection, Craft, Cause and Change categories on values and {term.many}</span>
+            </label>
+            <p className="meta">
+              On, the home page explains the five categories and Conviction adds coverage by category.
+              Off, the tags and category filters are hidden. Values and {term.many} keep their categories either way.
+            </p>
+          </div>
 
           <div className="panel">
             <label className="fl" htmlFor="pulseSel">Quick pulse per sign-in</label>

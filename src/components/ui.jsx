@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { inCategory } from '../lib/categories.js';
 
 export const pad = (n) => String(n).padStart(2, '0');
 
@@ -146,7 +147,7 @@ export function TagActionsHost({ ctx }) {
   }
   const c = categories.find((x) => x.name === open.name);
   const inVals = values.filter((x) => x.category === open.name);
-  const inBeh = behaviors.filter((b) => b.category === open.name);
+  const inBeh = behaviors.filter((b) => inCategory(b, open.name));
   return (
     <Modal title={open.name} onClose={close} footer={<button className="btn ghost" onClick={close}>Close</button>}>
       <div className="tagrow"><span className="tag tg-category">5C category</span></div>

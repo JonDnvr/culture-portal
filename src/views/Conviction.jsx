@@ -4,6 +4,7 @@ import {
   listIterations, listPulseRounds
 } from '../lib/api.js';
 import { pad, N, NumList, PulseBar, CategoryBadge, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
+import { inCategory } from '../lib/categories.js';
 
 export default function Conviction({ ctx }) {
   const [tab, setTab] = useState('measures');
@@ -288,7 +289,7 @@ function Summary({ ctx, rounds, round, onPick }) {
           <table className="ctable">
             <tbody>
               {categories.map((c) => {
-                const ids = behaviors.filter((b) => b.category === c.name).map((b) => b.id);
+                const ids = behaviors.filter((b) => inCategory(b, c.name)).map((b) => b.id);
                 const score = rollup(ids);
                 return (
                   <tr key={c.name}>
@@ -538,9 +539,10 @@ function Coverage({ ctx }) {
  * each. A category with none, or only one, is where the culture is thin.
  */
 function CategoryCoverage({ ctx, categories, behaviors, openBehavior }) {
-  const counts = Object.fromEntries(categories.map((c) => [c.name, behaviors.filter((b) => b.category === c.name).length]));
+  // A behavior counts in its own category and in each of its values' categories.
+  const counts = Object.fromEntries(categories.map((c) => [c.name, behaviors.filter((b) => inCategory(b, c.name)).length]));
   const thin = categories.filter((c) => counts[c.name] < 2);
-  const none = behaviors.filter((b) => !categories.some((c) => c.name === b.category));
+  const none = behaviors.filter((b) => !categories.some((c) => inCategory(b, c.name)));
   return (
     <>
       {thin.length > 0 && (
@@ -557,12 +559,12 @@ function CategoryCoverage({ ctx, categories, behaviors, openBehavior }) {
             </thead>
             <tbody>
               {behaviors.map((b) => (
-                <tr key={b.id} className={categories.some((c) => c.name === b.category) ? '' : 'flagged'}>
+                <tr key={b.id} className={categories.some((c) => inCategory(b, c.name)) ? '' : 'flagged'}>
                   <td className="name"><span className="bnum">{pad(b.number)}</span></td>
                   <td className="name btn2" onClick={() => openBehavior(b.id)}>{b.title}</td>
                   {categories.map((c) => (
                     <td key={c.name} className="ccell">
-                      {b.category === c.name ? <Tag type="category">{c.name}</Tag> : <span className="gap">&mdash;</span>}
+                      {inCategory(b, c.name) ? <Tag type="category">{c.name}</Tag> : <span className="gap">&mdash;</span>}
                     </td>
                   ))}
                 </tr>

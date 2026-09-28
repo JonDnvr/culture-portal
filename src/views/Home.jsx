@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { N, Tag } from '../components/ui.jsx';
 import HomeBadges from './HomeBadges.jsx';
 import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
+import { categoriesOf } from '../lib/categories.js';
 
 export default function Home({ ctx }) {
   const { org, behaviors, values, goto, openBehavior, term, showCats, categories } = ctx;
@@ -29,7 +30,7 @@ export default function Home({ ctx }) {
         <section>
           <div className="sectionhead"><h2>{UNIT[cadenceOf(org).kind].this.replace(/^./, (c) => c.toUpperCase())}</h2><span className="note">{rotationNote(cadenceOf(org))}</span></div>
           <div className="bigcard">
-            <div className="kicker"><N n={week.number} dot={false} />{showCats && week.category ? ` / ${week.category}` : ''} / {week.values.map((v) => v.name).join(', ')}</div>
+            <div className="kicker"><N n={week.number} dot={false} />{showCats && categoriesOf(week).length ? ` / ${categoriesOf(week).join(', ')}` : ''} / {week.values.map((v) => v.name).join(', ')}</div>
             <h2>{week.title}</h2>
             <p className="desc">{week.description}</p>
             <div className="btnrow">
@@ -111,7 +112,7 @@ export default function Home({ ctx }) {
           </div>
           <p className="prose">
             Our values and {term.many} sort into five categories.{' '}
-            <a href="https://horizonlinegroup.com/5cs/" target="_blank" rel="noopener noreferrer">
+            <a className="quietlink" href="https://horizonlinegroup.com/5cs/" target="_blank" rel="noopener noreferrer">
               Together they cover how we build personal centeredness, inspiration across people, and
               ensure no part of strong culture is left to chance.
             </a>
@@ -233,7 +234,7 @@ function openHandout(org, values, behaviors, full, term, showCats = true) {
       <h3><span class="bnum">${num(b.number)}.</span> ${esc(b.title)}</h3>
       <div class="tags">
         ${b.values.map((v) => `<span class="tag v">${esc(v.name)}</span>`).join('')}
-        ${showCats && b.category ? `<span class="tag c">${esc(b.category)}</span>` : ''}
+        ${showCats ? categoriesOf(b).map((c) => `<span class="tag c">${esc(c)}</span>`).join('') : ''}
       </div>
       <p>${esc(b.description)}</p>
       ${full ? [

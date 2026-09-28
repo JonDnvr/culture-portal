@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Tag, BNum } from '../components/ui.jsx';
+import { inCategory, categoriesOf } from '../lib/categories.js';
 import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
 import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
 
@@ -25,7 +26,7 @@ export default function Clarity({ ctx }) {
     system: Object.fromEntries(systems.map((s) =>
       [s.name, behaviors.filter((b) => b.placements.some((p) => p.systemId === s.id)).length])),
     category: Object.fromEntries(categories.map((c) =>
-      [c.name, behaviors.filter((b) => b.category === c.name).length])),
+      [c.name, behaviors.filter((b) => inCategory(b, c.name)).length])),
     unapplied: behaviors.filter((b) => b.placements.length === 0).length
   }), [behaviors, values, systems, categories]);
 
@@ -33,7 +34,7 @@ export default function Clarity({ ctx }) {
     if (value !== ALL && !b.values.some((v) => v.name === value)) return false;
     if (system === UNAPPLIED && b.placements.length > 0) return false;
     if (system !== ALL && system !== UNAPPLIED && !b.placements.some((p) => p.system === system)) return false;
-    if (category !== ALL && b.category !== category) return false;
+    if (category !== ALL && !inCategory(b, category)) return false;
     return true;
   });
 
@@ -104,7 +105,7 @@ export default function Clarity({ ctx }) {
                 </div>
                 <div className="tagrow">
                   {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-                  <Tag type="category">{b.category}</Tag>
+                  {categoriesOf(b).map((c) => <Tag key={c} type="category">{c}</Tag>)}
                   <Tag type="ritual" behaviorId={b.id}>Rituals ({b.rituals.filter((r) => !r.applies_to_all).length + rituals.filter((r) => r.applies_to_all).length})</Tag>
                   {b.placements.length
                     ? <Tag type="system" behaviorId={b.id}>{b.placements.map((p) => p.system).join(', ')}</Tag>

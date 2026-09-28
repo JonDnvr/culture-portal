@@ -12,6 +12,7 @@ import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
 import { termFor } from '../lib/term.js';
 import { cadenceOf, UNIT } from '../lib/gamify.js';
+import { inCategory, categoriesOf } from '../lib/categories.js';
 
 const ALL = 'All';
 
@@ -73,7 +74,7 @@ function ThisWeek({ ctx }) {
           <h2><BNum n={week.number} /> {week.title}</h2>
           <div className="tagrow">
             {week.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-            <Tag type="category">{week.category}</Tag>
+            {categoriesOf(week).map((c) => <Tag key={c} type="category">{c}</Tag>)}
             {week.is_example && <Tag type="warn">Example</Tag>}
           </div>
           <p className="desc">{week.description}</p>
@@ -213,7 +214,7 @@ function Sessions({ ctx }) {
     if (kind === 'system' && !isSystem(it)) return false;
     if (system !== ALL && (it.system_category_id ?? it.system?.id) !== system) return false;
     if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
-    if (category !== ALL && !bs.some((b) => b.category === category)) return false;
+    if (category !== ALL && !bs.some((b) => inCategory(b, category))) return false;
     if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
     return true;
   });
@@ -371,7 +372,7 @@ export function Rotation({ ctx }) {
                 </div>
                 <div className="tagrow">
                   {b.values.map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-                  <Tag type="category">{b.category}</Tag>
+                  {categoriesOf(b).map((c) => <Tag key={c} type="category">{c}</Tag>)}
                   {b.id === org.weekly_behavior_id && <Tag type="live">Featured now</Tag>}
                   {b.is_example && <Tag type="warn">Example</Tag>}
                 </div>
@@ -458,7 +459,7 @@ function Rituals({ ctx, initialBehavior = null }) {
   const list = rituals.filter((r) => {
     const bs = carriers(r);
     if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
-    if (category !== ALL && !bs.some((b) => b.category === category)) return false;
+    if (category !== ALL && !bs.some((b) => inCategory(b, category))) return false;
     if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
     return true;
   });
@@ -583,7 +584,7 @@ function Systems({ ctx, initialBehavior = null }) {
   const visible = rows.filter(({ b, p }) => {
     if (system !== ALL && p.systemId !== system) return false;
     if (behavior !== ALL && b.id !== behavior) return false;
-    if (category !== ALL && b.category !== category) return false;
+    if (category !== ALL && !inCategory(b, category)) return false;
     if (value !== ALL && !b.values.some((v) => v.name === value)) return false;
     return true;
   });
