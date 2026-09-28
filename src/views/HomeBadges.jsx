@@ -109,8 +109,12 @@ export default function HomeBadges({ ctx }) {
                     <span className="lbl gold">{cairn.completed} round{cairn.completed === 1 ? '' : 's'}<small>complete</small></span>
                   </span>
                 )}
-                <span className="pairh">
+                <span className="pairh" title={cairn.possible != null
+                  ? `${cairn.rated} of ${cairn.possible} ratings in: every active member rating every ${term.one}` : undefined}>
                   <CairnStack size={36} filled={cairn.filled} />
+                  <span className="lbl">{cairn.complete}% complete<small>round {cairn.round} rated so far</small></span>
+                </span>
+                <span className="pairh">
                   <span className="lbl">{cairn.done} of {cairn.target}<small>people finished</small></span>
                 </span>
               </div>
@@ -123,7 +127,7 @@ export default function HomeBadges({ ctx }) {
               </div>
               {!isSuper && mineLeft > 0 && (
                 <div className="btnrow" style={{ marginTop: 8 }}>
-                  <button className="btn small" onClick={() => openPulse()}>Rate now</button>
+                  <button className="btn small" onClick={() => openPulse()}>Run a Pulse</button>
                   {mineLeft > (org.pulse_per_signin ?? 2) && (
                     <button className="btn ghost small" onClick={() => openPulse({ all: true })}>
                       Rate what's left ({mineLeft})

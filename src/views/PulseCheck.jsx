@@ -80,7 +80,7 @@ export default function PulseCheck({ ctx, ask = { n: 0, all: false } }) {
     getPulseAssignment(org.id).then(setAssignment).catch(() => setAssignment(null));
   }, [org.id]);
 
-  // "Rate now" or "Rate what's left" from the home page: bring the pulse back
+  // "Run a Pulse" or "Rate what's left" from the home page: bring the pulse back
   // with fresh questions, even if it was dismissed earlier in this session.
   useEffect(() => {
     if (!ask.n) return;

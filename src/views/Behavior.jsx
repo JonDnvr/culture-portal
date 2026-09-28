@@ -132,7 +132,7 @@ export default function Behavior({ ctx, id }) {
           return (
             <div key={r.id} className="placement rit">
               <div className="ph">
-                <span className="psys">{r.name}</span>
+                <span className="psys">{r.name}{r.is_example && <> <Tag type="warn">Example</Tag></>}</span>
                 <span className="pmeta">{r.owner} / {r.cadence}</span>
               </div>
               <p className="pact">{r.description}</p>

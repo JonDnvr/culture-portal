@@ -402,14 +402,15 @@ export async function createRitual(orgId, ritual) {
   return data;
 }
 
+// Editing an example ritual makes it yours, so clearing examples leaves it.
 export async function saveRitualPractice(ritualId, practice) {
-  const { error } = await supabase.from('rituals').update({ practice }).eq('id', ritualId);
+  const { error } = await supabase.from('rituals').update({ practice, is_example: false }).eq('id', ritualId);
   if (error) throw error;
 }
 
 export async function updateRitual(ritualId, fields) {
   const { data, error } = await supabase
-    .from('rituals').update(fields).eq('id', ritualId).select().single();
+    .from('rituals').update({ ...fields, is_example: false }).eq('id', ritualId).select().single();
   if (error) throw error;
   return data;
 }
@@ -750,6 +751,10 @@ export async function resetPassword({ password }) {
 }
 
 export async function clearExampleContent(orgId) {
+  // The example history first, then what it hangs from.
+  for (const table of ['iterations', 'recognitions', 'stories', 'award_grants', 'award_types', 'teams', 'rituals']) {
+    await supabase.from(table).delete().eq('org_id', orgId).eq('is_example', true);
+  }
   await supabase.from('behaviors').delete().eq('org_id', orgId).eq('is_example', true);
   await supabase.from('values_').delete().eq('org_id', orgId).eq('is_example', true);
   await supabase.from('system_categories').delete().eq('org_id', orgId).eq('is_example', true);
@@ -1163,7 +1168,7 @@ export async function createTeam(orgId, name) {
 
 export async function renameTeam(teamId, name) {
   const { data, error } = await supabase
-    .from('teams').update({ name: String(name).trim() }).eq('id', teamId).select().single();
+    .from('teams').update({ name: String(name).trim(), is_example: false }).eq('id', teamId).select().single();
   if (error) throw error;
   return data;
 }
@@ -1194,7 +1199,9 @@ export async function saveAwardType(orgId, fields) {
     grantable_to: fields.grantable_to ?? 'both',
     grant_cap: fields.grant_cap ? Number(fields.grant_cap) : null,
     cap_period: fields.grant_cap ? fields.cap_period ?? 'quarter' : null,
-    active: fields.active ?? true
+    active: fields.active ?? true,
+    // Editing an example award makes it yours, so clearing examples leaves it.
+    is_example: false
   };
   if (!row.name) throw new Error('Name the award.');
   if (!fields.valueIds?.length) throw new Error('Pick at least one Value this award stands for.');
@@ -1340,6 +1347,8 @@ async function updateRecord(kind, id, fields, { addFiles = [], removeFileIds = [
   const patch = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
   let row;
   if (Object.keys(patch).length) {
+    // Editing an example makes it yours, so clearing examples leaves it.
+    patch.is_example = false;
     const { data, error } = await supabase.from(r.table).update(patch).eq('id', id).select();
     if (error) throw clean(error);
     if (!data?.length) throw new Error(NOT_ALLOWED);

@@ -342,16 +342,17 @@ export default function Admin({ ctx }) {
             <h2>Example content clearer</h2>
             <span className="note">
               <button className="btn small" onClick={async () => {
-                if (!(await confirmAction({ title: 'Delete everything still marked as an example?', body: 'Example values, ' + term.many + ' and their records go. This cannot be undone.' }))) return;
+                if (!(await confirmAction({ title: 'Delete everything still marked as an example?', body: `Example values, ${term.many}, systems, rituals, sessions, recognition, stories and awards go. This cannot be undone.` }))) return;
                 try { await clearExampleContent(org.id); toast('Example content cleared.'); await refreshOrgs(); reload(); }
                 catch (e) { toast(e.message); }
               }}>Clear example content</button>
             </span>
           </div>
           <div className="notice">
-            This portal still has example values and {term.many}, marked with an Example tag
-            wherever they appear. Editing one makes it yours and removes its tag. Clear example content
-            deletes every example that is left, in one step.
+            This portal still has example content: values, {term.many}, the systems they are built
+            into, a ritual, sessions (ritual and system runs), recognition, a story, and a Value
+            award given to an example team. Editing one makes it yours and removes its Example tag.
+            Clear example content deletes every example that is left, in one step.
           </div>
         </section>
       )}
@@ -1326,25 +1327,32 @@ function PulseRounds({ ctx, toast }) {
       <label className="fl" htmlFor="pulseClose">Close a pulse round at</label>
       <select id="pulseClose" className="field" value={pct} disabled={busy}
         onChange={(e) => setPct(Number(e.target.value))}>
-        {!CLOSE_PCTS.includes(pct) && <option value={pct}>{pct}% of members</option>}
-        {CLOSE_PCTS.map((n) => <option key={n} value={n}>{n}% of members</option>)}
+        {!CLOSE_PCTS.includes(pct) && <option value={pct}>{pct}%</option>}
+        {CLOSE_PCTS.map((n) => <option key={n} value={n}>{n}%</option>)}
       </select>
       <p className="meta">
-        A round closes, and gets its date, once this share of active members have each rated
-        every {term.one}. Inactive members are not counted.
+        Participation is the people who have rated every {term.one}, divided by the active
+        members. The round closes, and gets its date, when it reaches this. Inactive members are
+        not counted.
       </p>
       {!st ? null : !st.total ? (
         <p className="meta">The pulse starts once your {term.many} are written.</p>
       ) : (
         <>
-          <p className="meta">
-            <b>Round {st.round} is open.</b> {st.done} of {st.members} active members ({st.participation}%)
-            have rated every {term.one}. It closes at {st.target} {st.target === 1 ? 'person' : 'people'}.
-          </p>
+          <div className="metrics" style={{ margin: '10px 0' }}>
+            <div className="metric">
+              <div className="n">{st.done} of {st.members}</div>
+              <div className="l">People finished in round {st.round}</div>
+            </div>
+            <div className="metric">
+              <div className="n">{st.participation}%</div>
+              <div className="l">Participation, closes at {pct}% ({st.target} {st.target === 1 ? 'person' : 'people'})</div>
+            </div>
+          </div>
           <div className="btnrow">
             <button className="btn ghost small danger" onClick={closeNow} disabled={busy || !st.answers}
-              title={st.answers ? '' : 'Nothing has been answered in this round yet'}>
-              Close round {st.round} now
+              title={st.answers ? `Close round ${st.round} with the answers it has` : 'Nothing has been answered in this round yet'}>
+              Close Round Now
             </button>
           </div>
         </>

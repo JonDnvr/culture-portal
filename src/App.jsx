@@ -109,7 +109,7 @@ function App() {
   const navRef = useRef(null);
   // On every screen, signed in or not: Back never leaves the portal without asking.
   useBackGuard(true, navRef);
-  // Bumped by "Rate now" to bring the pulse back even after it was dismissed;
+  // Bumped by "Run a Pulse" to bring the pulse back even after it was dismissed;
   // `all` asks for every behavior the person has left this round.
   const [pulseAsk, setPulseAsk] = useState({ n: 0, all: false });
 

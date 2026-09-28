@@ -117,7 +117,7 @@ function CrestTrophy({ ctx, g, setModal }) {
   return (
     <Trophy key={g.id}
       art={<Crest height={50} pips={Math.max(1, names.length)} />}
-      kicker={names.join(' · ') || 'Value award'}
+      kicker={`${g.is_example ? 'Example · ' : ''}${names.join(' · ') || 'Value award'}`}
       title={g.award?.name ?? 'Value award'}
       meta={<>Conferred on {g.recipient_name} by {g.granted_by_name} · {fmt(g.granted_at)}</>}
       files={g.attachments}

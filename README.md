@@ -25,7 +25,11 @@ buttons open the portal full size.
   reset email. Local mode shows a six-digit code on screen, since it has no mail server.
 - **Start a free trial.** Organization name, the champion's name and email, and a password.
   It creates the organization, makes that person its culture champion, and seeds example
-  values, behaviors, systems and the practice session. Every new portal gets 30 days of the
+  content: three values with their 5C categories, three behaviors each built into a system,
+  the weekly practice session and an example ritual, and a little history in the
+  champion's name (a practice session, a ritual run, a system run, a recognition, a
+  story, and a Value award given to an example team). All of it is tagged Example, and
+  "Clear example content" in Admin removes it. Every new portal gets 30 days of the
   unlimited plan, with no card and no plan to pick. The two plans' prices show on the form;
   the super user sets them.
 - **Request access.** It lands in that organization's Admin as a tentative member until an
@@ -48,18 +52,7 @@ The super user is `jon@horizonlinegroup.com`, recorded in `platform_admins` rath
 in any one organization, which is why it is the only account that gets an organization
 switcher.
 
-Seeded demonstration accounts, all with the password `Portal2026!`:
-
-| Email | Organization | Role |
-|---|---|---|
-| chair@mountainvistage.com | Mountain Vistage CE Team | Culture champion |
-| accountability@mountainvistage.com | Mountain Vistage CE Team | Leader |
-| member@mountainvistage.com | Mountain Vistage CE Team | Member |
-| editor@vaildaily.com | Vail Daily | Culture champion |
-| desk@vaildaily.com | Vail Daily | Leader |
-| reporter@vaildaily.com | Vail Daily | Member |
-
-Sign in as the champion of either organization and you will see only that organization.
+Sign in as the champion of an organization and you will see only that organization.
 Sign in as the super user and the left rail gains an organization switcher, and Admin
 gains an Organizations section for standing up a new client.
 
@@ -82,7 +75,7 @@ Fastest, no tooling at all:
     open dist-single/culture-portal.html
 
 That file is the whole application inlined into one HTML document. Double-click it and
-sign in with one of the accounts above. The super user can use "Reset demo data" in the
+sign in with one of the seeded accounts. The super user can use "Reset demo data" in the
 left rail to restore the seeded organizations, people and content.
 
 With Node, for live editing:
@@ -273,9 +266,13 @@ at the foot of the pulse and on the home page, puts every behavior the person ha
 rated this round in front of them at once. Example content is never rated, and a new
 portal is not asked anything until it has written a behavior of its own.
 
-**Rounds.** A round closes when a set share of the organization's active members have
-each rated every behavior: 80% unless an admin changes it in Admin, Settings, which also
-shows where participation stands. An admin can also close the open round by hand. A round
+**Rounds.** A round closes when participation, the people who have rated every behavior
+divided by the active members, reaches a set share: 80% unless an admin changes it in
+Admin, Settings, which also shows how many people have finished. An admin can also close
+the open round by hand with Close Round Now. The home page's Survey cadence card shows
+how much of the round is rated: every rating in so far, divided by every active member
+rating every behavior. Its cairn fills with that share, and **Run a Pulse** brings the
+pulse up. A round
 is dated only when it closes, and the next round opens at once. Inactive members, over a
 plan's seat limit, are not counted.
 

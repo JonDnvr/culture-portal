@@ -328,9 +328,14 @@ export function cairnFor(status) {
   const completed = status.closed ?? Math.max(0, (status.round ?? 1) - 1);
   const done = status.done ?? status.scored ?? 0;
   const target = status.target || 1;
+  // How much of the round is rated: every rating in, against every active
+  // member rating every behavior. Older backends only knew who had finished.
+  const complete = status.complete ?? Math.round((100 * done) / target);
   return {
-    round: status.round, completed, pct,
-    filled: Math.min(4, Math.floor((4 * done) / target)),
+    round: status.round, completed, pct, complete,
+    rated: status.rated ?? null, possible: status.possible ?? null,
+    // The four stones fill with the share rated, the top one at 100%.
+    filled: Math.min(4, Math.floor((4 * complete) / 100)),
     done, target, members: status.members ?? target, total: status.total,
     mineLeft: status.mine_left ?? 0,
     // kept for older screens

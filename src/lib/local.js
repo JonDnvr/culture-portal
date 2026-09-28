@@ -652,10 +652,10 @@ export async function listOutbox(orgId) {
 /** Example content is marked until someone edits it or clears it out. */
 function exampleContent(orgId) {
   const values = [
-    { n: 'Trust', d: 'What is said here is safe here, and what is promised here happens.' },
-    { n: 'Candor', d: 'Say the hard thing early, to the person who can act on it.' },
-    { n: 'Care', d: 'Full attention, real regard, and a team that is good to be on.' }
-  ].map((v, i) => ({ id: uid(), org_id: orgId, name: v.n, description: v.d, position: i, is_example: true }));
+    { n: 'Trust', c: 'Change', d: 'What is said here is safe here, and what is promised here happens.' },
+    { n: 'Candor', c: 'Character', d: 'Say the hard thing early, to the person who can act on it.' },
+    { n: 'Care', c: 'Connection', d: 'Full attention, real regard, and a team that is good to be on.' }
+  ].map((v, i) => ({ id: uid(), org_id: orgId, name: v.n, description: v.d, category: v.c, position: i, is_example: true }));
 
   const systems = ['Meetings', 'Onboarding', 'Recognition']
     .map((name, i) => ({ id: uid(), org_id: orgId, name, position: i, is_example: true }));
@@ -699,19 +699,106 @@ function exampleContent(orgId) {
   const valueId = Object.fromEntries(values.map((v) => [v.name, v.id]));
   const systemId = Object.fromEntries(systems.map((x) => [x.name, x.id]));
 
-  const rows = behaviors.map((b) => ({
-    id: uid(), org_id: orgId, number: b.number, title: b.title, description: b.description,
-    category: b.category, quick_tip: b.quick_tip, coaching_tips: b.coaching_tips,
-    teaching_points: b.teaching_points, questions: b.questions,
-    failure_state: b.failure_state, hard_rule: b.hard_rule, is_example: true,
-    valueIds: b.values.map((n) => valueId[n]).filter(Boolean), ritualIds: [],
-    placements: b.number === 1
-      ? [{ id: uid(), systemId: systemId.Meetings, owner: 'Whoever leads the meeting',
-           cadence: 'Every meeting', artifact: 'Commitments read back at the open', template: null }]
-      : []
-  }));
+  // A ritual of its own, applied to behavior 3, alongside the weekly practice.
+  const ritual = {
+    id: uid(), org_id: orgId, applies_to_all: false, is_example: true,
+    name: 'Friday wins round', cadence: 'Fridays, 10 minutes', owner: 'Team lead',
+    description: 'Ten minutes at the end of the week to name who did good work, and what it made possible.',
+    practice: [
+      '1. Each person names one teammate and one thing they did this week.', '',
+      '2. Say the effect: what it made easier, faster or better.', '',
+      '3. The lead writes the names down for the weekly note.'
+    ].join('\n')
+  };
 
-  return { values, systems, behaviors: rows };
+  // Where each example behavior is built into a system, by behavior number.
+  const placementFor = {
+    1: { system: 'Meetings', owner: 'Whoever leads the meeting', cadence: 'Every meeting',
+         artifact: 'Commitments read back at the open',
+         template: 'Open every meeting by reading last week\'s commitments aloud: who, what and the date. Anyone whose date will move says so now.' },
+    2: { system: 'Onboarding', owner: 'Hiring manager', cadence: 'First week',
+         artifact: 'A first-week check-in',
+         template: 'On day five, ask the new person: what have you noticed that nobody has said out loud yet?' },
+    3: { system: 'Recognition', owner: 'Team lead', cadence: 'Weekly',
+         artifact: 'One named credit in the weekly note',
+         template: 'Name the person, what they did, and the difference it made. One line is enough.' }
+  };
+
+  const rows = behaviors.map((b) => {
+    const p = placementFor[b.number];
+    return {
+      id: uid(), org_id: orgId, number: b.number, title: b.title, description: b.description,
+      category: b.category, quick_tip: b.quick_tip, coaching_tips: b.coaching_tips,
+      teaching_points: b.teaching_points, questions: b.questions,
+      failure_state: b.failure_state, hard_rule: b.hard_rule, is_example: true,
+      valueIds: b.values.map((n) => valueId[n]).filter(Boolean),
+      ritualIds: b.number === 3 ? [ritual.id] : [],
+      placements: p ? [{ id: uid(), systemId: systemId[p.system], owner: p.owner, cadence: p.cadence,
+        artifact: p.artifact, template: p.template }] : []
+    };
+  });
+
+  return { values, systems, behaviors: rows, ritual };
+}
+
+/**
+ * A little history in the culture champion's name, so Cadence, Connection and
+ * the home page show what a working portal looks like. All of it is marked as
+ * an example and goes with "Clear example content".
+ */
+function exampleActivity(orgId, content, practiceId, champ) {
+  const [b1, b2, b3] = content.behaviors;
+  const ago = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const run = (fields, n, notes) => ({
+    id: uid(), org_id: orgId, ritual_id: null, system_category_id: null, team_id: null,
+    recorded_by: champ.id, recorded_by_name: champ.name, held_at: ago(n), created_at: ago(n),
+    notes, attachments: [], is_example: true, ...fields
+  });
+  return {
+    iterations: [
+      run({ ritual_id: practiceId, behavior_ids: [b1.id] }, 2,
+        'Example. Read the behavior aloud; two people named a date that had slipped and reset it on the spot.'),
+      run({ ritual_id: content.ritual.id, behavior_ids: [b3.id] }, 3,
+        'Example. Six wins named. The customer-support team came up twice.'),
+      // Today, so "Practiced this week" on the home page is never empty.
+      run({ system_category_id: b1.placements[0].systemId, behavior_ids: [b1.id] }, 0,
+        'Example. Commitments read back at the open; one date moved, and it was said before it passed.')
+    ],
+    recognitions: [{
+      id: uid(), org_id: orgId, behavior_id: b3.id, author_id: champ.id, author_name: champ.name,
+      recipient: 'A teammate', recipient_user_id: null, title: 'Named the people behind the launch',
+      body: 'Example. At the all-hands, they listed by name the four people who made the launch happen, and what each one did. Two of them had never been mentioned in a meeting before.',
+      created_at: ago(4), attachments: [], is_example: true
+    }],
+    stories: [{
+      id: uid(), org_id: orgId, behavior_id: b2.id, author_id: champ.id, author_name: champ.name,
+      body: 'Example. A project lead said in week two that the deadline was not going to hold. We moved scope instead of finding out in week eight.',
+      created_at: ago(6), attachments: [], is_example: true
+    }],
+    ...exampleAward(orgId, content, champ, ago)
+  };
+}
+
+/**
+ * A Value award in the catalog, and one given to an example team, so the
+ * Awards page shows what a crest looks like. The team has nobody on it.
+ */
+function exampleAward(orgId, content, champ, ago) {
+  const team = { id: uid(), org_id: orgId, name: 'Example team', archived: false, created_at: now(), is_example: true };
+  const valueId = Object.fromEntries(content.values.map((v) => [v.name, v.id]));
+  const type = {
+    id: uid(), org_id: orgId, name: 'The Keystone Award', grantable_to: 'both',
+    description: 'For carrying our values when it would have been easier not to.',
+    grant_cap: null, cap_period: null, active: true, created_at: now(), is_example: true,
+    valueIds: ['Trust', 'Care'].map((n) => valueId[n]).filter(Boolean)
+  };
+  const grant = {
+    id: uid(), org_id: orgId, award_type_id: type.id, recipient_user_id: null, team_id: team.id,
+    recipient_name: team.name, granted_by: champ.id, granted_by_name: champ.name,
+    citation: 'Example. Held every commitment through the move to the new system, and named each person who made it work.',
+    granted_at: ago(5), recipients: [], attachments: [], is_example: true
+  };
+  return { teams: [team], awardTypes: [type], awardGrants: [grant] };
 }
 
 /**
@@ -747,18 +834,30 @@ export async function createPortal({ orgName, subtitle, championName, championEm
   // they keep is picked later, in Admin, when they add a payment method.
   beginTrial(org, 'unlimited', null, championName.trim());
 
+  const user = {
+    id: uid(), email, name: championName.trim(), passwordHash: await hash(password),
+    is_super: false, org_id: orgId, role: 'champion',
+    // No team, and not the example team the start-up would otherwise pick.
+    team_id: null, avatar_path: null
+  };
+
   const seedContent = exampleContent(orgId);
+  const practice = { id: uid(), org_id: orgId, ...DEFAULT_PRACTICE_RITUAL };
   db.values[orgId] = seedContent.values;
   db.systems[orgId] = seedContent.systems;
   db.behaviors[orgId] = seedContent.behaviors;
-  db.rituals[orgId] = [{ id: uid(), org_id: orgId, ...DEFAULT_PRACTICE_RITUAL }];
+  db.rituals[orgId] = [practice, seedContent.ritual];
   db.measures[orgId] = [];
   org.weekly_behavior_id = seedContent.behaviors[0].id;
 
-  const user = {
-    id: uid(), email, name: championName.trim(), passwordHash: await hash(password),
-    is_super: false, org_id: orgId, role: 'champion'
-  };
+  const history = exampleActivity(orgId, seedContent, practice.id, user);
+  db.iterations.unshift(...history.iterations);
+  db.recognitions.unshift(...history.recognitions);
+  db.stories.unshift(...history.stories);
+  db.teams[orgId] = history.teams;
+  db.awardTypes[orgId] = history.awardTypes;
+  db.awardGrants.unshift(...history.awardGrants);
+
   db.users.push(user);
   queueMail(orgId, email, `Welcome to the ${org.name} culture portal`, welcomeBody(org, user, null));
 
@@ -771,6 +870,24 @@ export async function createPortal({ orgName, subtitle, championName, championEm
 /** Clears everything still marked as an example. */
 export async function clearExampleContent(orgId) {
   requireEditor(orgId);
+  // The example history first, then what it hangs from.
+  const kept = (x) => x.org_id !== orgId || !x.is_example;
+  db.iterations = db.iterations.filter(kept);
+  db.recognitions = db.recognitions.filter(kept);
+  db.stories = db.stories.filter(kept);
+  const goneRituals = new Set((db.rituals[orgId] ?? []).filter((r) => r.is_example).map((r) => r.id));
+  db.rituals[orgId] = (db.rituals[orgId] ?? []).filter((r) => !r.is_example);
+  db.iterations = db.iterations.filter((it) => !goneRituals.has(it.ritual_id));
+  for (const b of db.behaviors[orgId] ?? []) b.ritualIds = (b.ritualIds ?? []).filter((id) => !goneRituals.has(id));
+  // The example award, what was given with it, and the example team.
+  const goneTypes = new Set((db.awardTypes[orgId] ?? []).filter((a) => a.is_example).map((a) => a.id));
+  const goneTeams = new Set((db.teams[orgId] ?? []).filter((t) => t.is_example).map((t) => t.id));
+  db.awardGrants = (db.awardGrants ?? []).filter((g) =>
+    kept(g) && !goneTypes.has(g.award_type_id) && !goneTeams.has(g.team_id));
+  db.awardTypes[orgId] = (db.awardTypes[orgId] ?? []).filter((a) => !a.is_example);
+  db.teams[orgId] = (db.teams[orgId] ?? []).filter((t) => !t.is_example);
+  for (const u of db.users) if (u.org_id === orgId && goneTeams.has(u.team_id)) u.team_id = null;
+  for (const it of db.iterations) if (it.org_id === orgId && goneTeams.has(it.team_id)) it.team_id = null;
   db.values[orgId] = (db.values[orgId] ?? []).filter((v) => !v.is_example);
   db.systems[orgId] = (db.systems[orgId] ?? []).filter((x) => !x.is_example);
   db.behaviors[orgId] = (db.behaviors[orgId] ?? []).filter((b) => !b.is_example);
@@ -1784,7 +1901,8 @@ export async function createRitual(orgId, ritual) {
 export async function updateRitual(ritualId, fields) {
   for (const orgId of Object.keys(db.rituals)) {
     const r = db.rituals[orgId].find((x) => x.id === ritualId);
-    if (r) { requireEditor(orgId); Object.assign(r, fields); persist(); return r; }
+    // Editing an example ritual makes it yours, so clearing examples leaves it.
+    if (r) { requireEditor(orgId); Object.assign(r, fields); r.is_example = false; persist(); return r; }
   }
   throw new Error('No such ritual.');
 }
@@ -1804,7 +1922,7 @@ export async function deleteRitual(ritualId) {
 export async function saveRitualPractice(ritualId, practice) {
   for (const orgId of Object.keys(db.rituals)) {
     const r = db.rituals[orgId].find((x) => x.id === ritualId);
-    if (r) { r.practice = practice; persist(); return; }
+    if (r) { r.practice = practice; r.is_example = false; persist(); return; }
   }
 }
 
@@ -2108,11 +2226,18 @@ export async function getPulseStatus(orgId) {
   syncPulse(orgId);
   const round = currentRound(orgId);
   const members = pulseMembers(orgId).length;
+  const total = realBehaviors(orgId).length;
   const done = finishedIn(orgId, round);
   const me = currentUser();
+  // Ratings in from active members on current behaviors, against every one of
+  // them rating every behavior.
+  const people = new Set(pulseMembers(orgId).map((u) => u.id));
+  const real = new Set(realBehaviors(orgId).map((b) => b.id));
+  const rated = roundAnswers(orgId, round).filter((p) => people.has(p.user_id) && real.has(p.behavior_id)).length;
+  const possible = members * total;
   return {
-    round, target: pulseTarget(orgId), done, scored: done, members,
-    total: realBehaviors(orgId).length,
+    round, target: pulseTarget(orgId), done, scored: done, members, total,
+    rated, possible, complete: possible ? Math.round((100 * rated) / possible) : 0,
     mine_left: answersPulse(me, orgId) ? myUnrated(orgId, round, me.id).length : 0,
     pct: closePct(orgId),
     answers: roundAnswers(orgId, round).length,
@@ -2418,7 +2543,7 @@ export async function createTeam(orgId, name) {
 export async function renameTeam(teamId, name) {
   for (const orgId of Object.keys(db.teams)) {
     const t = db.teams[orgId].find((x) => x.id === teamId);
-    if (t) { requireEditor(orgId); t.name = String(name).trim(); persist(); return t; }
+    if (t) { requireEditor(orgId); t.name = String(name).trim(); t.is_example = false; persist(); return t; }
   }
   throw new Error('No such team.');
 }
@@ -2447,7 +2572,9 @@ export async function saveAwardType(orgId, fields) {
     grant_cap: fields.grant_cap ? Number(fields.grant_cap) : null,
     cap_period: fields.grant_cap ? fields.cap_period ?? 'quarter' : null,
     active: fields.active ?? true,
-    valueIds: fields.valueIds ?? []
+    valueIds: fields.valueIds ?? [],
+    // Editing an example award makes it yours, so clearing examples leaves it.
+    is_example: false
   };
   if (!clean.name) throw new Error('Name the award.');
   if (!clean.valueIds.length) throw new Error('Pick at least one Value this award stands for.');
@@ -2645,6 +2772,7 @@ export async function updateStory(id, { behaviorId, body, isDraft, addFiles = []
   const st = db.stories.find((x) => x.id === id);
   if (!st || !visible(st, st.author_id)) throw new Error('That story is no longer here.');
   requireModify(st.org_id, st.author_id, 'that story');
+  st.is_example = false; // editing an example makes it yours
   if (behaviorId !== undefined) st.behavior_id = behaviorId;
   if (body !== undefined) st.body = body;
   applyDraft(st, isDraft, 'created_at');
@@ -2658,6 +2786,7 @@ export async function updateRecognition(id, { behaviorId, recipientUserId, title
   const r = db.recognitions.find((x) => x.id === id);
   if (!r || !visible(r, r.author_id)) throw new Error('That recognition is no longer here.');
   requireModify(r.org_id, r.author_id, 'that recognition');
+  r.is_example = false; // editing an example makes it yours
   if (recipientUserId !== undefined && recipientUserId !== r.recipient_user_id) {
     const target = db.users.find((u) => u.id === recipientUserId);
     if (!target || target.org_id !== r.org_id) throw new Error('That person is not in this organization.');
@@ -2679,6 +2808,7 @@ export async function updateIteration(id, { behaviorIds, teamId, heldAt, notes, 
   const it = db.iterations.find((x) => x.id === id);
   if (!it || !visible(it, it.recorded_by)) throw new Error('That run is no longer here.');
   requireModify(it.org_id, it.recorded_by, 'that run');
+  it.is_example = false; // editing an example makes it yours
   if (behaviorIds !== undefined) {
     if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
     it.behavior_ids = behaviorIds;
@@ -2700,6 +2830,7 @@ export async function updateAwardGrant(id, { citation, isDraft, addFiles = [], r
   const g = db.awardGrants.find((x) => x.id === id);
   if (!g || !visible(g, g.granted_by)) throw new Error('That award is no longer here.');
   requireModify(g.org_id, g.granted_by, 'that award');
+  g.is_example = false; // editing an example makes it yours
   if (citation !== undefined) {
     if (!String(citation).trim()) throw new Error('Write the citation: what they did.');
     g.citation = citation.trim();

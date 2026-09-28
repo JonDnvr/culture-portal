@@ -26,11 +26,69 @@ const admin = createClient(
 /** A little content so the first sign-in is not an empty screen. */
 const EXAMPLE = {
   values: [
-    { name: 'Trust', description: 'What is said here is safe here, and what is promised here happens.' },
-    { name: 'Candor', description: 'Say the hard thing early, to the person who can act on it.' },
-    { name: 'Care', description: 'Full attention, real regard, and a team that is good to be on.' }
+    { name: 'Trust', category: 'Change', description: 'What is said here is safe here, and what is promised here happens.' },
+    { name: 'Candor', category: 'Character', description: 'Say the hard thing early, to the person who can act on it.' },
+    { name: 'Care', category: 'Connection', description: 'Full attention, real regard, and a team that is good to be on.' }
   ],
   systems: ['Meetings', 'Onboarding', 'Recognition'],
+  // Where each example behavior is built into a system, by behavior number.
+  placements: [
+    { number: 1, system: 'Meetings', owner: 'Whoever leads the meeting', cadence: 'Every meeting',
+      artifact: 'Commitments read back at the open',
+      template: 'Open every meeting by reading last week\'s commitments aloud: who, what and the date. Anyone whose date will move says so now.' },
+    { number: 2, system: 'Onboarding', owner: 'Hiring manager', cadence: 'First week',
+      artifact: 'A first-week check-in',
+      template: 'On day five, ask the new person: what have you noticed that nobody has said out loud yet?' },
+    { number: 3, system: 'Recognition', owner: 'Team lead', cadence: 'Weekly',
+      artifact: 'One named credit in the weekly note',
+      template: 'Name the person, what they did, and the difference it made. One line is enough.' }
+  ],
+  // A ritual of its own, applied to one behavior, alongside the weekly practice.
+  ritual: {
+    name: 'Friday wins round', cadence: 'Fridays, 10 minutes', owner: 'Team lead',
+    description: 'Ten minutes at the end of the week to name who did good work, and what it made possible.',
+    practice: [
+      '1. Each person names one teammate and one thing they did this week.', '',
+      '2. Say the effect: what it made easier, faster or better.', '',
+      '3. The lead writes the names down for the weekly note.'
+    ].join('\n'),
+    behaviors: [3]
+  },
+  // A little history, recorded by the culture champion, so Cadence, Connection
+  // and the home page show what a working portal looks like.
+  activity: {
+    runs: [
+      { ritual: 'practice', behavior: 1, daysAgo: 2,
+        notes: 'Example. Read the behavior aloud; two people named a date that had slipped and reset it on the spot.' },
+      { ritual: 'example', behavior: 3, daysAgo: 3,
+        notes: 'Example. Six wins named. The customer-support team came up twice.' },
+      // Today, so "Practiced this week" on the home page is never empty.
+      { system: 'Meetings', behavior: 1, daysAgo: 0,
+        notes: 'Example. Commitments read back at the open; one date moved, and it was said before it passed.' }
+    ],
+    recognition: {
+      behavior: 3, daysAgo: 4, recipient: 'A teammate', title: 'Named the people behind the launch',
+      body: 'Example. At the all-hands, they listed by name the four people who made the launch happen, and what each one did. Two of them had never been mentioned in a meeting before.'
+    },
+    story: {
+      behavior: 2, daysAgo: 6,
+      body: 'Example. A project lead said in week two that the deadline was not going to hold. We moved scope instead of finding out in week eight.'
+    }
+  },
+  // A Value award in the catalog, and one given to an example team, so the
+  // Awards page shows what a crest looks like. The team has nobody on it.
+  award: {
+    team: 'Example team',
+    type: {
+      name: 'The Keystone Award', grantable_to: 'both',
+      description: 'For carrying our values when it would have been easier not to.',
+      values: ['Trust', 'Care']
+    },
+    grant: {
+      daysAgo: 5,
+      citation: 'Example. Held every commitment through the move to the new system, and named each person who made it work.'
+    }
+  },
   behaviors: [
     {
       number: 1, title: 'Honor commitments', category: 'Character',
@@ -181,17 +239,24 @@ Deno.serve(async (req) => {
       const { data: values } = await admin.from('values_').insert(
         EXAMPLE.values.map((v, i) => ({ org_id: org.id, ...v, position: i, is_example: true }))
       ).select();
-      await admin.from('system_categories').insert(
+      const { data: systems } = await admin.from('system_categories').insert(
         EXAMPLE.systems.map((name, i) => ({ org_id: org.id, name, position: i, is_example: true }))
-      );
-      await admin.from('rituals').insert({ org_id: org.id, ...EXAMPLE.practiceRitual });
+      ).select();
+      const { data: practice } = await admin.from('rituals')
+        .insert({ org_id: org.id, ...EXAMPLE.practiceRitual }).select().single();
+      const { behaviors: ritualFor, ...ritualFields } = EXAMPLE.ritual;
+      const { data: ritual } = await admin.from('rituals')
+        .insert({ org_id: org.id, ...ritualFields, is_example: true }).select().single();
 
       const valueId = Object.fromEntries((values ?? []).map((v) => [v.name, v.id]));
+      const systemId = Object.fromEntries((systems ?? []).map((s) => [s.name, s.id]));
+      const behaviorId: Record<number, string> = {};
       for (const b of EXAMPLE.behaviors) {
         const { values: names, ...rest } = b;
         const { data: row } = await admin.from('behaviors')
           .insert({ org_id: org.id, ...rest, is_example: true }).select().single();
         if (row) {
+          behaviorId[b.number] = row.id;
           await admin.from('behavior_values').insert(
             names.map((n) => ({ behavior_id: row.id, value_id: valueId[n] })).filter((x) => x.value_id)
           );
@@ -199,6 +264,69 @@ Deno.serve(async (req) => {
             await admin.from('organizations').update({ weekly_behavior_id: row.id }).eq('id', org.id);
           }
         }
+      }
+
+      // Systems and the example ritual, applied to the example behaviors.
+      await admin.from('placements').insert(EXAMPLE.placements
+        .filter((p) => behaviorId[p.number] && systemId[p.system])
+        .map((p) => ({
+          org_id: org.id, behavior_id: behaviorId[p.number], system_category_id: systemId[p.system],
+          owner: p.owner, cadence: p.cadence, artifact: p.artifact, template: p.template
+        })));
+      if (ritual) {
+        await admin.from('behavior_rituals').insert(ritualFor
+          .filter((n) => behaviorId[n]).map((n) => ({ behavior_id: behaviorId[n], ritual_id: ritual.id })));
+      }
+
+      // A little history in the champion's name. Everything is marked as an
+      // example, so "Clear example content" takes it away with the rest.
+      const champ = { id: created.user.id, name: championName.trim() };
+      const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+      const { runs, recognition, story } = EXAMPLE.activity;
+      await admin.from('iterations').insert(runs
+        .filter((x) => behaviorId[x.behavior])
+        .map((x) => ({
+          org_id: org.id,
+          ritual_id: x.ritual === 'practice' ? practice?.id ?? null : x.ritual === 'example' ? ritual?.id ?? null : null,
+          system_category_id: x.system ? systemId[x.system] ?? null : null,
+          behavior_ids: [behaviorId[x.behavior]],
+          recorded_by: champ.id, recorded_by_name: champ.name,
+          held_at: daysAgo(x.daysAgo), created_at: daysAgo(x.daysAgo),
+          notes: x.notes, is_example: true
+        }))
+        .filter((x) => x.ritual_id || x.system_category_id));
+      if (behaviorId[recognition.behavior]) {
+        await admin.from('recognitions').insert({
+          org_id: org.id, behavior_id: behaviorId[recognition.behavior],
+          author_id: champ.id, author_name: champ.name,
+          recipient: recognition.recipient, recipient_user_id: null, title: recognition.title,
+          body: recognition.body, created_at: daysAgo(recognition.daysAgo), is_example: true
+        });
+      }
+      if (behaviorId[story.behavior]) {
+        await admin.from('stories').insert({
+          org_id: org.id, behavior_id: behaviorId[story.behavior],
+          author_id: champ.id, author_name: champ.name,
+          body: story.body, created_at: daysAgo(story.daysAgo), is_example: true
+        });
+      }
+
+      const { award } = EXAMPLE;
+      const { data: team } = await admin.from('teams')
+        .insert({ org_id: org.id, name: award.team, is_example: true }).select().single();
+      const { values: awardValues, ...typeFields } = award.type;
+      const { data: awardType } = await admin.from('award_types')
+        .insert({ org_id: org.id, ...typeFields, is_example: true }).select().single();
+      if (awardType) {
+        await admin.from('award_type_values').insert(awardValues
+          .filter((n) => valueId[n]).map((n) => ({ award_type_id: awardType.id, value_id: valueId[n] })));
+      }
+      if (team && awardType) {
+        await admin.from('award_grants').insert({
+          org_id: org.id, award_type_id: awardType.id, team_id: team.id, recipient_name: team.name,
+          granted_by: champ.id, granted_by_name: champ.name, citation: award.grant.citation,
+          granted_at: daysAgo(award.grant.daysAgo), is_example: true
+        });
       }
 
       await sendWelcome(org.name, email, championName.trim(), 'culture champion');
