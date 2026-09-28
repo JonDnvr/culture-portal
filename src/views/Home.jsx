@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { N, Tag } from '../components/ui.jsx';
 import HomeBadges from './HomeBadges.jsx';
-import { ClearExamplesButton } from '../components/examples.jsx';
 import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
 
 export default function Home({ ctx }) {
@@ -23,9 +22,6 @@ export default function Home({ ctx }) {
           {ctx.canEdit ? (
             <>, or <button className="linkbtn" onClick={() => goto('admin', { tab: 'about' })}>clear the rest from Admin</button>.</>
           ) : '. An admin or the culture champion can clear the rest.'}
-          {ctx.canEdit && (
-            <div className="btnrow" style={{ marginTop: 8 }}><ClearExamplesButton ctx={ctx} /></div>
-          )}
         </div>
       )}
 
