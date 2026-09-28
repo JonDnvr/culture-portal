@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
-import { pad, Tag } from '../components/ui.jsx';
+import { N, Tag } from '../components/ui.jsx';
+import HomeBadges from './HomeBadges.jsx';
+import { ClearExamplesButton } from '../components/examples.jsx';
+import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
 
 export default function Home({ ctx }) {
-  const { org, behaviors, values, goto, openBehavior } = ctx;
+  const { org, behaviors, values, goto, openBehavior, term, showCats, categories } = ctx;
   const [openValue, setOpenValue] = useState(null);
+  const [openCat, setOpenCat] = useState(null);
   const week = behaviors.find((b) => b.id === org.weekly_behavior_id) ?? behaviors[0];
   const countFor = (v) => behaviors.filter((b) => b.values.some((x) => x.id === v.id)).length;
 
@@ -14,68 +18,37 @@ export default function Home({ ctx }) {
       <p className="lede">{org.creed}</p>
       {org.has_example_content && (
         <div className="notice examplenotice">
-          Some of this is example content, marked with an Example tag. Edit a value or a behavior
-          to make it yours, or clear the rest from Admin.
+          Some of this is example content, marked with an Example tag. Edit a value or
+          a {term.one} to make it yours
+          {ctx.canEdit ? (
+            <>, or <button className="linkbtn" onClick={() => goto('admin', { tab: 'about' })}>clear the rest from Admin</button>.</>
+          ) : '. An admin or the culture champion can clear the rest.'}
+          {ctx.canEdit && (
+            <div className="btnrow" style={{ marginTop: 8 }}><ClearExamplesButton ctx={ctx} /></div>
+          )}
         </div>
       )}
 
       {week && (
         <section>
-          <div className="sectionhead"><h2>This week</h2><span className="note">Rotates Monday</span></div>
+          <div className="sectionhead"><h2>{UNIT[cadenceOf(org).kind].this.replace(/^./, (c) => c.toUpperCase())}</h2><span className="note">{rotationNote(cadenceOf(org))}</span></div>
           <div className="bigcard">
-            <div className="kicker">{pad(week.number)} / {week.category} / {week.values.map((v) => v.name).join(', ')}</div>
+            <div className="kicker"><N n={week.number} dot={false} />{showCats && week.category ? ` / ${week.category}` : ''} / {week.values.map((v) => v.name).join(', ')}</div>
             <h2>{week.title}</h2>
             <p className="desc">{week.description}</p>
             <div className="btnrow">
               <button className="btn" onClick={() => goto('cadence')}>Practice it</button>
-              <button className="btn ghost" onClick={() => openBehavior(week.id)}>Full behavior</button>
+              <button className="btn ghost" onClick={() => openBehavior(week.id)}>Full {term.one}</button>
             </div>
           </div>
         </section>
       )}
 
-      <section>
-        <div className="sectionhead"><h2>Purpose</h2></div>
-        <div className="block"><h4>Shared purpose/mission</h4><p>{org.mission}</p></div>
-        <div className="block"><h4>Vision/Where we are going</h4><p>{org.vision}</p></div>
-      </section>
-
-      <section>
-        <div className="sectionhead"><h2>Values</h2><span className="note">Each one carried by behaviors</span></div>
-        <div className="vgrid">
-          {values.map((v) => {
-            const carried = behaviors.filter((b) => b.values.some((x) => x.id === v.id));
-            const open = openValue === v.id;
-            return (
-              <div key={v.id} className="vcard">
-                <h3>{v.name}</h3>
-                {v.is_example && <div className="tagrow"><Tag type="warn">Example</Tag></div>}
-                <p>{v.description}</p>
-                <button className="cnt linkbtn" aria-expanded={open}
-                  onClick={() => setOpenValue(open ? null : v.id)}>
-                  Behaviors ({carried.length}) {open ? '▴' : '▾'}
-                </button>
-                {open && (
-                  <ul className="vlist">
-                    {carried.map((b) => (
-                      <li key={b.id}>
-                        <button className="linkbtn" onClick={() => openBehavior(b.id)}>
-                          {pad(b.number)}. {b.title}
-                        </button>
-                      </li>
-                    ))}
-                    {!carried.length && <li className="quiet">No behavior carries this value yet.</li>}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      <HomeBadges ctx={ctx} />
 
       <section>
         <div className="sectionhead">
-          <h2>All behaviors</h2>
+          <h2>All {term.many}</h2>
           <span className="note">{behaviors.length} in practice</span>
         </div>
         <p className="prose">
@@ -84,15 +57,93 @@ export default function Home({ ctx }) {
         </p>
         <div className="btnrow">
           <button className="btn" onClick={() => goto('clarity')}>See the full list</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false)}>Open the handout</button>
-          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true)}>Open the full handout</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, false, term, showCats)}>Open the handout</button>
+          <button className="btn ghost" onClick={() => openHandout(org, values, behaviors, true, term, showCats)}>Open the full handout</button>
         </div>
         <p className="meta" style={{ marginTop: 8 }}>
-          The handout is the one-line-per-behavior version for a meeting. The full handout adds
+          The handout is the one-line-per-{term.one} version for a meeting. The full handout adds
           the coaching tips, teaching points, discussion questions, failure state and rule, for
           whoever is leading. Both open as a clean page you can print or save as a PDF.
         </p>
       </section>
+
+      <section>
+        <div className="sectionhead"><h2>Purpose</h2></div>
+        <div className="block"><h4>Shared purpose/mission</h4><p>{org.mission}</p></div>
+        <div className="block"><h4>Vision/Where we are going</h4><p>{org.vision}</p></div>
+      </section>
+
+      <section>
+        <div className="sectionhead"><h2>Values</h2><span className="note">Each one carried by {term.many}</span></div>
+        <div className="vgrid">
+          {values.map((v) => {
+            const carried = behaviors.filter((b) => b.values.some((x) => x.id === v.id));
+            const open = openValue === v.id;
+            return (
+              <div key={v.id} className="vcard boxed">
+                <h3>{v.name}</h3>
+                {v.is_example && <div className="tagrow"><Tag type="warn">Example</Tag></div>}
+                <p>{v.description}</p>
+                <button className="cnt linkbtn" aria-expanded={open}
+                  onClick={() => setOpenValue(open ? null : v.id)}>
+                  {term.Many} ({carried.length}) {open ? '▴' : '▾'}
+                </button>
+                {open && (
+                  <ul className="vlist">
+                    {carried.map((b) => (
+                      <li key={b.id}>
+                        <button className="linkbtn" onClick={() => openBehavior(b.id)}>
+                          <N n={b.number} /> {b.title}
+                        </button>
+                      </li>
+                    ))}
+                    {!carried.length && <li className="quiet">No {term.one} carries this value yet.</li>}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+
+      {showCats && (
+        <section>
+          <div className="sectionhead">
+            <h2>The 5C categories</h2>
+            <span className="note">How each {term.one} is sorted</span>
+          </div>
+          <p className="prose">
+            Our values and {term.many} sort into five categories. Together they cover who we are, how we
+            treat people, how we do the work, who it is for, and how we keep growing, so no side of
+            the culture is left to chance.
+          </p>
+          <div className="cgrid">
+            {(categories ?? []).map((c) => {
+              const inCat = values.filter((v) => v.category === c.name);
+              const open = openCat === c.name;
+              return (
+                <div key={c.name} className="ccard">
+                  <h3>{c.name}</h3>
+                  <div className="cq">{c.question}</div>
+                  {c.definition && <p>{c.definition}</p>}
+                  <button className="cnt" aria-expanded={open} onClick={() => setOpenCat(open ? null : c.name)}>
+                    Values ({inCat.length}) {open ? '▴' : '▾'}
+                  </button>
+                  {open && (
+                    <ul className="vlist">
+                      {inCat.map((v) => (
+                        <li key={v.id}>{v.name}</li>
+                      ))}
+                      {!inCat.length && <li className="quiet">No value in this category yet. Set one from Admin, About Us, Values.</li>}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -101,7 +152,7 @@ export default function Home({ ctx }) {
  * Builds the handout as its own page rather than printing the app. Two
  * depths: the short one for the room, the full one for whoever is leading.
  */
-function openHandout(org, values, behaviors, full) {
+function openHandout(org, values, behaviors, full, term, showCats = true) {
   const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const num = (n) => String(n).padStart(2, '0');
@@ -115,12 +166,12 @@ function openHandout(org, values, behaviors, full) {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(org.name)} — behaviors${full ? ', full' : ''}</title>
+<title>${esc(org.name)} — ${esc(term.many)}${full ? ', full' : ''}</title>
 <style>
   :root{
     --ink:#151A18;--soft:#3E4A46;--muted:#5F6C67;--line:#D4DAD6;
     --accent:${esc(org.accent || '#9C7A3C')};
-    --value:#A8791F;--category:#4F7052;
+    --value:#B5541C;--category:#4F7052;
   }
   *{box-sizing:border-box}
   body{margin:0;background:#f4f5f3;color:var(--ink);
@@ -178,13 +229,13 @@ function openHandout(org, values, behaviors, full) {
     ${values.map((v) => `<li><strong>${esc(v.name)}.</strong> ${esc(v.description)}</li>`).join('')}
   </ul>
 
-  <h2>Behaviors</h2>
+  <h2>${esc(term.Many)}</h2>
   ${behaviors.map((b) => `
     <div class="behavior">
       <h3><span class="bnum">${num(b.number)}.</span> ${esc(b.title)}</h3>
       <div class="tags">
         ${b.values.map((v) => `<span class="tag v">${esc(v.name)}</span>`).join('')}
-        <span class="tag c">${esc(b.category)}</span>
+        ${showCats && b.category ? `<span class="tag c">${esc(b.category)}</span>` : ''}
       </div>
       <p>${esc(b.description)}</p>
       ${full ? [
