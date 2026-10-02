@@ -273,32 +273,6 @@ export default function Admin({ ctx }) {
       </section>
 
       <section>
-        <div className="sectionhead"><h2>5C Value Categories</h2><span className="note">Character, Connection, Craft, Cause, Change</span></div>
-        <div className="settinggrid two">
-          <div className="panel">
-            <label className="fl">5C Value Categories</label>
-            <label className="toggle">
-              <input type="checkbox" checked={org.show_categories !== false}
-                onChange={async (e) => {
-                  const on = e.target.checked;
-                  try {
-                    await updateOrganization(org.id, { show_categories: on });
-                    toast(on ? 'Category tags are on.' : 'Category tags are off.');
-                    await refreshOrgs();
-                  } catch (err) { toast(err.message); }
-                }} />
-              <span>Show the Character, Connection, Craft, Cause and Change categories on values and {term.many}</span>
-            </label>
-            <p className="meta">
-              On, the home page explains the five categories and Conviction adds coverage by category.
-              Off, the tags and category filters are hidden. Each {term.one} keeps its category either way.
-            </p>
-          </div>
-
-        </div>
-      </section>
-
-      <section>
         <div className="sectionhead">
           <h2>Our Systems</h2>
           <span className="note"><button className="btn small" onClick={() => setModal({ kind: 'system' })}>Add a system</button></span>
@@ -354,7 +328,57 @@ export default function Admin({ ctx }) {
       </>
       )}
 
-      {tab === 'rotation' && <Rotation ctx={ctx} />}
+      {tab === 'rotation' && (
+      <>
+      {/* Which behavior is featured now and how it moves on, above the order it moves through. */}
+      <section>
+        <div className="sectionhead">
+          <h2>Featured {term.one} (behavior of the week)</h2>
+          <span className="note">Shown on the culture home and in Cadence</span>
+        </div>
+        <div className="panel" style={{ maxWidth: 560 }}>
+          <label className="fl" htmlFor="weekSel">Currently practising</label>
+          <select id="weekSel" className="field" value={org.weekly_behavior_id ?? ''}
+            onChange={async (e) => {
+              try {
+                await setWeeklyBehavior(org.id, e.target.value || null);
+                toast(`${term.One} of the week set.`);
+                await refreshOrgs(); reload();
+              } catch (err) { toast(err.message); }
+            }}>
+            <option value="">None selected</option>
+            {behaviors.map((b) => <option key={b.id} value={b.id}>{pad(b.number)}. {b.title}</option>)}
+          </select>
+          <label className="switchrow">
+            <input type="checkbox" checked={!!org.auto_advance}
+              onChange={async (e) => {
+                try {
+                  await setAutoAdvance(org.id, e.target.checked);
+                  toast(e.target.checked
+                    ? 'It will now move on by itself each week.'
+                    : 'Back to setting it by hand.');
+                  await refreshOrgs(); reload();
+                } catch (err) { toast(err.message); }
+              }} />
+            <span>Advance automatically, in rotation order</span>
+          </label>
+          <BotwCadence org={org} toast={toast} refreshOrgs={refreshOrgs} reload={reload} />
+          <p className="meta" style={{ marginTop: 8 }}>
+            {org.auto_advance
+              ? `It moves to the next ${term.one} in the rotation ${cadenceLine(org)}. Setting one by hand restarts the clock.`
+              : `Set it by hand ${cadenceLine(org)}.`}{' '}
+            Streaks and badges count in the same unit.
+          </p>
+          {staleWeek(org) && (
+            <div className="notice flagnotice" style={{ marginTop: 10 }}>
+              This was last changed {staleWeek(org)} days ago. The rotation has stalled.
+            </div>
+          )}
+        </div>
+      </section>
+      <Rotation ctx={ctx} />
+      </>
+      )}
 
       {tab === 'people' && (
       <>
@@ -482,52 +506,6 @@ export default function Admin({ ctx }) {
       <>
       <section>
         <div className="sectionhead">
-          <h2>Featured {term.one} (behavior of the week)</h2>
-          <span className="note">Shown on the culture home and in Cadence</span>
-        </div>
-        <div className="panel" style={{ maxWidth: 560 }}>
-          <label className="fl" htmlFor="weekSel">Currently practising</label>
-          <select id="weekSel" className="field" value={org.weekly_behavior_id ?? ''}
-            onChange={async (e) => {
-              try {
-                await setWeeklyBehavior(org.id, e.target.value || null);
-                toast(`${term.One} of the week set.`);
-                await refreshOrgs(); reload();
-              } catch (err) { toast(err.message); }
-            }}>
-            <option value="">None selected</option>
-            {behaviors.map((b) => <option key={b.id} value={b.id}>{pad(b.number)}. {b.title}</option>)}
-          </select>
-          <label className="switchrow">
-            <input type="checkbox" checked={!!org.auto_advance}
-              onChange={async (e) => {
-                try {
-                  await setAutoAdvance(org.id, e.target.checked);
-                  toast(e.target.checked
-                    ? 'It will now move on by itself each week.'
-                    : 'Back to setting it by hand.');
-                  await refreshOrgs(); reload();
-                } catch (err) { toast(err.message); }
-              }} />
-            <span>Advance automatically, in rotation order</span>
-          </label>
-          <BotwCadence org={org} toast={toast} refreshOrgs={refreshOrgs} reload={reload} />
-          <p className="meta" style={{ marginTop: 8 }}>
-            {org.auto_advance
-              ? `It moves to the next ${term.one} in the rotation ${cadenceLine(org)}. Setting one by hand restarts the clock.`
-              : `Set it by hand ${cadenceLine(org)}.`}{' '}
-            Streaks and badges count in the same unit.
-          </p>
-          {staleWeek(org) && (
-            <div className="notice flagnotice" style={{ marginTop: 10 }}>
-              This was last changed {staleWeek(org)} days ago. The rotation has stalled.
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section>
-        <div className="sectionhead">
           <h2>Settings</h2>
           <span className="note">Applies to everyone in {org.name}</span>
         </div>
@@ -548,6 +526,26 @@ export default function Admin({ ctx }) {
           </div>
 
           <TermSetting ctx={ctx} toast={toast} />
+
+          <div className="panel">
+            <label className="fl">5C Value Categories</label>
+            <label className="toggle">
+              <input type="checkbox" checked={org.show_categories !== false}
+                onChange={async (e) => {
+                  const on = e.target.checked;
+                  try {
+                    await updateOrganization(org.id, { show_categories: on });
+                    toast(on ? 'Category tags are on.' : 'Category tags are off.');
+                    await refreshOrgs();
+                  } catch (err) { toast(err.message); }
+                }} />
+              <span>Show the Character, Connection, Craft, Cause and Change categories on values and {term.many}</span>
+            </label>
+            <p className="meta">
+              On, the home page explains the five categories and Conviction adds coverage by category.
+              Off, the tags and category filters are hidden. Values and {term.many} keep their categories either way.
+            </p>
+          </div>
 
           <div className="panel">
             <label className="fl" htmlFor="pulseSel">Quick pulse per sign-in</label>
