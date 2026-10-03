@@ -1,0 +1,19 @@
+# Installed packages; Cloudflare installs its own when it builds.
+node_modules/
+
+# Build output; Cloudflare builds from source.
+dist/
+dist-single/
+
+# Secrets. Never commit these; the service role key can read and change everything.
+.env
+.env.*
+!env.example
+
+# The Supabase CLI's local cache.
+supabase/.temp/
+
+# Editor and OS clutter.
+.DS_Store
+Thumbs.db
+*.log

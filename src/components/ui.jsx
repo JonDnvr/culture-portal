@@ -174,28 +174,74 @@ export function CategoryBadge({ name }) {
 }
 
 
+/** A footer button that leaves without saving. */
+const LEAVES = /^(cancel|close)$/i;
+
+/**
+ * Every pop-up. A click outside it does nothing, so a stray click cannot lose
+ * a form. Once anything in it has been typed, picked or toggled, leaving
+ * without saving asks first: Escape, the browser's Back button, and a footer
+ * Cancel or Close all go through the same question. Saving closes it as
+ * before, because the form that saved removes it.
+ */
 export function Modal({ title, children, footer, onClose, wide }) {
   const scrim = useRef(null);
+  const dirty = useRef(false);
+  const asking = useRef(false);
+  const latestClose = useRef(onClose);
+  latestClose.current = onClose;
+
+  const leave = useCallback(async () => {
+    if (asking.current) return;
+    if (dirty.current) {
+      asking.current = true;
+      const ok = await confirmAction({
+        title: 'Leave without saving?',
+        body: 'You have changes here that are not saved. Leaving now loses them.',
+        action: 'Leave without saving'
+      });
+      asking.current = false;
+      if (!ok) return;
+    }
+    latestClose.current();
+  }, []);
+
   useEffect(() => {
     // Escape closes only the dialog on top, so a confirmation over a form
     // does not take the form with it.
     const esc = (e) => {
       if (e.key !== 'Escape') return;
       const all = document.querySelectorAll('.scrim');
-      if (all[all.length - 1] === scrim.current) onClose();
+      if (all[all.length - 1] === scrim.current) leave();
     };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
-  }, [onClose]);
+  }, [leave]);
+
+  // Typing, picking from a list, choosing a file, or pressing a pill or
+  // toggle counts as a change. Showing a password does not.
+  const changed = () => { dirty.current = true; };
+  const clicked = (e) => {
+    const b = e.target.closest?.('button[aria-pressed]');
+    if (b && !b.classList.contains('pwtoggle')) dirty.current = true;
+  };
+  const footClick = (e) => {
+    const b = e.target.closest?.('button');
+    if (b && dirty.current && LEAVES.test(b.textContent.trim())) {
+      e.preventDefault();
+      e.stopPropagation();
+      leave();
+    }
+  };
 
   return (
-    <div className="scrim" ref={scrim} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="scrim" ref={scrim}>
       <div className={wide ? 'modal wide' : 'modal'} role="dialog" aria-modal="true" aria-label={title}>
-        <div className="form">
+        <div className="form" onInputCapture={changed} onChangeCapture={changed} onClickCapture={clicked}>
           {title && <h3>{title}</h3>}
           {children}
         </div>
-        {footer && <div className="modalfoot">{footer}</div>}
+        {footer && <div className="modalfoot" onClickCapture={footClick}>{footer}</div>}
       </div>
     </div>
   );
@@ -207,7 +253,7 @@ let showConfirm = null;
 
 /**
  * Asks before anything is removed. Resolves true only when the person presses
- * the action button; Cancel, Escape or a click outside all mean no.
+ * the action button; Cancel or Escape mean no.
  *
  *   if (!(await confirmAction({ title: 'Delete this story?', body: '…' }))) return;
  */

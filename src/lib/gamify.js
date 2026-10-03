@@ -195,11 +195,16 @@ export function botwStreak(iterations, sessionId, scope, today = new Date(), cad
 
 /* ---------------------------------------------------------------- practice */
 
-/** Ritual and system runs, this week and across the recent window. */
+/**
+ * Every ritual and system run, this week and across the recent window, for
+ * the home page's "Practiced" card. Unlike fluency and the badges, this counts
+ * the weekly practice session too: it is a ritual people ran, and a portal
+ * whose only runs are practice sessions should not read as having done nothing.
+ */
 export function practiceSummary(iterations, sessionId, scope, recentW, today = new Date(), cad = WEEKLY) {
   const current = periodKey(today, cad);
   const since = lastPeriods(recentW, cad, today)[0].getTime();
-  const rows = iterations.filter((it) => isPractice(it, sessionId) && inScope(it, scope));
+  const rows = iterations.filter((it) => (!!it.ritual_id || !!it.system_category_id) && inScope(it, scope));
   return {
     thisWeek: rows.filter((it) => periodKey(it.held_at, cad) === current),
     recent: rows.filter((it) => new Date(it.held_at).getTime() >= since)
