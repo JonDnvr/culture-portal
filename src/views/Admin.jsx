@@ -465,7 +465,10 @@ export default function Admin({ ctx }) {
                   onCreate={(name) => newTeamFor(m.user_id, name, m.display_name)} />
                 <button className="linkn" title="Recognition and Value awards received"
                   onClick={() => setModal({ kind: 'received', m })}>
-                  <GoldStar size={14} /> {received(m).length}
+                  <GoldStar size={14} /> {received(m).filter((x) => x.kind === 'recognition').length}
+                  {received(m).some((x) => x.kind === 'award') && (
+                    <> <Crest height={15} pips={1} /> {received(m).filter((x) => x.kind === 'award').length}</>
+                  )}
                 </button>
                 <select className="field inline" value={m.role} onChange={(e) => changeRole(m.user_id, e.target.value)}>
                   {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
@@ -1182,7 +1185,7 @@ function ReceivedList({ ctx, member, rows, onClose }) {
               const g = x.g;
               return (
                 <button key={`award-${g.id}`} className="runrow" onClick={() => { onClose(); ctx.goto('wall'); }}>
-                  <GoldStar size={20} />
+                  <Crest height={22} pips={Math.max(1, (g.award?.valueIds ?? []).length)} />
                   <span>
                     <b>{g.award?.name ?? 'Value award'}</b>
                     <small className="who2">

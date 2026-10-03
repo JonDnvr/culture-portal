@@ -5,6 +5,7 @@ import {
 } from '../lib/api.js';
 import { pad, N, NumList, PulseBar, CategoryBadge, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
 import { inCategory } from '../lib/categories.js';
+import { RecordIteration } from './Cadence.jsx';
 
 export default function Conviction({ ctx }) {
   const [tab, setTab] = useState('measures');
@@ -28,7 +29,7 @@ export default function Conviction({ ctx }) {
         <button className="tab" aria-pressed={tab === 'summary'} onClick={() => setTab('summary')}>Summary ratings</button>
         <button className="tab" aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>Detail scores</button>
         <button className="tab" aria-pressed={tab === 'rounds'} onClick={() => setTab('rounds')}>Pulse rounds</button>
-        <button className="tab" aria-pressed={tab === 'rhythm'} onClick={() => setTab('rhythm')}>Rhythm iterations</button>
+        <button className="tab" aria-pressed={tab === 'rhythm'} onClick={() => setTab('rhythm')}>Recent Iterations</button>
         <button className="tab" aria-pressed={tab === 'coverage'} onClick={() => setTab('coverage')}>Coverage</button>
       </div>
       {tab === 'measures' && <Measures ctx={ctx} />}
@@ -363,9 +364,13 @@ function DetailScores({ ctx, rounds, round, onPick }) {
 function RhythmIterations({ ctx }) {
   const { org, rituals, behaviors, systems, openRecord } = ctx;
   const [runs, setRuns] = useState([]);
+  // The ritual or system whose name was clicked, to record a run of it.
+  const [recording, setRecording] = useState(null);
+  const toast = useToast();
   const days = org.recent_days ?? 45;
 
-  useEffect(() => { listIterations(org.id).then(setRuns).catch(() => setRuns([])); }, [org.id]);
+  const loadRuns = () => listIterations(org.id).then(setRuns).catch(() => setRuns([]));
+  useEffect(() => { loadRuns(); }, [org.id]);
 
   const cutoff = Date.now() - days * 86400000;
   // Rituals and systems side by side: a system run is recorded the same way.
@@ -392,7 +397,10 @@ function RhythmIterations({ ctx }) {
             <tbody>
               {summary.map(({ ritual, kind, total, recent, last }) => (
                 <tr key={`${kind}-${ritual.id}`} className={last ? '' : 'flagged'}>
-                  <td className="name">{ritual.name}</td>
+                  <td className="name">
+                    <button className="linkbtn" title={`Record a run of ${ritual.name}`}
+                      onClick={() => setRecording({ kind, item: ritual })}>{ritual.name}</button>
+                  </td>
                   <td className="meta">{ritual.cadence}</td>
                   <td>{last ? new Date(last.held_at).toLocaleDateString() : <span className="gap">never</span>}</td>
                   <td>{recent || <span className="gap">0</span>}</td>
@@ -428,6 +436,14 @@ function RhythmIterations({ ctx }) {
           {!runs.length && <div className="row"><div className="s">Nothing recorded yet.</div></div>}
         </div>
       </section>
+
+      {recording && (
+        <RecordIteration ctx={ctx} toast={toast}
+          ritual={recording.kind === 'Ritual' ? recording.item : undefined}
+          system={recording.kind === 'System' ? systems.find((s) => s.id === recording.item.id) : undefined}
+          onClose={() => setRecording(null)}
+          onDone={() => { setRecording(null); loadRuns(); ctx.refreshActivity(); }} />
+      )}
     </>
   );
 }
@@ -435,7 +451,7 @@ function RhythmIterations({ ctx }) {
 /* ---------------------------------------------------------------- coverage */
 
 function Coverage({ ctx }) {
-  const { org, behaviors, systems, rituals, openBehavior, categories, showCats } = ctx;
+  const { org, behaviors, systems, rituals, openBehavior, openRecord, categories, showCats } = ctx;
   const [coverage, setCoverage] = useState([]);
   const [runs, setRuns] = useState([]);
   const [view, setView] = useState('system');
@@ -488,8 +504,12 @@ function Coverage({ ctx }) {
                         const p = b.placements.find((x) => x.systemId === s.id);
                         return (
                           <td key={s.id}>
-                            {p ? <><span className="mark">{p.cadence}</span><div className="s">{p.owner}</div></>
-                              : <span className="gap">&mdash;</span>}
+                            {p ? (
+                              <button className="linkbtn" title={`${s.name} for ${b.title}: open the details`}
+                                onClick={() => openRecord('placement', p.id)}>
+                                <span className="mark">{p.cadence}</span><span className="s" style={{ display: 'block' }}>{p.owner}</span>
+                              </button>
+                            ) : <span className="gap">&mdash;</span>}
                           </td>
                         );
                       })}
@@ -504,7 +524,11 @@ function Coverage({ ctx }) {
           <div className="tablewrap">
             <table>
               <thead>
-                <tr><th>#</th><th>{ctx.term.One}</th>{rituals.map((r) => <th key={r.id}>{r.name}</th>)}</tr>
+                <tr><th>#</th><th>{ctx.term.One}</th>{rituals.map((r) => (
+                  <th key={r.id}>
+                    <button className="linkbtn" title={`Open ${r.name}`} onClick={() => openRecord('ritual', r.id)}>{r.name}</button>
+                  </th>
+                ))}</tr>
               </thead>
               <tbody>
                 {behaviors.map((b) => (
@@ -516,9 +540,12 @@ function Coverage({ ctx }) {
                       const last = applied ? lastRunFor(b.id, r.id) : null;
                       return (
                         <td key={r.id}>
-                          {applied
-                            ? (last ? <span className="mark">{last}</span> : <Tag type="warn">not run</Tag>)
-                            : <span className="gap">&mdash;</span>}
+                          {applied ? (
+                            <button className="linkbtn" title={`${r.name} for ${b.title}: open the details`}
+                              onClick={() => openRecord('ritual', r.id)}>
+                              {last ? <span className="mark">{last}</span> : <Tag type="warn">not run</Tag>}
+                            </button>
+                          ) : <span className="gap">&mdash;</span>}
                         </td>
                       );
                     })}

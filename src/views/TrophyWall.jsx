@@ -14,6 +14,11 @@ import {
 } from '../lib/gamify.js';
 
 const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+/** A date as the YYYY-MM-DD a date picker uses, in the viewer's own time zone. */
+const dayOf = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+};
 
 /**
  * What has been earned, for you, your team and the organization. Streaks and
@@ -406,7 +411,7 @@ export function GiveAward({ ctx, initial = null, onClose, onDone }) {
   const mode = formMode(initial);
   const active = awardTypes.filter((a) => a.active !== false || a.id === initial?.award_type_id);
   const [f, setF] = useState(initial
-    ? { awardId: initial.award_type_id, to: initial.team_id ? 'team' : 'member', recipientId: initial.recipient_user_id ?? '', teamId: initial.team_id ?? '', citation: initial.citation ?? '', files: [] }
+    ? { awardId: initial.award_type_id, to: initial.team_id ? 'team' : 'member', recipientId: initial.recipient_user_id ?? '', teamId: initial.team_id ?? '', citation: initial.citation ?? '', files: [], date: dayOf(initial.granted_at) }
     : { awardId: active[0]?.id ?? '', to: 'member', recipientId: '', teamId: '', citation: '', files: [] });
   const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -427,10 +432,15 @@ export function GiveAward({ ctx, initial = null, onClose, onDone }) {
   async function save(asDraft) {
     if (initial) {
       if (!f.citation.trim()) return toast('Write the citation: what they did.');
+      if (!f.date) return toast('Pick the date the award was given.');
+      if (f.date > dayOf(new Date())) return toast('An award date cannot be in the future.');
       setBusy(true);
       try {
+        // Only a changed date is sent; noon keeps the day the same in any time zone.
+        const dateChanged = f.date !== dayOf(initial.granted_at);
         await updateAwardGrant(initial.id, {
           citation: f.citation, isDraft: mode === 'published' ? undefined : asDraft,
+          grantedAt: dateChanged ? new Date(`${f.date}T12:00:00`).toISOString() : undefined,
           addFiles: f.files, removeFileIds: removeIds
         });
         await finish(mode === 'published' ? 'Changes saved.' : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
@@ -473,6 +483,9 @@ export function GiveAward({ ctx, initial = null, onClose, onDone }) {
           </span>
         </div>
         <p className="meta">The award and who receives it stay as they are. To change either, delete this one and give a new one.</p>
+        <label className="fl" htmlFor="awardDate">Date given</label>
+        <input id="awardDate" type="date" className="field" style={{ maxWidth: 220 }} value={f.date}
+          max={dayOf(new Date())} onChange={(e) => setF({ ...f, date: e.target.value })} />
         <label className="fl">Citation: what they did</label>
         <textarea rows={4} value={f.citation} onChange={(e) => setF({ ...f, citation: e.target.value })} />
         <FileEditor id="awardFiles" existing={initial.attachments ?? []} removeIds={removeIds} setRemoveIds={setRemoveIds}

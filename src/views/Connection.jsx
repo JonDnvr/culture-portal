@@ -6,7 +6,7 @@ import {
 import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
 import { DraftsPanel, RecordEditor } from './RecordEditor.jsx';
 import { pad, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../components/ui.jsx';
-import { GoldStar } from '../components/badges.jsx';
+import { GoldStar, Crest } from '../components/badges.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
 import { inCategory } from '../lib/categories.js';
@@ -246,7 +246,7 @@ function Recognition({ ctx }) {
                   {x.to}
                 </span>
                 <span className="when">{new Date(x.at).toLocaleDateString()}</span>
-                <p className="rectitle"><GoldStar size={16} /> {x.title}</p>
+                <p className="rectitle"><Crest height={18} pips={Math.max(1, x.valueNames.length)} /> {x.title}</p>
                 <p>{p.text}</p>
                 <Attachments files={x.row.attachments ?? []} compact />
                 <div className="tagrow">
@@ -309,7 +309,7 @@ function Recognition({ ctx }) {
       {sharing && sharing.kind === 'award' && (
         <ShareRecord kind="award" id={sharing.id} onClose={() => setSharing(null)} toast={toast}
           summary={<>
-            <p className="rectitle"><GoldStar size={16} /> {sharing.title}</p>
+            <p className="rectitle"><Crest height={18} pips={Math.max(1, (sharing.valueNames ?? []).length)} /> {sharing.title}</p>
             <p className="quiet">{sharing.by} gave {sharing.title} to {sharing.to}. {preview(sharing.text ?? '').text}</p>
           </>} />
       )}
@@ -617,7 +617,8 @@ function WhatsGood({ ctx }) {
                 <div className="t">
                   {x.kind === 'award' ? (x.title ?? 'Value award') : x.kind === 'recognition' ? (x.title || 'Recognition') : 'Story'}
                   <Tag type={x.kind === 'award' ? 'value' : x.kind === 'recognition' ? 'live' : 'plain'}>{KIND_LABEL[x.kind]}</Tag>
-                  {((x.kind === 'recognition' && x.toId) || x.kind === 'award') && <GoldStar size={14} />}
+                  {x.kind === 'recognition' && x.toId && <GoldStar size={14} />}
+                  {x.kind === 'award' && <Crest height={16} pips={Math.max(1, (x.valueNames ?? []).length)} />}
                   {x.team && teamName(x.team) && <Tag type="plain">{teamName(x.team)}</Tag>}
                 </div>
                 <div className="s who2">
@@ -657,7 +658,7 @@ function AwardDetail({ award, onClose }) {
   return (
     <Modal title={award.title ?? 'Value award'} onClose={onClose}
       footer={<button className="btn ghost" onClick={onClose}>Close</button>}>
-      <p className="rectitle"><GoldStar size={18} /> {award.title ?? 'Value award'}</p>
+      <p className="rectitle"><Crest height={20} pips={Math.max(1, (award.valueNames ?? []).length)} /> {award.title ?? 'Value award'}</p>
       <div className="tagrow">{(award.valueNames ?? []).map((n) => <Tag key={n} type="value">{n}</Tag>)}</div>
       <p className="meta">Conferred on {award.to} by {award.by}, {new Date(award.at).toLocaleDateString()}</p>
       <p className="confirmbody" style={{ whiteSpace: 'pre-wrap' }}>{award.text}</p>

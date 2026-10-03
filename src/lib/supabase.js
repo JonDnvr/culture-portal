@@ -1399,9 +1399,10 @@ export const updateIteration = (id, { behaviorIds, teamId, heldAt, notes, isDraf
     held_at: heldAt, notes, is_draft: draftField(isDraft)
   }, { addFiles, removeFileIds });
 
-export const updateAwardGrant = (id, { citation, isDraft, addFiles, removeFileIds }) =>
+export const updateAwardGrant = (id, { citation, isDraft, grantedAt, addFiles, removeFileIds }) =>
   updateRecord('award', id, {
-    citation: citation === undefined ? undefined : citation.trim(), is_draft: draftField(isDraft)
+    citation: citation === undefined ? undefined : citation.trim(), is_draft: draftField(isDraft),
+    granted_at: grantedAt ?? undefined
   }, { addFiles, removeFileIds });
 
 export const deleteAwardGrant = (id) => deleteRecord('award', id);
