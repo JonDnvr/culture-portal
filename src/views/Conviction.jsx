@@ -418,7 +418,10 @@ function RhythmIterations({ ctx }) {
           {runs.slice(0, 40).map((r) => (
             <div key={r.id} className="row">
               <div>
-                <div className="t">{r.ritual?.name ?? r.system?.name ?? 'Run'}{r.system ? ' (system)' : ''}</div>
+                <div className="t">
+                  {r.ritual?.name ?? r.system?.name ?? 'Run'}{r.system ? ' (system)' : ''}
+                  {r.parent_id ? ` (in ${r.parentSystem?.name ?? 'a system session'})` : ''}
+                </div>
                 <div className="s who2">
                   <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
                   {new Date(r.held_at).toLocaleDateString()} / {r.recorded_by_name}

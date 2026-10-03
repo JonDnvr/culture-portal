@@ -88,6 +88,9 @@ export const setCardFails = (...a) => (IS_LOCAL ? local.setCardFails(...a) : Pro
 export const billingToday = () => (IS_LOCAL ? local.today() : new Date().toISOString().slice(0, 10));
 export const applySystemToBehaviors = (...a) => impl.applySystemToBehaviors(...a);
 export const setRitualBehaviors = (...a) => impl.setRitualBehaviors(...a);
+// R6, hosted only: local mode (legacy) has no rituals in systems and skips these.
+export const setRitualSystems = (...a) => impl.setRitualSystems?.(...a);
+export const setSessionRituals = (...a) => impl.setSessionRituals?.(...a);
 export const reorderBehaviors = (...a) => impl.reorderBehaviors(...a);
 export const updateSystemCategory = (...a) => impl.updateSystemCategory(...a);
 

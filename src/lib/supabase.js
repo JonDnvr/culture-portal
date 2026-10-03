@@ -390,14 +390,53 @@ export async function removePlacement(placementId) {
 export async function listRituals(orgId) {
   const { data, error } = await supabase
     .from('rituals')
-    .select('*, behavior_rituals ( behaviors ( id, number, title ) )')
+    .select('*, behavior_rituals ( behaviors ( id, number, title ) ), ritual_systems ( system_category_id )')
     .eq('org_id', orgId)
     .order('created_at');
   if (error) throw error;
   return data.map((r) => ({
     ...r,
-    behaviors: r.behavior_rituals.map((b) => b.behaviors).filter(Boolean)
+    behaviors: r.behavior_rituals.map((b) => b.behaviors).filter(Boolean),
+    // The systems this ritual can be included in (R6).
+    systemIds: (r.ritual_systems ?? []).map((s) => s.system_category_id)
   }));
+}
+
+/** Which systems a ritual can be included in, replacing the list it had. */
+export async function setRitualSystems(ritualId, systemIds) {
+  const { error: delErr } = await supabase.from('ritual_systems').delete().eq('ritual_id', ritualId);
+  if (delErr) throw delErr;
+  if (!systemIds.length) return;
+  const { error } = await supabase.from('ritual_systems')
+    .insert(systemIds.map((system_category_id) => ({ ritual_id: ritualId, system_category_id })));
+  if (error) throw error;
+}
+
+/**
+ * The rituals included in a system session, made to match `wanted`
+ * ([{ ritualId, behaviorIds }]): runs for newly ticked rituals are added under
+ * the session, runs for unticked ones removed. The database gives them the
+ * session's date, team and draft state.
+ */
+export async function setSessionRituals(orgId, sessionId, wanted) {
+  const { data: have, error } = await supabase.from('iterations').select('id, ritual_id').eq('parent_id', sessionId);
+  if (error) throw error;
+  const keep = new Set(wanted.map((w) => w.ritualId));
+  const gone = (have ?? []).filter((h) => !keep.has(h.ritual_id)).map((h) => h.id);
+  if (gone.length) {
+    const { error: delErr } = await supabase.from('iterations').delete().in('id', gone);
+    if (delErr) throw delErr;
+  }
+  const present = new Set((have ?? []).map((h) => h.ritual_id));
+  const add = wanted.filter((w) => !present.has(w.ritualId));
+  if (!add.length) return;
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error: insErr } = await supabase.from('iterations').insert(add.map((w) => ({
+    org_id: orgId, ritual_id: w.ritualId, parent_id: sessionId, behavior_ids: w.behaviorIds,
+    recorded_by: user.id, recorded_by_name: user.user_metadata?.display_name ?? user.email,
+    held_at: new Date().toISOString()   // replaced by the session's own date
+  })));
+  if (insErr) throw insErr;
 }
 
 export async function createRitual(orgId, ritual) {
@@ -512,7 +551,28 @@ export async function listIterations(orgId, { behaviorId, ritualId, systemId, da
   const rows = data.map((it) => ({
     ...it, ritual: it.rituals, system: it.system_categories, attachments: it.iteration_attachments ?? []
   }));
+  await attachParents(rows);
   return attachBehaviors(rows, orgId);
+}
+
+/**
+ * A ritual run inside a system session gets `parentSystem` (the session's
+ * system) and `parentAt` (its date), so a list can say "in Meetings". Sessions
+ * not in the list are looked up in one query.
+ */
+async function attachParents(rows) {
+  const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+  const missing = [...new Set(rows.map((r) => r.parent_id).filter((id) => id && !byId[id]))];
+  if (missing.length) {
+    const { data } = await supabase.from('iterations')
+      .select('id, held_at, system_categories ( id, name )').in('id', missing);
+    for (const p of data ?? []) byId[p.id] = { ...p, system: p.system_categories };
+  }
+  for (const r of rows) {
+    if (!r.parent_id) continue;
+    r.parentSystem = byId[r.parent_id]?.system ?? null;
+    r.parentAt = byId[r.parent_id]?.held_at ?? null;
+  }
 }
 
 export async function getIteration(id) {
@@ -532,6 +592,15 @@ export async function getIteration(id) {
       .in('behavior_id', row.behavior_ids)
       .limit(1);
     if (p?.[0]) row.system = { ...row.system, ...p[0] };
+  }
+  // A system session lists the rituals included in it; a ritual run inside a
+  // session knows which session it was part of.
+  if (row.system) {
+    const { data: kids } = await supabase.from('iterations')
+      .select('id, ritual_id, rituals ( id, name )').eq('parent_id', row.id);
+    row.included = (kids ?? []).map((k) => ({ id: k.id, ritualId: k.ritual_id, name: k.rituals?.name ?? 'Ritual' }));
+  } else if (row.parent_id) {
+    await attachParents([row]);
   }
   return row;
 }
@@ -558,9 +627,13 @@ export async function getRecognition(id) {
 
 export async function getRitual(id) {
   const { data, error } = await supabase
-    .from('rituals').select('*, behavior_rituals ( behaviors ( id, number, title ) )').eq('id', id).single();
+    .from('rituals').select('*, behavior_rituals ( behaviors ( id, number, title ) ), ritual_systems ( system_category_id )')
+    .eq('id', id).single();
   if (error) throw error;
-  return { ...data, behaviors: data.behavior_rituals.map((b) => b.behaviors).filter(Boolean) };
+  return {
+    ...data, behaviors: data.behavior_rituals.map((b) => b.behaviors).filter(Boolean),
+    systemIds: (data.ritual_systems ?? []).map((s) => s.system_category_id)
+  };
 }
 
 /* ---------------------------------------------------------------- measures */

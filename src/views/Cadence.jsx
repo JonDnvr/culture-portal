@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  createRitual, updateRitual, deleteRitual, setRitualBehaviors, recordIteration, updateIteration, listIterations,
+  createRitual, updateRitual, deleteRitual, setRitualBehaviors, setRitualSystems, setSessionRituals,
+  recordIteration, updateIteration, listIterations,
   reorderBehaviors, createBehavior, applySystemToBehaviors, savePlacementTemplate, markFluency,
   updatePlacement, removePlacement
 } from '../lib/api.js';
@@ -207,9 +208,15 @@ function Sessions({ ctx }) {
   const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
   const isSystem = (it) => !!(it.system_category_id ?? it.system);
+  // Rituals included in a system session (R6), by session.
+  const listed = new Set(activity.iterations.map((it) => it.id));
+  const includedIn = {};
+  for (const it of activity.iterations) if (it.parent_id) (includedIn[it.parent_id] ??= []).push(it);
 
   const rows = activity.iterations.filter((it) => {
     const bs = (it.behavior_ids ?? []).map((id) => byId[id]).filter(Boolean);
+    // An included ritual shows on its session's row, except when listing rituals.
+    if (it.parent_id && kind !== 'ritual' && listed.has(it.parent_id)) return false;
     if (kind === 'ritual' && isSystem(it)) return false;
     if (kind === 'system' && !isSystem(it)) return false;
     if (system !== ALL && (it.system_category_id ?? it.system?.id) !== system) return false;
@@ -224,6 +231,7 @@ function Sessions({ ctx }) {
     onTeam: (it, teamId) => it.team_id === teamId,
     text: (it) => searchable(ctx, [
       it.ritual?.name, it.system?.name, it.system ? 'system' : 'ritual', it.notes, it.recorded_by_name,
+      (includedIn[it.id] ?? []).map((k) => k.ritual?.name), it.parentSystem?.name,
       teamName(it.team_id), new Date(it.held_at).toLocaleDateString(),
       (it.behavior_ids ?? []).map((id) => behaviorWords(byId[id]))
     ])
@@ -270,8 +278,15 @@ function Sessions({ ctx }) {
               <div className="t">
                 {it.ritual?.name ?? it.system?.name ?? 'Run'}
                 <Tag type={it.system ? 'system' : 'ritual'}>{it.system ? 'System' : 'Ritual'}</Tag>
+                {it.parent_id && <Tag type="system">in {it.parentSystem?.name ?? 'a system session'}</Tag>}
                 {teamName(it.team_id) && <Tag type="plain">{teamName(it.team_id)}</Tag>}
               </div>
+              {(includedIn[it.id] ?? []).length > 0 && (
+                <div className="tagrow">
+                  <span className="meta">Included:</span>
+                  {includedIn[it.id].map((k) => <Tag key={k.id} type="ritual">{k.ritual?.name ?? 'Ritual'}</Tag>)}
+                </div>
+              )}
               <div className="s who2">
                 <Avatar person={findPerson(ctx.people, { id: it.recorded_by, name: it.recorded_by_name })}
                   name={it.recorded_by_name} size={18} />
@@ -499,6 +514,15 @@ function Rituals({ ctx, initialBehavior = null }) {
                   ? bs.map((b) => <BehaviorTag key={b.id} behavior={b} onClick={() => openBehavior(b.id)} />)
                   : <Tag type="warn">Not applied to any {ctx.term.one}</Tag>}
             </div>
+            {(r.applies_to_all || (r.systemIds ?? []).length > 0) && (
+              <div className="tagrow">
+                <span className="meta">Can be included in:</span>
+                {r.applies_to_all
+                  ? <Tag type="system">Every system</Tag>
+                  : r.systemIds.map((id) => ctx.systems.find((s) => s.id === id)).filter(Boolean)
+                    .map((s) => <Tag key={s.id} type="system">{s.name}</Tag>)}
+              </div>
+            )}
             <div className="tagrow">
               <Tag type="ritual">Iterations ({mine.length})</Tag>
               {last
@@ -526,19 +550,21 @@ function Rituals({ ctx, initialBehavior = null }) {
       {!list.length && <div className="empty">No rituals match that filter.</div>}
 
       {modal?.kind === 'new' && (
-        <RitualForm title="New ritual" toast={toast} term={ctx.term} behaviors={behaviors} onClose={() => setModal(null)}
-          onSave={async (fields, behaviorIds) => {
+        <RitualForm title="New ritual" toast={toast} term={ctx.term} behaviors={behaviors} systems={ctx.systems} onClose={() => setModal(null)}
+          onSave={async (fields, behaviorIds, systemIds) => {
             const r = await createRitual(org.id, fields);
             if (behaviorIds?.length) await setRitualBehaviors(r.id, behaviorIds);
+            if (systemIds?.length) await setRitualSystems(r.id, systemIds);
             toast('Ritual created.'); setModal(null); reload();
           }} />
       )}
       {modal?.kind === 'edit' && (
         <RitualForm title="Edit ritual" term={ctx.term} initial={modal.ritual} behaviors={modal.ritual.applies_to_all ? null : behaviors}
-          selected={carriers(modal.ritual).map((b) => b.id)} toast={toast} onClose={() => setModal(null)}
-          onSave={async (fields, behaviorIds) => {
+          selected={carriers(modal.ritual).map((b) => b.id)} systems={ctx.systems} toast={toast} onClose={() => setModal(null)}
+          onSave={async (fields, behaviorIds, systemIds) => {
             await updateRitual(modal.ritual.id, fields);
             if (behaviorIds) await setRitualBehaviors(modal.ritual.id, behaviorIds);
+            if (systemIds) await setRitualSystems(modal.ritual.id, systemIds);
             toast('Ritual updated.'); setModal(null); reload();
           }} />
       )}
@@ -625,8 +651,23 @@ function Systems({ ctx, initialBehavior = null }) {
         <div key={s.id} className="sysgroup">
           <div className="sectionhead">
             <h2 className="small">{s.name}</h2>
-            <span className="note">Behaviors ({items.length})</span>
+            <span className="note">
+              Behaviors ({items.length}){' '}
+              <button className="btn small" onClick={() => setModal({ kind: 'runSystem', s, p: null, b: null })}>Run a Session</button>
+            </span>
           </div>
+          {(() => {
+            const rits = ctx.rituals.filter((r) => !r.applies_to_all && (r.systemIds ?? []).includes(s.id));
+            return rits.length > 0 && (
+              <div className="tagrow" style={{ marginTop: -4, marginBottom: 8 }}>
+                <span className="meta">Rituals it can include:</span>
+                {rits.map((r) => (
+                  <Tag key={r.id} type="ritual" onClick={() => ctx.openRecord('ritual', r.id)}>{r.name}</Tag>
+                ))}
+                <Tag type="ritual">and the weekly practice</Tag>
+              </div>
+            );
+          })()}
           {items.length ? items.map(({ b, p }) => (
             <div key={p.id} className="placement">
               <div className="ph">
@@ -660,7 +701,7 @@ function Systems({ ctx, initialBehavior = null }) {
           onDone={() => { setModal(null); reload(); }} />
       )}
       {modal?.kind === 'runSystem' && (
-        <RecordIteration ctx={ctx} system={modal.s} placement={modal.p} readFor={[modal.b.id]}
+        <RecordIteration ctx={ctx} system={modal.s} placement={modal.p} readFor={modal.b ? [modal.b.id] : []}
           onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} toast={toast} />
       )}
       {modal?.kind === 'writeTemplate' && (
@@ -797,21 +838,32 @@ function WriteTemplate({ placement, onClose, onDone, toast }) {
 
 /* --------------------------------------------------------- shared modals */
 
-export function RitualForm({ title, initial, behaviors, selected = [], note, onSave, onClose, toast, term = termFor(null) }) {
+/**
+ * Writing or editing a ritual: what it is, the behaviors it reinforces, and
+ * (with `systems`) which systems' sessions it can be included in. onSave gets
+ * (fields, behaviorIds or null, systemIds or null).
+ */
+export function RitualForm({ title, initial, behaviors, selected = [], systems = null, note, onSave, onClose, toast, term = termFor(null) }) {
   const [f, setF] = useState({
     name: initial?.name ?? '', cadence: initial?.cadence ?? '', owner: initial?.owner ?? '',
     description: initial?.description ?? '', practice: initial?.practice ?? ''
   });
   const [ids, setIds] = useState(selected);
+  const [sysIds, setSysIds] = useState(initial?.systemIds ?? []);
   const [busy, setBusy] = useState(false);
+  const everySystem = !!initial?.applies_to_all;
 
   const toggle = (id) => setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  const toggleSys = (id) => setSysIds(sysIds.includes(id) ? sysIds.filter((x) => x !== id) : [...sysIds, id]);
 
   async function save() {
     if (!f.name.trim() || !f.cadence.trim() || !f.owner.trim())
       return toast('Name, cadence and owner are required.');
     setBusy(true);
-    try { await onSave({ ...f, practice: f.practice.trim() || null }, behaviors ? ids : null); }
+    try {
+      await onSave({ ...f, practice: f.practice.trim() || null }, behaviors ? ids : null,
+        systems && !everySystem ? sysIds : null);
+    }
     catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
@@ -850,6 +902,28 @@ export function RitualForm({ title, initial, behaviors, selected = [], note, onS
           </div>
         </>
       )}
+      {systems && (
+        <>
+          <label className="fl">Can be included in</label>
+          {everySystem ? (
+            <p className="meta">The weekly practice can be included in a session of every system.</p>
+          ) : systems.length ? (
+            <>
+              <div className="tagrow">
+                {systems.map((s) => (
+                  <button key={s.id} className="pill" aria-pressed={sysIds.includes(s.id)} onClick={() => toggleSys(s.id)}>
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+              <p className="meta">
+                When one of these systems runs a session, this ritual is offered to tick as part of it,
+                and counts as its own iteration.
+              </p>
+            </>
+          ) : <p className="meta">No systems are set up yet.</p>}
+        </>
+      )}
       <label className="fl">The practice</label>
       <textarea rows={10} placeholder="Step by step, in the words people will actually use"
         value={f.practice} onChange={(e) => setF({ ...f, practice: e.target.value })} />
@@ -869,17 +943,27 @@ export function connectedBehaviors(behaviors, { ritual, system }) {
 }
 
 /**
- * One dialog for running a ritual or executing a system: it shows the
- * practice or the template, then records the run. Opened from Cadence, from a
- * behavior page, or from a template, it behaves the same way everywhere.
+ * One dialog for running a ritual or a system session. Opened from Cadence, a
+ * behavior page, a Details page or Conviction, it behaves the same everywhere.
  *
- * Nothing is pre-selected: the person recording says which behaviors the run
- * actually covered. Members see the practice and template without the form,
- * since recording is a leader's job.
+ * A ritual run shows the practice and records one iteration.
+ *
+ * A system session (R6) shows every template placed in the system as a list
+ * to expand, and the rituals the system can include, each opening its details
+ * when ticked. Saving records one iteration of the system, with the behaviors
+ * picked from its templates, plus one iteration for each ritual ticked, on the
+ * session's date and team. Templates are guidance; which ones were used is
+ * not recorded.
+ *
+ * Nothing is pre-selected: the person recording says which behaviors the
+ * session actually covered.
  */
 export function RecordIteration({ ctx, ritual, system, placement, readFor = [], preselect = [], initial = null, onClose, onDone, toast }) {
   const { org, behaviors, teams, myTeamId, term } = ctx;
   const mode = formMode(initial);
+  const isSession = !!system;
+  // A ritual run that was part of a system session takes its date and team from it.
+  const inSession = !!initial?.parent_id;
   const connected = connectedBehaviors(behaviors, { ritual, system });
   // Editing keeps whatever the run already covered, even if a ritual has
   // since been taken off one of them.
@@ -901,6 +985,25 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
   const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
 
+  // A session's guidance: every template placed in the system, each with its
+  // behavior. The one it was opened from starts open.
+  const templates = isSession
+    ? behaviors.flatMap((b) => (b.placements ?? []).filter((p) => p.systemId === system.id).map((p) => ({ p, b })))
+      .sort((x, y) => x.b.number - y.b.number)
+    : [];
+  const [openTpl, setOpenTpl] = useState(() => new Set(placement ? [placement.id] : []));
+
+  // The rituals a session can include: those grouped into this system, and
+  // the weekly practice, which goes with every system.
+  const offered = isSession
+    ? ctx.rituals.filter((r) => r.applies_to_all || (r.systemIds ?? []).includes(system.id))
+    : [];
+  const included = initial && isSession
+    ? [...(ctx.activity?.iterations ?? []), ...(ctx.drafts?.iterations ?? [])].filter((k) => k.parent_id === initial.id)
+    : [];
+  const [ritIds, setRitIds] = useState(() => [...new Set(included.map((k) => k.ritual_id))]);
+  const [openRit, setOpenRit] = useState(() => new Set());
+
   // Opening the practice or the template is the reading step of fluency.
   useEffect(() => {
     if (initial) return;
@@ -909,27 +1012,51 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
   }, []);
 
   const toggle = (id) => setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
+  const flip = (set, setter, id) => { const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); setter(next); };
+  // Ticking a ritual opens its details; unticking closes them.
+  const toggleRit = (id) => {
+    const on = ritIds.includes(id);
+    setRitIds(on ? ritIds.filter((x) => x !== id) : [...ritIds, id]);
+    const next = new Set(openRit); on ? next.delete(id) : next.add(id); setOpenRit(next);
+  };
+  // What an included ritual credits: the behavior of the week for the weekly
+  // practice, otherwise the behaviors the ritual carries.
+  const creditFor = (r) => r.applies_to_all
+    ? [org.weekly_behavior_id].filter(Boolean)
+    : behaviors.filter((b) => (b.rituals ?? []).some((x) => x.id === r.id)).map((b) => b.id);
+  const wantedRituals = () => ritIds
+    .map((id) => offered.find((r) => r.id === id) ?? ctx.rituals.find((r) => r.id === id))
+    .filter(Boolean)
+    .map((r) => ({ ritualId: r.id, behaviorIds: creditFor(r) }));
+
   const name = ritual?.name ?? system?.name;
-  const script = ritual ? ritual.practice : placement?.template;
+  const script = ritual ? ritual.practice : null;
 
   async function save(asDraft) {
-    if (!ids.length) return toast(`Pick the ${term.many} this run covered.`);
+    if (!ids.length) return toast(`Pick the ${term.many} this ${isSession ? 'session' : 'run'} covered.`);
     setBusy(true);
     try {
       if (initial) {
         await updateIteration(initial.id, {
-          behaviorIds: ids, teamId: teamId || null, heldAt: new Date(when).toISOString(), notes: notes.trim(),
+          behaviorIds: ids,
+          // An included ritual's date and team are its session's; the database keeps them in step.
+          teamId: inSession ? undefined : (teamId || null),
+          heldAt: inSession ? undefined : new Date(when).toISOString(),
+          notes: notes.trim(),
           isDraft: mode === 'published' ? undefined : asDraft, addFiles: files, removeFileIds: removeIds
         });
+        if (isSession) await setSessionRituals(org.id, initial.id, wantedRituals());
       } else {
-        await recordIteration(org.id, {
+        const id = await recordIteration(org.id, {
           ritualId: ritual?.id ?? null, systemId: system?.id ?? null, teamId: teamId || null,
           behaviorIds: ids, heldAt: new Date(when).toISOString(), notes: notes.trim(), files, isDraft: asDraft
         });
+        if (isSession && ritIds.length) await setSessionRituals(org.id, id, wantedRituals());
       }
+      const withRituals = isSession && ritIds.length ? `, with ${ritIds.length} ritual${ritIds.length === 1 ? '' : 's'}` : '';
       toast(mode === 'published' ? 'Changes saved.'
         : asDraft ? 'Saved as a draft. Publish it from your top account dropdown.'
-          : ritual ? 'Session published.' : 'System run published.');
+          : isSession ? `${name} session published${withRituals}.` : 'Session published.');
       if (!asDraft && mode !== 'published') celebrate();
       await ctx.refreshActivity();
       onDone();
@@ -938,58 +1065,122 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
 
   const heading = initial
     ? `${mode === 'draft' ? 'Draft' : 'Edit'}: ${name ?? 'session'}`
-    : ritual ? `Practice It: ${name}` : `Run the system: ${name}`;
+    : ritual ? `Practice It: ${name}` : `Run a Session: ${name}`;
 
   return (
     <Modal title={heading} onClose={onClose} wide
       footer={<FormButtons mode={mode} busy={busy} onCancel={onClose} onSave={save} publishLabel="Publish Session" />}>
-      {ritual && <p className="meta">{ritual.owner} / {ritual.cadence}</p>}
-      {placement && <p className="meta">{placement.artifact} / {placement.owner} / {placement.cadence}</p>}
-      {script
-        ? <pre className="practice">{script}</pre>
-        : <p className="quiet">{ritual ? 'No practice written yet.' : 'No template written yet.'}</p>}
-
-
-      {(
+      {ritual && (
         <>
-          <div className="tworow">
-            <div>
-              <label className="fl">When it was run</label>
-              <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
-            </div>
-            <div>
-              <label className="fl">Team</label>
-              <select className="field" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-                <option value="">No team</option>
-                {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <p className="meta" style={{ marginTop: 6 }}>
-            Recorded by {initial ? initial.recorded_by_name : org.displayName}. The team gets the credit toward its streaks.
-          </p>
-
-          <label className="fl">{term.Many} this run covered</label>
-          {options.length ? (
-            <div className="tagrow">
-              {options.map((b) => (
-                <button key={b.id} className="pill" aria-pressed={ids.includes(b.id)} onClick={() => toggle(b.id)}>
-                  <N n={b.number} /> {b.title}{b.id === org.weekly_behavior_id ? ' (this week)' : ''}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="empty">
-              {ritual ? `This ritual is not connected to any ${term.one} yet.` : `This system is not applied to any ${term.one} yet.`}
-            </div>
-          )}
-
-          <label className="fl">What happened, optional</label>
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          <FileEditor id="runFiles" existing={initial?.attachments ?? []} removeIds={removeIds}
-            setRemoveIds={setRemoveIds} files={files} setFiles={setFiles} />
+          <p className="meta">{ritual.owner} / {ritual.cadence}</p>
+          {script ? <pre className="practice">{script}</pre> : <p className="quiet">No practice written yet.</p>}
         </>
       )}
+
+      {isSession && (
+        <>
+          <label className="fl">Templates for {system.name}</label>
+          {templates.length ? (
+            <div className="xlist">
+              {templates.map(({ p, b }) => {
+                const open = openTpl.has(p.id);
+                return (
+                  <div key={p.id} className="xitem">
+                    <button type="button" className="xhead" aria-expanded={open} onClick={() => flip(openTpl, setOpenTpl, p.id)}>
+                      <span className="xcaret">{open ? '▾' : '▸'}</span>
+                      <span><N n={b.number} /> {b.title}<span className="meta"> · {p.artifact}</span></span>
+                    </button>
+                    {open && (
+                      <div className="xbody">
+                        <p className="meta">{p.owner} / {p.cadence}</p>
+                        {p.template ? <pre className="practice">{p.template}</pre> : <p className="quiet">No template written yet.</p>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="quiet">No {term.many} are placed in {system.name} yet.</p>}
+
+          <label className="fl">Rituals included in this session</label>
+          {offered.length ? (
+            <>
+              <div className="xlist">
+                {offered.map((r) => {
+                  const on = ritIds.includes(r.id);
+                  const open = openRit.has(r.id);
+                  return (
+                    <div key={r.id} className="xitem">
+                      <div className="xrow">
+                        <button type="button" className="pill" aria-pressed={on} onClick={() => toggleRit(r.id)}>
+                          {on ? '✓ ' : ''}{r.name}
+                        </button>
+                        <span className="meta">{r.owner} / {r.cadence}</span>
+                        <button type="button" className="linkbtn xmore" aria-expanded={open}
+                          onClick={() => flip(openRit, setOpenRit, r.id)}>{open ? 'Hide details' : 'Details'}</button>
+                      </div>
+                      {open && (
+                        <div className="xbody">
+                          {r.description && <p>{r.description}</p>}
+                          {r.practice ? <pre className="practice">{r.practice}</pre> : <p className="quiet">No practice written yet.</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="meta">
+                Each ritual ticked is recorded as its own iteration on this session's date and team, and
+                credits the {term.many} it carries ({term.one} of the week for the weekly practice).
+              </p>
+            </>
+          ) : (
+            <p className="quiet">
+              No rituals are set up to be included in {system.name}. On a ritual, use "Can be included in" to offer it here.
+            </p>
+          )}
+        </>
+      )}
+
+      <div className="tworow">
+        <div>
+          <label className="fl">When it was run</label>
+          <input type="datetime-local" value={when} disabled={inSession} onChange={(e) => setWhen(e.target.value)} />
+        </div>
+        <div>
+          <label className="fl">Team</label>
+          <select className="field" value={teamId} disabled={inSession} onChange={(e) => setTeamId(e.target.value)}>
+            <option value="">No team</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <p className="meta" style={{ marginTop: 6 }}>
+        {inSession
+          ? `Part of the ${initial.parentSystem?.name ?? 'system'} session: its date and team follow that session.`
+          : `Recorded by ${initial ? initial.recorded_by_name : org.displayName}. The team gets the credit toward its streaks.`}
+      </p>
+
+      <label className="fl">{term.Many} this {isSession ? 'session' : 'run'} covered{isSession ? ', from the templates above' : ''}</label>
+      {options.length ? (
+        <div className="tagrow">
+          {options.map((b) => (
+            <button key={b.id} className="pill" aria-pressed={ids.includes(b.id)} onClick={() => toggle(b.id)}>
+              <N n={b.number} /> {b.title}{b.id === org.weekly_behavior_id ? ' (this week)' : ''}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="empty">
+          {ritual ? `This ritual is not connected to any ${term.one} yet.` : `This system is not applied to any ${term.one} yet.`}
+        </div>
+      )}
+
+      <label className="fl">What happened, optional</label>
+      <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <FileEditor id="runFiles" existing={initial?.attachments ?? []} removeIds={removeIds}
+        setRemoveIds={setRemoveIds} files={files} setFiles={setFiles} />
     </Modal>
   );
 }
+

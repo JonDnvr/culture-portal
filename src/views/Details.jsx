@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   getStory, getRecognition, getIteration, getRitual, signAttachment, listIterations,
-  updateRitual, setRitualBehaviors
+  updateRitual, setRitualBehaviors, setRitualSystems
 } from '../lib/api.js';
 import { Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
 import { GoldStar } from '../components/badges.jsx';
@@ -181,7 +181,7 @@ export function IterationPage({ ctx, id }) {
         <button className="btn ghost small" onClick={ctx.back}>Back</button>
       </div>
       <div className="detailhead">
-        <div className="kicker">{it.system ? 'System run' : 'Ritual iteration'} {it.is_draft && <DraftTag />}</div>
+        <div className="kicker">{it.system ? 'System session' : 'Ritual iteration'} {it.is_draft && <DraftTag />}</div>
         <RecordTools ctx={ctx} kind="iteration" row={it} reload={reload} />
       </div>
       <BehaviorHeader behavior={behavior} ctx={ctx} />
@@ -192,11 +192,27 @@ export function IterationPage({ ctx, id }) {
             <h3 className="recordwho">{it.system.name}</h3>
             {it.system.artifact && <p className="meta">{it.system.artifact} / {it.system.owner} / {it.system.cadence}</p>}
             {it.system.template && <pre className="practice">{it.system.template}</pre>}
+            {(it.included ?? []).length > 0 && (
+              <div className="tagrow">
+                <span className="meta">Rituals included:</span>
+                {it.included.map((k) => (
+                  <Tag key={k.id} type="ritual" onClick={() => ctx.openRecord('iteration', k.id)}>{k.name}</Tag>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <>
             <h3 className="recordwho">{it.ritual?.name ?? 'Ritual'}</h3>
             <p className="meta">{it.ritual?.owner} / {it.ritual?.cadence}</p>
+            {it.parent_id && (
+              <p className="meta">
+                Part of a{' '}
+                <button className="linkbtn" onClick={() => ctx.openRecord('iteration', it.parent_id)}>
+                  {it.parentSystem?.name ?? 'system'} session
+                </button>.
+              </p>
+            )}
             {it.ritual && (
               <button className="btn ghost small" onClick={() => ctx.openRecord('ritual', it.ritual.id)}>
                 Open the ritual
@@ -289,7 +305,10 @@ export function RitualPage({ ctx, id }) {
             {runs.map((r) => (
               <div key={r.id} className="row">
                 <div>
-                  <div className="t">{new Date(r.held_at).toLocaleDateString()}</div>
+                  <div className="t">
+                    {new Date(r.held_at).toLocaleDateString()}
+                    {r.parent_id && <> <Tag type="system">in {r.parentSystem?.name ?? 'a system session'}</Tag></>}
+                  </div>
                   <div className="s who2">
                     <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
                     {r.recorded_by_name}{r.notes ? ` / ${r.notes.slice(0, 80)}` : ''}
@@ -304,10 +323,11 @@ export function RitualPage({ ctx, id }) {
       {editing && (
         <RitualForm title="Edit ritual" term={ctx.term} initial={ritual} toast={toast}
           behaviors={ritual.applies_to_all ? null : ctx.behaviors} selected={(ritual.behaviors ?? []).map((b) => b.id)}
-          onClose={() => setEditing(false)}
-          onSave={async (fields, behaviorIds) => {
+          systems={ctx.systems} onClose={() => setEditing(false)}
+          onSave={async (fields, behaviorIds, systemIds) => {
             await updateRitual(ritual.id, fields);
             if (behaviorIds) await setRitualBehaviors(ritual.id, behaviorIds);
+            if (systemIds) await setRitualSystems(ritual.id, systemIds);
             toast('Ritual updated.'); setEditing(false); reload(); ctx.reload();
           }} />
       )}
@@ -362,7 +382,10 @@ export function PlacementPage({ ctx, id }) {
             {runs.map((r) => (
               <div key={r.id} className="row">
                 <div>
-                  <div className="t">{new Date(r.held_at).toLocaleDateString()}</div>
+                  <div className="t">
+                    {new Date(r.held_at).toLocaleDateString()}
+                    {r.parent_id && <> <Tag type="system">in {r.parentSystem?.name ?? 'a system session'}</Tag></>}
+                  </div>
                   <div className="s who2">
                     <Avatar person={findPerson(ctx.people, { id: r.recorded_by, name: r.recorded_by_name })} name={r.recorded_by_name} size={18} />
                     {r.recorded_by_name}{r.notes ? ` / ${r.notes.slice(0, 80)}` : ''}

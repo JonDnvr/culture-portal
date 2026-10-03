@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   applySystem, savePlacementTemplate, removePlacement,
-  applyRitual, unapplyRitual, createRitual, updateRitual, saveRitualPractice,
+  applyRitual, unapplyRitual, createRitual, updateRitual, saveRitualPractice, setRitualSystems,
   updateBehavior, deleteBehavior, listRecognitions, listStories, listIterations, markFluency
 } from '../lib/api.js';
 import { pad, NumList, Tag, BNum, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
@@ -254,17 +254,23 @@ export default function Behavior({ ctx, id }) {
           onDone={() => { setModal(null); reload(); }} onClose={() => setModal(null)} />
       )}
       {modal?.kind === 'newRitual' && (
-        <RitualForm title="New ritual" toast={toast} onClose={() => setModal(null)}
+        <RitualForm title="New ritual" toast={toast} systems={ctx.systems} onClose={() => setModal(null)}
           note={`It is created for ${org.name} and applied to this ${term.one}. You can apply it to others later.`}
-          onSave={async (fields) => {
+          onSave={async (fields, _behaviorIds, systemIds) => {
             const r = await createRitual(org.id, fields);
             await applyRitual(b.id, r.id);
+            if (systemIds?.length) await setRitualSystems(r.id, systemIds);
             toast('Ritual created and applied.'); setModal(null); reload();
           }} />
       )}
       {modal?.kind === 'editRitual' && (
-        <RitualForm title="Edit ritual" initial={modal.r} toast={toast} onClose={() => setModal(null)}
-          onSave={async (fields) => { await updateRitual(modal.r.id, fields); toast('Ritual updated.'); setModal(null); reload(); }} />
+        <RitualForm title="Edit ritual" initial={ctx.rituals.find((x) => x.id === modal.r.id) ?? modal.r} systems={ctx.systems}
+          toast={toast} onClose={() => setModal(null)}
+          onSave={async (fields, _behaviorIds, systemIds) => {
+            await updateRitual(modal.r.id, fields);
+            if (systemIds) await setRitualSystems(modal.r.id, systemIds);
+            toast('Ritual updated.'); setModal(null); reload();
+          }} />
       )}
       {modal?.kind === 'runSystem' && (
         <RecordIteration ctx={ctx} system={{ id: modal.p.systemId, name: modal.p.system }} placement={modal.p}
