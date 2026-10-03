@@ -146,13 +146,13 @@ export default function Behavior({ ctx, id }) {
               </div>
               <div className="btnrow">
                 {r.practice
-                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runRitual', r })}>Open the practice</button>
+                  ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runRitual', r })}>Run a Session</button>
                   : canEdit
                     ? <button className="btn ghost small" onClick={() => setModal({ kind: 'writePractice', r })}>Write the practice</button>
                     : <button className="btn ghost small" disabled>No practice written</button>}
                 {canEdit && (
                   <>
-                    <button className="btn ghost small" onClick={() => setModal({ kind: 'editRitual', r })}>Edit ritual</button>
+                    <button className="btn ghost small" onClick={() => setModal({ kind: 'editRitual', r })}>Edit</button>
                     {!r.applies_to_all && (
                       <button className="btn ghost small" onClick={() => detachRitual(r.id, r.name)}>Remove</button>
                     )}
@@ -187,7 +187,7 @@ export default function Behavior({ ctx, id }) {
             <p className="pact">{p.artifact}</p>
             <div className="btnrow">
               {p.template
-                ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', p })}>Open the template</button>
+                ? <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', p })}>Run a Session</button>
                 : canEdit
                   ? <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p })}>Write the template</button>
                   : <button className="btn ghost small" disabled>No template yet</button>}
