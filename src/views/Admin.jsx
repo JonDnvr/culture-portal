@@ -125,10 +125,17 @@ export default function Admin({ ctx }) {
     } catch (e) { toast(e.message); }
   }
 
-  // Recognition each person has received: gold stars by member, plus older
-  // recognition that named them by typing their name.
-  const received = (m) => (activity?.recognitions ?? []).filter((r) =>
-    r.recipient_user_id ? r.recipient_user_id === m.user_id : r.recipient === m.display_name);
+  // Everything a person has received, newest first: recognition (picked from
+  // the list, or older ones that typed their name) and the Value awards that
+  // landed on their wall, including team awards given while they were on it.
+  const received = (m) => [
+    ...(activity?.recognitions ?? [])
+      .filter((r) => (r.recipient_user_id ? r.recipient_user_id === m.user_id : r.recipient === m.display_name))
+      .map((r) => ({ kind: 'recognition', id: r.id, at: r.created_at, r })),
+    ...(ctx.grants ?? [])
+      .filter((g) => (g.recipients ?? []).includes(m.user_id) || g.recipient_user_id === m.user_id)
+      .map((g) => ({ kind: 'award', id: g.id, at: g.granted_at, g }))
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
 
   async function changeRole(userId, role) {
     try { await updateUserRole(userId, role); toast('Role updated.'); loadMembers(); }
@@ -456,7 +463,7 @@ export default function Admin({ ctx }) {
                 <TeamSelect teams={teams} value={m.team_id} id={`team-${m.user_id}`}
                   onChange={(teamId) => changeTeam(m.user_id, teamId, m.display_name)}
                   onCreate={(name) => newTeamFor(m.user_id, name, m.display_name)} />
-                <button className="linkn" title="Recognition received"
+                <button className="linkn" title="Recognition and Value awards received"
                   onClick={() => setModal({ kind: 'received', m })}>
                   <GoldStar size={14} /> {received(m).length}
                 </button>
@@ -1154,29 +1161,49 @@ function NewOrganization({ onClose, onDone, toast }) {
   );
 }
 
-/** What a person's recognition count is made of, each line opening its record. */
+/**
+ * Everything behind a person's star count: recognition and Value awards, each
+ * with its star. Recognition opens its record; an award opens the Awards page.
+ */
 function ReceivedList({ ctx, member, rows, onClose }) {
   const byId = Object.fromEntries(ctx.behaviors.map((b) => [b.id, b]));
+  const recs = rows.filter((x) => x.kind === 'recognition').length;
+  const awards = rows.length - recs;
   return (
     <Modal title={`Recognition for ${member.display_name}`} onClose={onClose} wide
       footer={<button className="btn ghost" onClick={onClose}>Close</button>}>
       <p className="meta">
-        {rows.length} recognition{rows.length === 1 ? '' : 's'} received. Gold stars are the ones that
-        named {member.display_name} from the list; older ones typed the name and earn no star.
+        {recs} recognition{recs === 1 ? '' : 's'} and {awards} Value award{awards === 1 ? '' : 's'} received.
       </p>
       {rows.length ? (
         <div className="runlist">
-          {rows.map((r) => {
+          {rows.map((x) => {
+            if (x.kind === 'award') {
+              const g = x.g;
+              return (
+                <button key={`award-${g.id}`} className="runrow" onClick={() => { onClose(); ctx.goto('wall'); }}>
+                  <GoldStar size={20} />
+                  <span>
+                    <b>{g.award?.name ?? 'Value award'}</b>
+                    <small className="who2">
+                      <Avatar person={findPerson(ctx.people, { id: g.granted_by, name: g.granted_by_name })} name={g.granted_by_name} size={14} />
+                      Value award from {g.granted_by_name}{g.team_id ? ` · to the ${g.recipient_name} team` : ''}
+                    </small>
+                  </span>
+                  <span className="w">{new Date(g.granted_at).toLocaleDateString()}</span>
+                </button>
+              );
+            }
+            const r = x.r;
             const b = byId[r.behavior_id];
             return (
               <button key={r.id} className="runrow" onClick={() => { onClose(); ctx.openRecord('recognition', r.id); }}>
-                {r.recipient_user_id ? <GoldStar size={20} /> : <span className="nostar" />}
+                <GoldStar size={20} />
                 <span>
                   <b>{r.title || (b ? b.title : 'Recognition')}</b>
                   <small className="who2">
                     <Avatar person={findPerson(ctx.people, { id: r.author_id, name: r.author_name })} name={r.author_name} size={14} />
                     from {r.author_name}{b ? <> · <N n={b.number} /> {b.title}</> : ''}
-                    {!r.recipient_user_id ? ' · typed name' : ''}
                   </small>
                 </span>
                 <span className="w">{new Date(r.created_at).toLocaleDateString()}</span>

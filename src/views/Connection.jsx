@@ -173,19 +173,52 @@ export function Stories({ ctx }) {
 
 /* ------------------------------------------------------------- recognition */
 
+/**
+ * A Value award as it appears among recognition: who gave which award to
+ * whom, with the names and 5C categories of the Values it stands for.
+ */
+function awardItem(ctx, g) {
+  const byValue = Object.fromEntries(ctx.values.map((v) => [v.id, v]));
+  const vals = (g.award?.valueIds ?? []).map((id) => byValue[id]).filter(Boolean);
+  return {
+    kind: 'award', id: g.id, row: g, at: g.granted_at, title: g.award?.name ?? 'Value award',
+    by: g.granted_by_name, byId: g.granted_by, text: g.citation,
+    to: g.team_id ? `${g.recipient_name} team` : g.recipient_name, toId: g.recipient_user_id, team: g.team_id,
+    valueNames: vals.map((v) => v.name), valueCats: vals.map((v) => v.category).filter(Boolean)
+  };
+}
+
 function Recognition({ ctx }) {
-  const { openBehavior, openRecord, activity, term } = ctx;
+  const { openBehavior, openRecord, activity, grants, term } = ctx;
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
   const [sharing, setSharing] = useState(null);
+  const [openAward, setOpenAward] = useState(null);
   const toast = useToast();
   const f = useFilter(ctx, activity.recognitions);
+
+  // Value awards are recognition too, so they list here with their star. An
+  // award has no behavior: a behavior filter leaves it out, and the value and
+  // category filters read the Values it stands for.
+  const awards = (grants ?? []).map((g) => awardItem(ctx, g)).filter((a) => {
+    if (f.behavior !== ALL) return false;
+    if (f.value !== ALL && !a.valueNames.includes(f.value)) return false;
+    if (f.category !== ALL && !a.valueCats.includes(f.category)) return false;
+    return true;
+  });
+  const rows = [...f.filtered.map((r) => ({ kind: 'recognition', id: r.id, at: r.created_at, r })), ...awards]
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+
   const tools = useListTools({
-    ctx, rows: f.filtered,
-    onTeam: (r, teamId) => teamOfPerson(ctx, r.author_id, r.author_name) === teamId
-      || teamOfPerson(ctx, r.recipient_user_id, r.recipient) === teamId,
-    text: (r) => searchable(ctx, [r.author_name, r.recipient, r.title, r.body,
-      new Date(r.created_at).toLocaleDateString(), behaviorWords(ctx.behaviors.find((b) => b.id === r.behavior_id))])
+    ctx, rows,
+    onTeam: (x, teamId) => x.kind === 'award'
+      ? x.team === teamId || teamOfPerson(ctx, x.byId, x.by) === teamId || (!!x.toId && teamOfPerson(ctx, x.toId, x.to) === teamId)
+      : teamOfPerson(ctx, x.r.author_id, x.r.author_name) === teamId
+        || teamOfPerson(ctx, x.r.recipient_user_id, x.r.recipient) === teamId,
+    text: (x) => x.kind === 'award'
+      ? searchable(ctx, ['Value award', x.title, x.by, x.to, x.text, x.valueNames, new Date(x.at).toLocaleDateString()])
+      : searchable(ctx, [x.r.author_name, x.r.recipient, x.r.title, x.r.body,
+        new Date(x.r.created_at).toLocaleDateString(), behaviorWords(ctx.behaviors.find((b) => b.id === x.r.behavior_id))])
   });
 
   return (
@@ -201,7 +234,37 @@ function Recognition({ ctx }) {
       <ListBar ctx={ctx} tools={tools} placeholder={`Search recognition: a name, a title, a ${term.one}`} />
 
       <div className="feed">
-        {tools.shown.map((r) => {
+        {tools.shown.map((x) => {
+          if (x.kind === 'award') {
+            const p = preview(x.text ?? '');
+            return (
+              <div key={`award-${x.id}`} className="post">
+                <span className="who who2">
+                  <Avatar person={findPerson(ctx.people, { id: x.byId, name: x.by })} name={x.by} size={22} />
+                  {x.by} gave a Value award to
+                  <Avatar person={findPerson(ctx.people, { id: x.toId, name: x.to })} name={x.to} size={22} />
+                  {x.to}
+                </span>
+                <span className="when">{new Date(x.at).toLocaleDateString()}</span>
+                <p className="rectitle"><GoldStar size={16} /> {x.title}</p>
+                <p>{p.text}</p>
+                <Attachments files={x.row.attachments ?? []} compact />
+                <div className="tagrow">
+                  <Tag type="value">Value award</Tag>
+                  {x.valueNames.map((n) => <Tag key={n} type="value">{n}</Tag>)}
+                  {x.row.is_example && <Tag type="warn">Example</Tag>}
+                  {p.more && <Tag type="live">More to read</Tag>}
+                </div>
+                <div className="btnrow">
+                  <button className="btn ghost small" onClick={() => setOpenAward(x)}>Open</button>
+                  <button className="btn ghost small" onClick={() => setSharing(x)}>Share by email</button>
+                  <RecordActions ctx={ctx} kind="award" row={x.row} toast={toast}
+                    onEdit={(row) => setEditing({ kind: 'award', row })} />
+                </div>
+              </div>
+            );
+          }
+          const r = x.r;
           const p = preview(r.body);
           return (
             <div key={r.id} className="post">
@@ -225,7 +288,8 @@ function Recognition({ ctx }) {
               <div className="btnrow">
                 <button className="btn ghost small" onClick={() => openRecord('recognition', r.id)}>Open</button>
                 <button className="btn ghost small" onClick={() => setSharing(r)}>Share by email</button>
-                <RecordActions ctx={ctx} kind="recognition" row={r} toast={toast} onEdit={setEditing} />
+                <RecordActions ctx={ctx} kind="recognition" row={r} toast={toast}
+                  onEdit={(row) => setEditing({ kind: 'recognition', row })} />
               </div>
             </div>
           );
@@ -239,16 +303,24 @@ function Recognition({ ctx }) {
           onDone={() => setAdding(false)} />
       )}
       {editing && (
-        <RecordEditor ctx={ctx} kind="recognition" row={editing} toast={toast}
+        <RecordEditor ctx={ctx} kind={editing.kind} row={editing.row} toast={toast}
           onClose={() => setEditing(null)} onDone={() => setEditing(null)} />
       )}
-      {sharing && (
+      {sharing && sharing.kind === 'award' && (
+        <ShareRecord kind="award" id={sharing.id} onClose={() => setSharing(null)} toast={toast}
+          summary={<>
+            <p className="rectitle"><GoldStar size={16} /> {sharing.title}</p>
+            <p className="quiet">{sharing.by} gave {sharing.title} to {sharing.to}. {preview(sharing.text ?? '').text}</p>
+          </>} />
+      )}
+      {sharing && sharing.kind !== 'award' && (
         <ShareRecord kind="recognition" id={sharing.id} onClose={() => setSharing(null)} toast={toast}
           summary={<>
             <p className="rectitle">{sharing.recipient_user_id && <GoldStar size={16} />} {sharing.title || sharing.recipient}</p>
             <p className="quiet">{sharing.author_name} recognized {sharing.recipient}. {preview(sharing.body).text}</p>
           </>} />
       )}
+      {openAward && <AwardDetail award={openAward} onClose={() => setOpenAward(null)} />}
     </section>
   );
 }
@@ -545,7 +617,7 @@ function WhatsGood({ ctx }) {
                 <div className="t">
                   {x.kind === 'award' ? (x.title ?? 'Value award') : x.kind === 'recognition' ? (x.title || 'Recognition') : 'Story'}
                   <Tag type={x.kind === 'award' ? 'value' : x.kind === 'recognition' ? 'live' : 'plain'}>{KIND_LABEL[x.kind]}</Tag>
-                  {x.kind === 'recognition' && x.toId && <GoldStar size={14} />}
+                  {((x.kind === 'recognition' && x.toId) || x.kind === 'award') && <GoldStar size={14} />}
                   {x.team && teamName(x.team) && <Tag type="plain">{teamName(x.team)}</Tag>}
                 </div>
                 <div className="s who2">
@@ -575,15 +647,21 @@ function WhatsGood({ ctx }) {
         <RecordEditor ctx={ctx} kind={editing.kind} row={editing.row} toast={toast}
           onClose={() => setEditing(null)} onDone={() => setEditing(null)} />
       )}
-      {open && (
-        <Modal title={open.title ?? 'Value award'} onClose={() => setOpen(null)}
-          footer={<button className="btn ghost" onClick={() => setOpen(null)}>Close</button>}>
-          <div className="tagrow">{(open.valueNames ?? []).map((n) => <Tag key={n} type="value">{n}</Tag>)}</div>
-          <p className="meta">Conferred on {open.to} by {open.by}, {new Date(open.at).toLocaleDateString()}</p>
-          <p className="confirmbody" style={{ whiteSpace: 'pre-wrap' }}>{open.text}</p>
-          {(open.row.attachments ?? []).length > 0 && <Attachments files={open.row.attachments} />}
-        </Modal>
-      )}
+      {open && <AwardDetail award={open} onClose={() => setOpen(null)} />}
     </section>
+  );
+}
+
+/** A Value award in full: its Values, who gave it to whom and when, the citation and files. */
+function AwardDetail({ award, onClose }) {
+  return (
+    <Modal title={award.title ?? 'Value award'} onClose={onClose}
+      footer={<button className="btn ghost" onClick={onClose}>Close</button>}>
+      <p className="rectitle"><GoldStar size={18} /> {award.title ?? 'Value award'}</p>
+      <div className="tagrow">{(award.valueNames ?? []).map((n) => <Tag key={n} type="value">{n}</Tag>)}</div>
+      <p className="meta">Conferred on {award.to} by {award.by}, {new Date(award.at).toLocaleDateString()}</p>
+      <p className="confirmbody" style={{ whiteSpace: 'pre-wrap' }}>{award.text}</p>
+      {(award.row.attachments ?? []).length > 0 && <Attachments files={award.row.attachments} />}
+    </Modal>
   );
 }
