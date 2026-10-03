@@ -705,7 +705,7 @@ export function PlacementForm({ ctx, system, placement, behavior, toast, onClose
         <div><label className="fl">Owner</label><input type="text" value={f.owner} onChange={set('owner')} /></div>
         <div><label className="fl">Cadence</label><input type="text" value={f.cadence} onChange={set('cadence')} /></div>
       </div>
-      <label className="fl">What happens</label>
+      <label className="fl">What happens (the artifact)</label>
       <input type="text" value={f.artifact} onChange={set('artifact')} />
       <label className="fl">Template, optional</label>
       <textarea rows={8} value={f.template} onChange={set('template')}

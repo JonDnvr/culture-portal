@@ -5,7 +5,7 @@ import {
   updateBehavior, deleteBehavior, listRecognitions, listStories, listIterations, markFluency
 } from '../lib/api.js';
 import { pad, NumList, Tag, BNum, Modal, Avatar, findPerson, useToast, confirmAction } from '../components/ui.jsx';
-import { RecordIteration } from './Cadence.jsx';
+import { RecordIteration, PlacementForm } from './Cadence.jsx';
 import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../components/badges.jsx';
 import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
 import { termFor } from '../lib/term.js';
@@ -194,8 +194,8 @@ export default function Behavior({ ctx, id }) {
               {!p.template && (
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'runSystem', p })}>Record a run</button>
               )}
-              {canEdit && p.template && (
-                <button className="btn ghost small" onClick={() => setModal({ kind: 'writeTemplate', p, initial: p.template })}>Edit template</button>
+              {canEdit && (
+                <button className="btn ghost small" onClick={() => setModal({ kind: 'editPlacement', p })}>Edit</button>
               )}
               {canEdit && (
                 <button className="btn ghost small" onClick={async () => {
@@ -284,6 +284,10 @@ export default function Behavior({ ctx, id }) {
       {modal?.kind === 'connection' && (
         <ConnectionDetail ctx={ctx} behavior={b} scopeName={badges.scopeName}
           recentDays={badges.recentDays} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'editPlacement' && (
+        <PlacementForm ctx={ctx} system={{ id: modal.p.systemId, name: modal.p.system }} placement={modal.p}
+          behavior={b} toast={toast} onClose={() => setModal(null)} onDone={() => { setModal(null); reload(); }} />
       )}
       {modal?.kind === 'writeTemplate' && (
         <TextForm title={modal.initial ? 'Edit the template' : 'Write the template'} label="Template"
