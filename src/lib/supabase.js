@@ -81,9 +81,17 @@ export async function listMyOrganizations() {
     return data.map((o) => ({ ...o, role: 'owner', displayName: 'Super Admin', isSuper: true }));
   }
 
+  // Everyone can read every membership in their organization (Admin lists the
+  // people), so this must ask for the signed-in person's own row by id.
+  // Without the filter it returned whichever member came back first, with
+  // that person's name and role.
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) return [];
   const { data, error } = await supabase
     .from('memberships')
     .select('role, display_name, organizations(*)')
+    .eq('user_id', userId)
     .limit(1);
   if (error) throw error;
   if (!data.length) {
