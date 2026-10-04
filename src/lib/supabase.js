@@ -488,7 +488,8 @@ export async function unapplyRitual(behaviorId, ritualId) {
 
 export async function recordIteration(orgId, { ritualId = null, systemId = null, teamId = null, behaviorIds = [], heldAt, notes, files = [], isDraft = false }) {
   if (!!ritualId === !!systemId) throw new Error('An iteration is a run of one ritual or one system.');
-  if (!behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
+  // A system session may name no behaviors; a ritual run says which it covered.
+  if (ritualId && !behaviorIds.length) throw new Error('Pick at least one behavior this covered.');
   const { data: { user } } = await supabase.auth.getUser();
   const { data: it, error } = await supabase.from('iterations').insert({
     org_id: orgId, ritual_id: ritualId, system_category_id: systemId, team_id: teamId,

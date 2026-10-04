@@ -460,6 +460,7 @@ function Rituals({ ctx, initialBehavior = null }) {
   const [value, setValue] = useState(ALL);
   const [category, setCategory] = useState(ALL);
   const [behavior, setBehavior] = useState(initialBehavior ?? ALL);
+  const [system, setSystem] = useState(ALL);
   const [modal, setModal] = useState(null);
   const [runs, setRuns] = useState([]);
   const [expanded, setExpanded] = useState(false);
@@ -476,6 +477,8 @@ function Rituals({ ctx, initialBehavior = null }) {
     if (behavior !== ALL && !bs.some((b) => b.id === behavior)) return false;
     if (category !== ALL && !bs.some((b) => inCategory(b, category))) return false;
     if (value !== ALL && !bs.some((b) => b.values.some((v) => v.name === value))) return false;
+    // A system shows the rituals its sessions can include; the weekly practice goes with every system.
+    if (system !== ALL && !r.applies_to_all && !(r.systemIds ?? []).includes(system)) return false;
     return true;
   });
 
@@ -494,7 +497,14 @@ function Rituals({ ctx, initialBehavior = null }) {
 
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}
         value={value} setValue={setValue} behavior={behavior} setBehavior={setBehavior}
-        categories={ctx.showCats ? categories : null} category={category} setCategory={setCategory} />
+        categories={ctx.showCats ? categories : null} category={category} setCategory={setCategory}
+        extraLabel="System"
+        extra={
+          <select className="field inline" value={system} onChange={(e) => setSystem(e.target.value)}>
+            <option value={ALL}>All systems</option>
+            {ctx.systems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        } />
 
       {list.map((r) => {
         const bs = carriers(r);
@@ -1013,12 +1023,8 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
 
   const toggle = (id) => setIds(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
   const flip = (set, setter, id) => { const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); setter(next); };
-  // Ticking a ritual opens its details; unticking closes them.
-  const toggleRit = (id) => {
-    const on = ritIds.includes(id);
-    setRitIds(on ? ritIds.filter((x) => x !== id) : [...ritIds, id]);
-    const next = new Set(openRit); on ? next.delete(id) : next.add(id); setOpenRit(next);
-  };
+  // Ticking a ritual only ticks it; Details opens and closes its practice.
+  const toggleRit = (id) => setRitIds(ritIds.includes(id) ? ritIds.filter((x) => x !== id) : [...ritIds, id]);
   // What an included ritual credits: the behavior of the week for the weekly
   // practice, otherwise the behaviors the ritual carries.
   const creditFor = (r) => r.applies_to_all
@@ -1033,7 +1039,8 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
   const script = ritual ? ritual.practice : null;
 
   async function save(asDraft) {
-    if (!ids.length) return toast(`Pick the ${term.many} this ${isSession ? 'session' : 'run'} covered.`);
+    // A session can name no behaviors; a ritual run says which it covered.
+    if (!isSession && !ids.length) return toast(`Pick the ${term.many} this run covered.`);
     setBusy(true);
     try {
       if (initial) {
@@ -1161,7 +1168,8 @@ export function RecordIteration({ ctx, ritual, system, placement, readFor = [], 
           : `Recorded by ${initial ? initial.recorded_by_name : org.displayName}. The team gets the credit toward its streaks.`}
       </p>
 
-      <label className="fl">{term.Many} this {isSession ? 'session' : 'run'} covered{isSession ? ', from the templates above' : ''}</label>
+      <label className="fl">{isSession ? `${term.Many} that were strong in this session` : `${term.Many} this run covered`}</label>
+      {isSession && <p className="meta" style={{ marginTop: 0 }}>Optional. Pick any that stood out; none is fine.</p>}
       {options.length ? (
         <div className="tagrow">
           {options.map((b) => (
