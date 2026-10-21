@@ -65,7 +65,7 @@ export default function Behavior({ ctx, id }) {
   return (
     <>
       <div className="dateline">
-        <button className="btn ghost small" onClick={() => goto('clarity')}>Back to Clarity</button>
+        <button className="btn ghost small" onClick={() => goto('clarity')}>Back to Name</button>
       </div>
       <div className="detailhead">
         <div><h1 className="pagetitle"><BNum n={b.number} /> {b.title}</h1></div>
@@ -350,8 +350,8 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
     number: behavior?.number ?? '',
     title: behavior?.title ?? '',
     description: behavior?.description ?? '',
-    // An additional category, beyond those its values bring. Empty is fine.
-    category: behavior ? behavior.category ?? '' : '',
+    // R7: the 6Cs this behavior carries, any number, none required.
+    categories: [...(behavior?.categories ?? [])],
     quick_tip: behavior?.quick_tip ?? '',
     coaching_tips: (behavior?.coaching_tips ?? []).join('\n'),
     teaching_points: (behavior?.teaching_points ?? []).join('\n'),
@@ -363,9 +363,10 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
   const [busy, setBusy] = useState(false);
 
   const lines = (s) => s.split('\n').map((x) => x.trim()).filter(Boolean);
-  // The categories the picked values already bring, in the 5C order.
-  const valueCats = categories.map((c) => c.name).filter((name) =>
-    values.some((v) => f.valueIds.includes(v.id) && v.category === name));
+  const toggleCat = (name) => setF({
+    ...f,
+    categories: f.categories.includes(name) ? f.categories.filter((x) => x !== name) : [...f.categories, name]
+  });
   const toggleValue = (id) => setF({
     ...f,
     valueIds: f.valueIds.includes(id) ? f.valueIds.filter((x) => x !== id) : [...f.valueIds, id]
@@ -379,7 +380,7 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
         number: Number(f.number) || undefined,
         title: f.title.trim(),
         description: f.description.trim(),
-        category: f.category || null,
+        categories: f.categories,
         quick_tip: f.quick_tip.trim(),
         coaching_tips: lines(f.coaching_tips),
         teaching_points: lines(f.teaching_points),
@@ -410,18 +411,14 @@ export function BehaviorForm({ behavior, values, categories, onSave, onClose, to
             onClick={() => toggleValue(v.id)}>{v.name}</button>
         ))}
       </div>
-      <label className="fl">Additional 5C category</label>
-      <select className="field" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
-        <option value="">None, only the values' categories</option>
-        {categories.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
-      </select>
-      <p className="meta">
-        {valueCats.length
-          ? `From its values, this ${term.one} is already in ${valueCats.join(' and ')}. `
-          : `The values picked above bring no category yet. `}
-        Pick a category here only to add one beyond those. It shows under every one of them in the
-        category filters and counts.
-      </p>
+      <label className="fl">6Cs this carries</label>
+      <div className="tagrow">
+        {categories.map((c) => (
+          <button key={c.name} className="pill" aria-pressed={f.categories.includes(c.name)}
+            title={c.question} onClick={() => toggleCat(c.name)}>{c.name}</button>
+        ))}
+      </div>
+      <p className="meta">Pick any that fit; none is fine. It shows under each one in the category filters and counts.</p>
       <label className="fl">Try this</label>
       <input type="text" value={f.quick_tip} onChange={(e) => setF({ ...f, quick_tip: e.target.value })} />
       <label className="fl">Coaching tips, one per line</label>

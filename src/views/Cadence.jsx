@@ -32,7 +32,7 @@ export default function Cadence({ ctx }) {
           ? <button className="btn ghost small" onClick={ctx.back}>Back</button>
           : `Week of ${new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
       </div>
-      <h1 className="pagetitle">Cadence</h1>
+      <h1 className="pagetitle">Practice</h1>
       <p className="lede">One {term.one} at a time, carried by practices nobody has to remember.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'week'} onClick={() => setTab('week')}>{UNIT[cadenceOf(ctx.org).kind].this.replace(/^./, (c) => c.toUpperCase())}</button>
@@ -492,7 +492,7 @@ function Rituals({ ctx, initialBehavior = null }) {
       </div>
       <p className="lede small">
         Practices written once and applied to any {ctx.term.one} they reinforce. Recording an iteration
-        is what feeds recency and count on Conviction.
+        is what feeds recency and count on Track.
       </p>
 
       <BehaviorValueFilters term={ctx.term} values={values} behaviors={behaviors}

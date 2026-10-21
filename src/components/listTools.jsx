@@ -83,5 +83,5 @@ export function searchable(ctx, parts) {
 /** A behavior as it is searched for: its number, with and without padding, and its title. */
 export function behaviorWords(b) {
   if (!b) return [];
-  return [String(b.number), String(b.number).padStart(2, '0'), b.title, ...(b.values ?? []).map((v) => v.name), b.category];
+  return [String(b.number), String(b.number).padStart(2, '0'), b.title, ...(b.values ?? []).map((v) => v.name), ...(b.categories ?? [])];
 }

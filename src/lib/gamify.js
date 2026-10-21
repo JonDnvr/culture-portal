@@ -254,11 +254,11 @@ export function connectionByBehavior(recognitions, stories, people, scope, recen
 /* ----------------------------------------------------------------- fluency */
 
 export const FLUENCY_STEPS = [
-  { key: 'description', label: (t) => `Read the full ${t.one} description`, section: 'Clarity' },
-  { key: 'template', label: () => 'Read a ritual practice or a systems template', section: 'Clarity' },
-  { key: 'botw', label: (t) => `You or your team recorded a ${t.One} of the Week discussion`, section: 'Cadence' },
-  { key: 'practice', label: () => 'You or your team recorded a ritual or system practice', section: 'Cadence' },
-  { key: 'rated', label: (t) => `You rated this ${t.one} in a quick pulse`, section: 'Conviction' }
+  { key: 'description', label: (t) => `Read the full ${t.one} description`, section: 'Name' },
+  { key: 'template', label: () => 'Read a ritual practice or a systems template', section: 'Name' },
+  { key: 'botw', label: (t) => `You or your team recorded a ${t.One} of the Week discussion`, section: 'Practice' },
+  { key: 'practice', label: () => 'You or your team recorded a ritual or system practice', section: 'Practice' },
+  { key: 'rated', label: (t) => `You rated this ${t.one}`, section: 'Track' }
 ];
 
 /**
@@ -362,7 +362,7 @@ export function gapClosed(spreads, currentRound) {
 
 /* ------------------------------------------------------------------- events */
 
-/** Cadence and connection events per week, for the graph at the foot of a wall. */
+/** Practice and recognition events per week, for the graph at the foot of a wall. */
 export function weeklyEvents(iterations, recognitions, stories, people, scope, weeks, today = new Date()) {
   const keys = lastWeeks(weeks, today).map(weekKey);
   const idx = Object.fromEntries(keys.map((k, i) => [k, i]));

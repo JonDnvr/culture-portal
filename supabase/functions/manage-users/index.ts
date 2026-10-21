@@ -46,10 +46,10 @@ async function sendWelcome(orgName: string, to: string, name: string, role: stri
   </p>
   <p><strong>What you will find</strong></p>
   <ul style="font-size:15px;color:#3E4A46">
-    <li><strong>Culture home</strong>: the purpose, the values, and the behavior being practised this week.</li>
-    <li><strong>Clarity</strong>: every behavior, with coaching tips, teaching points and discussion questions.</li>
-    <li><strong>Cadence</strong>: the weekly practice session, the rotation, the rituals and the systems.</li>
-    <li><strong>Connection</strong>: recognize someone by name, and add stories of the behaviors happening.</li>
+    <li><strong>Home</strong>: the purpose, the values, and the behavior being practised this week.</li>
+    <li><strong>Name</strong>: every behavior, with coaching tips, teaching points and discussion questions.</li>
+    <li><strong>Practice</strong>: the weekly practice session, the rotation, the rituals and the systems.</li>
+    <li><strong>Recognize</strong>: recognize someone by name, and add stories of the behaviors happening.</li>
   </ul>
   <p style="font-size:15px;color:#3E4A46">
     When you sign in you will be asked to rate a couple of behaviors. It takes about thirty

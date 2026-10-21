@@ -105,7 +105,7 @@ let tagActions = null;
 
 /**
  * Mounted once in the app shell. Gives every Tag its action, and shows the
- * definition of a value or a 5C category when one is clicked.
+ * definition of a value or a 6C category when one is clicked.
  */
 export function TagActionsHost({ ctx }) {
   const [open, setOpen] = useState(null);
@@ -133,7 +133,7 @@ export function TagActionsHost({ ctx }) {
     const carried = behaviors.filter((b) => (b.values ?? []).some((x) => x.name === open.name));
     return (
       <Modal title={open.name} onClose={close} footer={<button className="btn ghost" onClick={close}>Close</button>}>
-        <div className="tagrow"><span className="tag tg-value">Value</span>{showCats && v?.category && <Tag type="category">{v.category}</Tag>}</div>
+        <div className="tagrow"><span className="tag tg-value">Value</span></div>
         <p className="confirmbody">{v?.description || 'No description written yet.'}</p>
         <label className="fl">{term.Many} that carry it ({carried.length})</label>
         <ul className="vlist">
@@ -146,17 +146,12 @@ export function TagActionsHost({ ctx }) {
     );
   }
   const c = categories.find((x) => x.name === open.name);
-  const inVals = values.filter((x) => x.category === open.name);
   const inBeh = behaviors.filter((b) => inCategory(b, open.name));
   return (
     <Modal title={open.name} onClose={close} footer={<button className="btn ghost" onClick={close}>Close</button>}>
-      <div className="tagrow"><span className="tag tg-category">5C category</span></div>
+      <div className="tagrow"><span className="tag tg-category">6C category</span></div>
       {c?.question && <p className="ratinghead">{c.question}</p>}
       <p className="confirmbody">{c?.definition ?? ''}</p>
-      {inVals.length > 0 && <>
-        <label className="fl">Values in it</label>
-        <p className="confirmbody">{inVals.map((x) => x.name).join(', ')}</p>
-      </>}
       <label className="fl">{term.Many} in it ({inBeh.length})</label>
       <ul className="vlist">
         {inBeh.map((b) => (

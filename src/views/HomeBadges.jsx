@@ -98,7 +98,7 @@ export default function HomeBadges({ ctx }) {
         </button>
 
         <div className="hcard">
-          <div className="hlabel">Survey cadence</div>
+          <div className="hlabel">Survey progress</div>
           <div className="hsub">Round {cairn?.round ?? 1}: complete when {cairn?.pct ?? 80}% of members have rated every {term.one}</div>
           {cairn && cairn.total > 0 ? (
             <>

@@ -62,10 +62,10 @@ function Shell({ art, kicker, title, status, how, children, onClose, term }) {
 export function FluencyDetail({ ctx, behavior, f, onClose }) {
   const open = (rec) => { onClose(); ctx.openRecord(rec.kind, rec.id); };
   return (
-    <Shell onClose={onClose} term={ctx.term} art={<FluencyBadge f={f} size={56} />} kicker="Clarity"
+    <Shell onClose={onClose} term={ctx.term} art={<FluencyBadge f={f} size={56} />} kicker="Name"
       title={fluencyName(f, ctx.term)}
       status={<><N n={behavior.number} /> {behavior.title} · {f.done} of {f.of} steps · private to you</>}
-      how={<>Five steps, in any order, including rating it at least once in a quick pulse. The ring always fills clockwise from the top, so the same
+      how={<>Five steps, in any order, including rating it at least once. The ring always fills clockwise from the top, so the same
         percentage always looks the same. Fully Fluent arrives the moment someone recognizes you
         for this {ctx.term.one}, or you share a story about it, whatever the ring says.</>}>
       <div className="steprows">
@@ -99,7 +99,7 @@ export function PracticeDetail({ ctx, behavior, p, scopeName, sessionId, onClose
     .filter((it) => new Date(it.held_at).getTime() >= since)
     .filter((it) => !ctx.myTeamId || it.team_id === ctx.myTeamId);
   return (
-    <Shell onClose={onClose} term={ctx.term} art={<Medal size={52}><Metronome size={26} /></Medal>} kicker="Cadence"
+    <Shell onClose={onClose} term={ctx.term} art={<Medal size={52}><Metronome size={26} /></Medal>} kicker="Practice"
       title={`Practiced ${p.count} of ${p.of}`}
       status={<><N n={behavior.number} /> {behavior.title} · {scopeName}</>}
       how={<>A ritual or a system recorded against this {ctx.term.one}, one mark per {UNIT[p.cad?.kind ?? 'weekly'].one} across the

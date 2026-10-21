@@ -72,13 +72,13 @@ export default function SignIn() {
 
           <h2 className="hlg-youget">You get</h2>
           <ul className="hlg-four">
-            <li><strong>Clarity</strong> Translate values to clear behaviors with tips and questions
+            <li><strong>Name</strong> Translate values to clear behaviors with tips and questions
               to bring them to life.</li>
-            <li><strong>Cadence</strong> Behavior of the week, rituals, systems and templates, to
+            <li><strong>Practice</strong> Behavior of the week, rituals, systems and templates, to
               make practice routine.</li>
-            <li><strong>Connection</strong> Recognize someone in seconds. Add Stories to make the
+            <li><strong>Recognize</strong> Recognize someone in seconds. Add Stories to make the
               good visible. Fluency tracking, and awards keep people engaged.</li>
-            <li><strong>Conviction</strong> Ratings, measures, coverage gaps and team streaks show
+            <li><strong>Track</strong> Ratings, measures, coverage gaps and team streaks show
               where culture is strong and where it is thin.</li>
             <li><strong>Engagement</strong> Emails with practice prompts, and printable handouts bring
               culture outside the portal.</li>

@@ -22,7 +22,7 @@ export default function Conviction({ ctx }) {
   return (
     <>
       <div className="dateline">Does it hold when it costs something?</div>
-      <h1 className="pagetitle">Conviction</h1>
+      <h1 className="pagetitle">Track</h1>
       <p className="lede">What the {ctx.term.many} are supposed to move, what people report, and whether the systems and rituals are actually running.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'measures'} onClick={() => setTab('measures')}>Measures</button>
@@ -565,7 +565,7 @@ function Coverage({ ctx }) {
 }
 
 /**
- * Which of the 5C categories each behavior sits in, and how many land in
+ * Which of the 6C categories each behavior sits in, and how many land in
  * each. A category with none, or only one, is where the culture is thin.
  */
 function CategoryCoverage({ ctx, categories, behaviors, openBehavior }) {

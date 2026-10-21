@@ -44,7 +44,7 @@ export default function Clarity({ ctx }) {
   return (
     <>
       <div className="dateline">{term.count(behaviors.length)}, numbered for reference</div>
-      <h1 className="pagetitle">Clarity</h1>
+      <h1 className="pagetitle">Name</h1>
       <p className="lede">{term.Many} written as verbs, filed by value, system{ctx.showCats ? ' and category' : ''}, specific enough to observe.</p>
 
       <FilterRow label="Value" value={value} onChange={setValue}

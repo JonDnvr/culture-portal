@@ -26,9 +26,9 @@ const admin = createClient(
 /** A little content so the first sign-in is not an empty screen. */
 const EXAMPLE = {
   values: [
-    { name: 'Challenge', category: 'Change', description: 'Hold a high bar, and push each other to reach it.' },
-    { name: 'Candor', category: 'Character', description: 'Say the hard thing early, to the person who can act on it.' },
-    { name: 'Care', category: 'Connection', description: 'Full attention, real regard, and a team that is good to be on.' }
+    { name: 'Challenge', description: 'Hold a high bar, and push each other to reach it.' },
+    { name: 'Candor', description: 'Say the hard thing early, to the person who can act on it.' },
+    { name: 'Care', description: 'Full attention, real regard, and a team that is good to be on.' }
   ],
   systems: ['Meetings', 'Onboarding', 'Recognition'],
   // Where each example behavior is built into a system, by behavior number.
@@ -54,7 +54,7 @@ const EXAMPLE = {
     ].join('\n'),
     behaviors: [3]
   },
-  // A little history, recorded by the culture champion, so Cadence, Connection
+  // A little history, recorded by the culture champion, so Practice, Recognize
   // and the home page show what a working portal looks like.
   activity: {
     runs: [
@@ -91,7 +91,7 @@ const EXAMPLE = {
   },
   behaviors: [
     {
-      number: 1, title: 'Honor commitments', category: 'Character',
+      number: 1, title: 'Honor commitments', categories: ['Character', 'Change'],
       description: 'If you say you will do it, it gets done on the date you said. If the date moves, you say so before it passes.',
       quick_tip: 'Say the date out loud when you make the commitment.',
       coaching_tips: ['Ask for the date, not the intent.', 'Thank an early reset publicly.'],
@@ -102,7 +102,7 @@ const EXAMPLE = {
       values: ['Challenge']
     },
     {
-      number: 2, title: 'Say the hard thing early', category: 'Character',
+      number: 2, title: 'Say the hard thing early', categories: ['Character', 'Change'],
       description: 'Raise the problem while it is small, to the person who can do something about it.',
       quick_tip: 'If you are rehearsing it in the car, send the message today.',
       coaching_tips: ['Thank the person before you respond to the content.', 'Ask directly: what are you not telling me?'],
@@ -113,7 +113,7 @@ const EXAMPLE = {
       values: ['Candor', 'Challenge']
     },
     {
-      number: 3, title: 'Credit people out loud', category: 'Connection',
+      number: 3, title: 'Credit people out loud', categories: ['Connection'],
       description: 'Say specifically who did the work, in front of others, close to when it happened.',
       quick_tip: 'Name the person, the behavior and the effect.',
       coaching_tips: ['Open meetings with a credit rather than closing with one.', 'Make sure credit reaches the roles nobody sees.'],
@@ -156,10 +156,10 @@ async function sendWelcome(orgName: string, to: string, name: string, role: stri
   </p>
   <p><strong>What you will find</strong></p>
   <ul style="font-size:15px;color:#3E4A46">
-    <li><strong>Culture home</strong>: the purpose, the values, and the behavior being practised this week.</li>
-    <li><strong>Clarity</strong>: every behavior, with coaching tips, teaching points and discussion questions.</li>
-    <li><strong>Cadence</strong>: the weekly practice session, the rituals and the systems that carry them.</li>
-    <li><strong>Connection</strong>: recognize someone by name, and add stories of the behaviors happening.</li>
+    <li><strong>Home</strong>: the purpose, the values, and the behavior being practised this week.</li>
+    <li><strong>Name</strong>: every behavior, with coaching tips, teaching points and discussion questions.</li>
+    <li><strong>Practice</strong>: the weekly practice session, the rituals and the systems that carry them.</li>
+    <li><strong>Recognize</strong>: recognize someone by name, and add stories of the behaviors happening.</li>
   </ul>
   <p style="font-size:15px;color:#3E4A46">
     When you sign in you will be asked to rate a couple of behaviors. It takes about thirty
@@ -252,11 +252,13 @@ Deno.serve(async (req) => {
       const systemId = Object.fromEntries((systems ?? []).map((s) => [s.name, s.id]));
       const behaviorId: Record<number, string> = {};
       for (const b of EXAMPLE.behaviors) {
-        const { values: names, ...rest } = b;
+        const { values: names, categories: cs, ...rest } = b;
         const { data: row } = await admin.from('behaviors')
           .insert({ org_id: org.id, ...rest, is_example: true }).select().single();
         if (row) {
           behaviorId[b.number] = row.id;
+          // R7: the 6Cs live on behaviors.
+          await admin.from('behavior_categories').insert(cs.map((category) => ({ behavior_id: row.id, category })));
           await admin.from('behavior_values').insert(
             names.map((n) => ({ behavior_id: row.id, value_id: valueId[n] })).filter((x) => x.value_id)
           );

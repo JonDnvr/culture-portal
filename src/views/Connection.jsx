@@ -9,7 +9,7 @@ import { pad, Tag, BehaviorTag, Modal, Avatar, findPerson, useToast } from '../c
 import { GoldStar, Crest } from '../components/badges.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
-import { inCategory } from '../lib/categories.js';
+import { inCategory, categoriesOfValues } from '../lib/categories.js';
 
 const PREVIEW = 260;
 
@@ -30,7 +30,7 @@ export default function Connection({ ctx }) {
   return (
     <>
       <div className="dateline">{ctx.term.Many} named out loud, and the record of them happening</div>
-      <h1 className="pagetitle">Connection</h1>
+      <h1 className="pagetitle">Recognize</h1>
       <p className="lede">Recognition tells people which {ctx.term.many} matter. Stories are how {ctx.term.many} become beliefs.</p>
       <div className="tabs">
         <button className="tab" aria-pressed={tab === 'recognition'} onClick={() => setTab('recognition')}>Recognition</button>
@@ -45,7 +45,7 @@ export default function Connection({ ctx }) {
 }
 
 /**
- * Value pills, 5C category pills (when the organization shows them) and a
+ * Value pills, 6C category pills (when the organization shows them) and a
  * behavior dropdown, the same pattern as Clarity and Cadence, Systems.
  */
 function Filters({ ctx, value, setValue, category, setCategory, behavior, setBehavior }) {
@@ -175,7 +175,7 @@ export function Stories({ ctx }) {
 
 /**
  * A Value award as it appears among recognition: who gave which award to
- * whom, with the names and 5C categories of the Values it stands for.
+ * whom, with the names of the Values it stands for and the 6Cs of their behaviors.
  */
 function awardItem(ctx, g) {
   const byValue = Object.fromEntries(ctx.values.map((v) => [v.id, v]));
@@ -184,7 +184,8 @@ function awardItem(ctx, g) {
     kind: 'award', id: g.id, row: g, at: g.granted_at, title: g.award?.name ?? 'Value award',
     by: g.granted_by_name, byId: g.granted_by, text: g.citation,
     to: g.team_id ? `${g.recipient_name} team` : g.recipient_name, toId: g.recipient_user_id, team: g.team_id,
-    valueNames: vals.map((v) => v.name), valueCats: vals.map((v) => v.category).filter(Boolean)
+    // An award has no behavior: it carries the Cs of the behaviors linked to its Values.
+    valueNames: vals.map((v) => v.name), valueCats: categoriesOfValues(ctx.behaviors, g.award?.valueIds)
   };
 }
 
@@ -548,7 +549,6 @@ function WhatsGood({ ctx }) {
   const toast = useToast();
   const byId = Object.fromEntries(behaviors.map((b) => [b.id, b]));
   const valueName = Object.fromEntries(values.map((v) => [v.id, v.name]));
-  const valueCat = Object.fromEntries(values.map((v) => [v.id, v.category]));
   const teamName = (id) => teams.find((t) => t.id === id)?.name;
 
   const all = [
@@ -564,7 +564,7 @@ function WhatsGood({ ctx }) {
       kind: 'award', row: g, id: g.id, at: g.granted_at, by: g.granted_by_name, byId: g.granted_by,
       to: g.team_id ? `${g.recipient_name} team` : g.recipient_name, toId: g.recipient_user_id, team: g.team_id,
       title: g.award?.name, text: g.citation, valueNames: (g.award?.valueIds ?? []).map((id) => valueName[id]).filter(Boolean),
-      valueCats: (g.award?.valueIds ?? []).map((id) => valueCat[id]).filter(Boolean)
+      valueCats: categoriesOfValues(behaviors, g.award?.valueIds)
     }))
   ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
 

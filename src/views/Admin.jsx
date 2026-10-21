@@ -60,7 +60,7 @@ const money = (n) => (n || n === 0 ? `$${Number(n).toLocaleString()}` : '—');
 
 const ROLES = [
   { id: 'member', label: 'Member', can: 'Reads everything, posts recognition and stories, answers the pulse' },
-  { id: 'leader', label: 'Leader', can: 'The above, plus can make value awards and sees Conviction' },
+  { id: 'leader', label: 'Leader', can: 'The above, plus can make value awards and sees Track' },
   { id: 'admin', label: 'Admin', can: 'The above, plus edits content and manages people. Several people can hold this.' },
   { id: 'champion', label: 'Culture champion', can: 'Admin rights, plus manages subscription, and the one seat that keeps working if the subscription lapses. Only one person holds it.' }
 ];
@@ -161,7 +161,7 @@ export default function Admin({ ctx }) {
     <>
       <div className="dateline">{isSuper ? 'Super user, all organizations' : `Culture champion, ${org.name}`}</div>
       <h1 className="pagetitle">Admin</h1>
-      <p className="lede">About us, people, the plan and settings for {org.name}. {term.Many} and rituals are managed from Cadence.</p>
+      <p className="lede">About us, people, the plan and settings for {org.name}. {term.Many} and rituals are managed from Practice.</p>
 
       <AdminTabs tab={tab} setTab={setTab} orgName={org.name} isSuper={isSuper} />
 
@@ -227,7 +227,7 @@ export default function Admin({ ctx }) {
             return (
               <div key={v.id} className="row">
                 <div>
-                  <div className="t">{v.name}{v.category && <> <Tag type="category">{v.category}</Tag></>}</div>
+                  <div className="t">{v.name}</div>
                   <div className="s">{v.description}</div>
                 </div>
                 <div className="rowactions">
@@ -286,7 +286,7 @@ export default function Admin({ ctx }) {
         </div>
         <p className="meta" style={{ marginTop: -6, marginBottom: 10 }}>
           The ways {org.name} already runs, like hiring, meetings or reviews. Set them here, then build
-          {' '}{term.many} into them from Cadence, Systems.
+          {' '}{term.many} into them from Practice, Systems.
         </p>
         <div className="rowlist">
           {systems.map((sys) => (
@@ -296,7 +296,7 @@ export default function Admin({ ctx }) {
                 <span className={usage(sys) ? 'tag' : 'tag warn'}>{term.count(usage(sys))}</span>
                 <button className="btn ghost small" onClick={() => setModal({ kind: 'system', s: sys })}>Edit</button>
                 <button className="btn ghost small danger" onClick={async () => {
-                  if (usage(sys) > 0) return toast(`Remove it from its ${term.count(usage(sys))} first, from Cadence, Systems.`);
+                  if (usage(sys) > 0) return toast(`Remove it from its ${term.count(usage(sys))} first, from Practice, Systems.`);
                   if (!(await confirmAction({ title: `Delete the system "${sys.name}"?`, body: 'This cannot be undone.' }))) return;
                   try { await deleteSystemCategory(sys.id); toast('System deleted.'); reload(); } catch (e) { toast(e.message); }
                 }}>Delete</button>
@@ -314,7 +314,7 @@ export default function Admin({ ctx }) {
         </div>
         <p className="prose">
           Define what the {term.many} are meant to move. Recording a value for each period is a
-          separate job, done from Conviction so it can happen on a cycle.
+          separate job, done from Track so it can happen on a cycle.
         </p>
         <div className="rowlist">
           {measures.map((m) => (
@@ -341,7 +341,7 @@ export default function Admin({ ctx }) {
       <section>
         <div className="sectionhead">
           <h2>Featured {term.one} (behavior of the week)</h2>
-          <span className="note">Shown on the culture home and in Cadence</span>
+          <span className="note">Shown on Home and in Practice</span>
         </div>
         <div className="panel" style={{ maxWidth: 560 }}>
           <label className="fl" htmlFor="weekSel">Currently practising</label>
@@ -530,7 +530,7 @@ export default function Admin({ ctx }) {
               {[14, 30, 45, 60, 90, 180].map((d) => <option key={d} value={d}>Last {d} days</option>)}
             </select>
             <p className="meta">
-              Used on {term.one} pages and in Conviction. Badges count in the refresh cadence, so this
+              Used on {term.one} pages and in Track. Badges count in the refresh cadence, so this
               reads as the last {recentPeriods(org)} {UNIT[cadenceOf(org).kind][recentPeriods(org) === 1 ? 'one' : 'many']} there.
             </p>
           </div>
@@ -538,7 +538,7 @@ export default function Admin({ ctx }) {
           <TermSetting ctx={ctx} toast={toast} />
 
           <div className="panel">
-            <label className="fl">5C Value Categories</label>
+            <label className="fl">6C tags</label>
             <label className="toggle">
               <input type="checkbox" checked={org.show_categories !== false}
                 onChange={async (e) => {
@@ -549,11 +549,11 @@ export default function Admin({ ctx }) {
                     await refreshOrgs();
                   } catch (err) { toast(err.message); }
                 }} />
-              <span>Show the Character, Connection, Craft, Cause and Change categories on values and {term.many}</span>
+              <span>Show 6C tags: Character, Connection, Craft, Cause, Change and Cheer on {term.many}</span>
             </label>
             <p className="meta">
-              On, the home page explains the five categories and Conviction adds coverage by category.
-              Off, the tags and category filters are hidden. Values and {term.many} keep their categories either way.
+              On, the home page explains the six categories and Track adds coverage by category.
+              Off, the tags and category filters are hidden. {term.Many} keep their categories either way.
             </p>
           </div>
 
@@ -942,7 +942,7 @@ function MeasureForm({ measure, onSave, onClose, toast }) {
       <input type="text" placeholder="How it is counted, or where it comes from" value={f.note}
         onChange={(e) => setF({ ...f, note: e.target.value })} />
       <p className="meta" style={{ marginTop: 8 }}>
-        Something the organization already tracks. Values are recorded per period from Conviction.
+        Something the organization already tracks. Values are recorded per period from Track.
       </p>
     </Modal>
   );
@@ -963,7 +963,7 @@ function SystemForm({ category, term, onSave, onClose, toast }) {
       <input type="text" value={name} onChange={(e) => setName(e.target.value)}
         placeholder="Performance reviews, compensation, offboarding" />
       <p className="meta" style={{ marginTop: 8 }}>
-        {category ? `Renaming keeps every ${term.one} already applied to it.` : `Then apply ${term.many} to it from Cadence, Systems.`}
+        {category ? `Renaming keeps every ${term.one} already applied to it.` : `Then apply ${term.many} to it from Practice, Systems.`}
       </p>
     </Modal>
   );
@@ -1008,7 +1008,7 @@ function PurposeForm({ org, onClose, onDone, toast }) {
       <textarea rows={3} value={f.mission} onChange={(e) => setF({ ...f, mission: e.target.value })} />
       <label className="fl">Vision/Where we are going</label>
       <textarea rows={3} value={f.vision} onChange={(e) => setF({ ...f, vision: e.target.value })} />
-      <label className="fl">Creed, the line on the culture home</label>
+      <label className="fl">Creed, the line on Home</label>
       <textarea rows={3} value={f.creed} onChange={(e) => setF({ ...f, creed: e.target.value })} />
     </Modal>
   );
@@ -1022,18 +1022,13 @@ function ValueForm({ value, term, categories = [], onSave, onClose, toast }) {
         <button className="btn ghost" onClick={onClose}>Cancel</button>
         <button className="btn" onClick={() => {
           if (!f.name.trim()) return toast('Name the value first.');
-          onSave({ name: f.name.trim(), description: f.description.trim(), category: f.category || null });
+          onSave({ name: f.name.trim(), description: f.description.trim() });
         }}>Save value</button>
       </>}>
       <label className="fl">Name</label>
       <input type="text" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <label className="fl">What it means here</label>
       <textarea rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
-      <label className="fl">5C category</label>
-      <select className="field" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>
-        <option value="">Not categorized</option>
-        {categories.map((c) => <option key={c.name} value={c.name}>{c.name}: {c.question}</option>)}
-      </select>
       <p className="meta" style={{ marginTop: 8 }}>
         Attach it to {term.many} from each {term.one}'s edit form. A value with no {term.one} under it is a poster.
       </p>

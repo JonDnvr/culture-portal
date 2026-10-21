@@ -25,7 +25,7 @@ buttons open the portal full size.
   reset email. Local mode shows a six-digit code on screen, since it has no mail server.
 - **Start a free trial.** Organization name, the champion's name and email, and a password.
   It creates the organization, makes that person its culture champion, and seeds example
-  content: three values with their 5C categories, three behaviors each built into a system,
+  content: three values, three behaviors each carrying its 6Cs and built into a system,
   the weekly practice session and an example ritual, and a little history in the
   champion's name (a practice session, a ritual run, a system run, a recognition, a
   story, and a Value award given to an example team). All of it is tagged Example, and
@@ -43,7 +43,7 @@ organization's data. Roles are assigned by an administrator; nobody chooses thei
 | Role | Can do |
 |---|---|
 | Member | Read everything, post recognition and stories, share a story, answer the pulse |
-| Leader | The above, plus log rituals and see Conviction |
+| Leader | The above, plus log rituals and see Track |
 | Admin | The above, plus edit content, manage people, set and close pulse rounds, and choose the plan. Several people can hold it. |
 | Culture champion | Admin rights, plus the one seat that survives a lapsed subscription. Exactly one per organization, enforced by a unique index. |
 | Super user | Every organization: create organizations, create users at any role, edit any content |
@@ -113,7 +113,7 @@ scripts/
   purge-org.mjs                  deletes a test organization, its files and its accounts
 src/
   lib/api.js                     every query in one place
-  views/                         Home, Clarity, Behavior, Cadence, Connection, Conviction, Admin
+  views/                         Home, Clarity (Name), Behavior, Cadence (Practice), Connection (Recognize), Conviction (Track), Admin
   components/ui.jsx              badge, modal, toast, pulse bar
   styles.css
 ```
@@ -206,8 +206,11 @@ src/
 
 - **Behaviors are numbered per organization** (`behaviors.number`, unique with `org_id`).
   The number is the reference people use out loud, so it is stored, not derived.
-- **Values are per organization** and many-to-many with behaviors. Categories are the
-  five shared ones and live in a global table.
+- **Values are per organization** and many-to-many with behaviors. Values carry no 6C.
+- **The 6Cs** (Character, Connection, Craft, Cause, Change, Cheer) are shared, in a global
+  `categories` table with each one's question and definition. A behavior carries any number
+  of them through `behavior_categories`. The home page explains them, with Centeredness as
+  the hub built from all six.
 - **System categories are per organization and admin-defined.** A `placement` joins a
   behavior to one system category and carries the owner, cadence, artifact and template.
   A behavior may appear once per system category.
@@ -238,19 +241,19 @@ Project settings, Storage, or hand off to a video host and store the URL.
 
 | Section | Holds |
 |---|---|
-| Culture home | Purpose, values, this week, and two handouts: the short one for the room, the full one for whoever is leading |
-| Clarity | Every behavior, filtered by value, then category, then system |
-| Cadence | This week's practice session, the rotation, the ritual library, the systems library |
-| Connection | Recognition and stories, posted from a dialog, filtered by value or behavior |
-| Conviction | Measures, summary ratings, detail scores, rhythm iterations, coverage |
+| Home | Purpose, values, this week, and two handouts: the short one for the room, the full one for whoever is leading |
+| Name | Every behavior, filtered by value, then 6C category, then system |
+| Practice | This week's practice session, the rotation, the ritual library, the systems library |
+| Recognize | Recognition and stories, posted from a dialog, filtered by value or behavior |
+| Track | Measures, summary ratings, detail scores, recent iterations, pulse rounds, coverage |
 | Admin | People, purpose, values, system categories, measures, recent window |
 
-Behaviors and rituals are managed where they are used, in Cadence and on each behavior's
+Behaviors and rituals are managed where they are used, in Practice and on each behavior's
 page, rather than in Admin.
 
 ### Iterations
 
-Recording that a ritual was run is the unit that makes Conviction meaningful. An
+Recording that a ritual was run is the unit that makes Track meaningful. An
 iteration carries the ritual, the behaviors it covered, who recorded it, when it was
 run, notes, and attachments. "Practice It" on the Rituals tab and on This Week both
 write one. Recency and count on the Rhythm iterations tab read from them, and each
@@ -277,7 +280,7 @@ pulse up. A round
 is dated only when it closes, and the next round opens at once. Inactive members, over a
 plan's seat limit, are not counted.
 
-**Reports.** Conviction's Summary ratings and Detail scores show one round at a time,
+**Reports.** Track's Summary ratings and Detail scores show one round at a time,
 the open one unless another is picked, and the Pulse rounds tab lists every round with
 when and how it closed, participation, and the average and spread of its answers.
 
@@ -321,16 +324,16 @@ A culture champion has full editorial control of their own organization:
 
 - **Purpose and identity** (name, subtitle, initials, accent, mission, vision, creed) from Admin
 - **Values**: add, edit, delete. Behaviors attach to values from each behavior's edit form
-- **Behaviors**: add from Cadence, Rotation; edit every field from the behavior page;
+- **Behaviors**: add from Practice, Rotation; edit every field from the behavior page;
   reorder by dragging in the Rotation tab, which renumbers the list
 - **Systems**: define the categories, apply them to behaviors, write and edit templates
-- **Rituals**: create from the behavior page or from Cadence, assign to several behaviors
+- **Rituals**: create from the behavior page or from Practice, assign to several behaviors
   at once, edit any of them. Editing a ritual changes it everywhere it is applied, which
   the behavior page says on screen when a ritual is shared. The weekly practice session
   is a ritual marked as applying to every behavior
 - **Behavior of the week**, set in Admin
 - **Measures**: defined in Admin. Recording a value for a period is separate, done from
-  Conviction, so definitions stay stable while values accumulate
+  Track, so definitions stay stable while values accumulate
 - **Settings** in Admin: what counts as recent, how many behaviors the quick pulse asks
   about per sign-in, the participation that closes a pulse round (with a button to close
   the open round now), and the highlight color, which can be changed at any time

@@ -136,9 +136,10 @@ export async function setWeeklyBehavior(orgId, behaviorId) {
 
 /* ----------------------------------------------------------------- values */
 
-export async function createValue(orgId, { name, description, category = null, position = 99 }) {
+export async function createValue(orgId, { name, description, position = 99 }) {
+  // R7: values carry no C.
   const { data, error } = await supabase
-    .from('values_').insert({ org_id: orgId, name, description, category, position }).select().single();
+    .from('values_').insert({ org_id: orgId, name, description, position }).select().single();
   if (error) throw error;
   return data;
 }
@@ -158,21 +159,34 @@ export async function deleteValue(valueId) {
 /* -------------------------------------------------------------- behaviors */
 
 export async function createBehavior(orgId, fields) {
-  const { valueIds = [], ...rest } = fields;
+  // R7: Cs live in behavior_categories; behaviors.category is no longer written.
+  const { valueIds = [], categories = [], category: _old, ...rest } = fields;
   const { data, error } = await supabase
     .from('behaviors').insert({ org_id: orgId, ...rest }).select().single();
   if (error) throw error;
   if (valueIds.length) await setBehaviorValues(data.id, valueIds);
+  if (categories.length) await setBehaviorCategories(data.id, categories);
   return data;
 }
 
 export async function updateBehavior(behaviorId, fields) {
-  const { valueIds, ...rest } = fields;
+  const { valueIds, categories, category: _old, ...rest } = fields;
   const { data, error } = await supabase
     .from('behaviors').update(rest).eq('id', behaviorId).select().single();
   if (error) throw error;
   if (valueIds) await setBehaviorValues(behaviorId, valueIds);
+  if (categories) await setBehaviorCategories(behaviorId, categories);
   return data;
+}
+
+/** The 6Cs a behavior carries, replacing what it had. None is fine. */
+export async function setBehaviorCategories(behaviorId, categories) {
+  const { error: delErr } = await supabase.from('behavior_categories').delete().eq('behavior_id', behaviorId);
+  if (delErr) throw delErr;
+  if (!categories.length) return;
+  const { error } = await supabase.from('behavior_categories')
+    .insert([...new Set(categories)].map((category) => ({ behavior_id: behaviorId, category })));
+  if (error) throw error;
 }
 
 export async function deleteBehavior(behaviorId) {
@@ -299,8 +313,8 @@ export async function deleteSystemCategory(id) {
 }
 
 /**
- * One round trip for everything the Clarity and behavior pages need:
- * behaviors with their values, placements and rituals.
+ * One round trip for everything the Name and behavior pages need:
+ * behaviors with their values, 6Cs, placements and rituals.
  */
 export async function listBehaviors(orgId) {
   // R4: the database moves the featured behavior on the organization's cadence.
@@ -309,7 +323,8 @@ export async function listBehaviors(orgId) {
     .from('behaviors')
     .select(`
       *,
-      behavior_values ( values_ ( id, name, category ) ),
+      behavior_values ( values_ ( id, name ) ),
+      behavior_categories ( category ),
       placements ( id, owner, cadence, artifact, template,
                    system_categories ( id, name ) ),
       behavior_rituals ( rituals ( id, name, cadence, owner, description, practice ) )
@@ -322,6 +337,8 @@ export async function listBehaviors(orgId) {
   return data.map((b) => ({
     ...b,
     values: b.behavior_values.map((v) => v.values_).filter(Boolean),
+    // R7: the 6Cs this behavior carries. Values carry none.
+    categories: (b.behavior_categories ?? []).map((c) => c.category),
     placements: b.placements.map((p) => ({
       id: p.id,
       owner: p.owner,

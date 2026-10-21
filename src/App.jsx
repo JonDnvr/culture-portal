@@ -36,11 +36,11 @@ const EDITORS = ['admin', 'champion', 'owner'];
 // The working sections: the rail on a wide screen, a bar along the bottom
 // on a phone. `short` is the phone label.
 const NAV = [
-  { id: 'home', label: 'Culture home', short: 'Home', sub: 'This week', roles: ALL_ROLES },
-  { id: 'clarity', label: 'Clarity', short: 'Clarity', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
-  { id: 'cadence', label: 'Cadence', short: 'Cadence', sub: 'Practice', roles: ALL_ROLES },
-  { id: 'connection', label: 'Connection', short: 'Connect', sub: 'Recognition, Stories', roles: ALL_ROLES },
-  { id: 'conviction', label: 'Conviction', short: 'Conviction', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
+  { id: 'home', label: 'Home', short: 'Home', sub: 'This week', roles: ALL_ROLES },
+  { id: 'clarity', label: 'Name', short: 'Name', sub: (t) => `The ${t.many}`, roles: ALL_ROLES },
+  { id: 'cadence', label: 'Practice', short: 'Practice', sub: 'Rituals, systems', roles: ALL_ROLES },
+  { id: 'connection', label: 'Recognize', short: 'Recognize', sub: 'Recognition, stories', roles: ALL_ROLES },
+  { id: 'conviction', label: 'Track', short: 'Track', sub: 'Is it holding?', roles: ['leader', ...EDITORS] }
 ];
 
 // In the header, beside your name: Awards, then Admin.
@@ -274,7 +274,7 @@ function App() {
       });
     },
     canEdit: EDITORS.includes(role) || isSuper,
-    // The 5C category tags, on unless the organization switched them off.
+    // The 6C category tags, on unless the organization switched them off.
     showCats: org.show_categories !== false,
     canLead: role !== 'member',
     // Refetch and re-point at the same organization, so an edit to its name,

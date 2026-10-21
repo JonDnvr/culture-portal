@@ -224,36 +224,36 @@ function GroupWall({ ctx, team, setModal }) {
         {myGrants.map((g) => <CrestTrophy key={g.id} ctx={ctx} g={g} setModal={setModal} />)}
       </Section>
 
-      <Section title="Clarity">
+      <Section title="Name">
         {d.set.earned && (
           <Trophy art={<Medal size={48} solid><Lens size={24} /></Medal>} kicker={`All ${ctx.term.Many}`}
             title="The Full Set"
             meta={`All ${d.set.total} ${ctx.term.many} discussed and practiced · earned ${fmt(d.set.earnedAt)}`}
-            onClick={() => setModal({ kind: 'info', title: 'The Full Set', kicker: `Clarity · all ${ctx.term.many}`,
+            onClick={() => setModal({ kind: 'info', title: 'The Full Set', kicker: `Name · all ${ctx.term.many}`,
               art: <Medal size={56} solid><Lens size={28} /></Medal>,
               status: `${name} · earned ${fmt(d.set.earnedAt)}`,
               how: `Every active ${ctx.term.one} has been discussed as ${ctx.term.One} of the Week and practiced through a ritual or a system at least once. It is earned on the day the last one was completed.` })} />
         )}
       </Section>
 
-      <Section title="Cadence">
+      <Section title="Practice">
         {d.streak.seal.tier > 0 && (
           <Trophy art={<Seal size={50} months={d.streak.seal.months} tier={d.streak.seal.tier} />}
             kicker={`${ctx.term.One} of the Week`} title={d.streak.seal.name}
             meta={`${d.streak.count} consecutive ${d.streak.unit.many} for ${name}`}
-            onClick={() => setModal({ kind: 'info', title: d.streak.seal.name, kicker: 'Cadence Seal',
+            onClick={() => setModal({ kind: 'info', title: d.streak.seal.name, kicker: 'Practice Seal',
               art: <Seal size={64} months={d.streak.seal.months} tier={d.streak.seal.tier} />,
               status: `${d.streak.count} consecutive ${d.streak.unit.many} for ${name} · ${d.streak.seal.months} of 12 months`,
               how: `An unbroken run of ${d.streak.unit.many} with a discussion of the featured ${ctx.term.one} recorded. Seals come at one month, a quarter, a half year and a year of ${d.streak.unit.many}; each of the twelve notches is a month, so a full ring is a year. The ${d.streak.unit.one} in progress never breaks a run, and a missed ${d.streak.unit.one} starts it over.` })} />
         )}
       </Section>
 
-      <Section title="Conviction">
+      <Section title="Track">
         {d.cairn?.completed > 0 && (
-          <Trophy art={<CairnDone size={44} rounds={d.cairn.completed} />} kicker="Survey cadence"
+          <Trophy art={<CairnDone size={44} rounds={d.cairn.completed} />} kicker="Survey progress"
             title={d.cairn.completed === 1 ? 'First pulse round complete' : `${d.cairn.completed} pulse rounds complete`}
             meta={`${d.cairn.done} of ${d.cairn.target} people finished toward the next`}
-            onClick={() => setModal({ kind: 'info', title: 'Survey cadence', kicker: 'Conviction',
+            onClick={() => setModal({ kind: 'info', title: 'Survey progress', kicker: 'Track',
               art: <CairnDone size={56} rounds={d.cairn.completed} />,
               status: `${d.cairn.completed} round${d.cairn.completed === 1 ? '' : 's'} complete · round ${d.cairn.round} under way`,
               how: `A pulse round is complete when ${d.cairn.pct}% of the organization's active members have each rated every ${ctx.term.one}, or when an admin closes it. The cairn on the home page fills from the bottom as people finish; each finished round adds one to the number on the base stone.` })} />
@@ -261,7 +261,7 @@ function GroupWall({ ctx, team, setModal }) {
         {!team && d.gap.earned && (
           <Trophy art={<Medal size={44} solid><Converge size={22} /></Medal>} kicker="Trust view"
             title="Gap Closed" meta={`Spread narrowed from ${d.gap.from.toFixed(1)} to ${d.gap.to.toFixed(1)} in round ${d.gap.round}`}
-            onClick={() => setModal({ kind: 'info', title: 'Gap Closed', kicker: 'Conviction · trust view',
+            onClick={() => setModal({ kind: 'info', title: 'Gap Closed', kicker: 'Track · trust view',
               art: <Medal size={56} solid><Converge size={28} /></Medal>,
               status: `Average spread ${d.gap.from.toFixed(1)} → ${d.gap.to.toFixed(1)}, round ${d.gap.round}`,
               how: `The distance between the highest and lowest pulse scores narrowed from one finished round to the next. Spread is the signal: a narrowing gap means people are experiencing the ${ctx.term.many} more alike.` })} />
@@ -274,7 +274,7 @@ function GroupWall({ ctx, team, setModal }) {
 
       <section className="wallsection">
         <div className="sectionhead">
-          <h2 className="small">Cadence and connection events</h2>
+          <h2 className="small">Practice and recognition events</h2>
           <span className="note">Last {d.events.labels.length} weeks</span>
         </div>
         <div className="panel">
@@ -301,7 +301,7 @@ function EventsChart({ events }) {
   return (
     <>
       <div className="chartwrap">
-        <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Cadence and connection events per week">
+        <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Practice and recognition events per week">
           {ticks.map((g) => (
             <g key={g}>
               <line x1={L} x2={W - R} y1={y(g)} y2={y(g)} stroke="var(--line)" strokeWidth="1" />
@@ -321,8 +321,8 @@ function EventsChart({ events }) {
         </svg>
       </div>
       <div className="legend">
-        <span><b style={{ background: 'var(--spruce)' }} />Cadence: rituals and systems recorded</span>
-        <span><b style={{ background: 'var(--gold-bright)' }} />Connection: recognition and stories</span>
+        <span><b style={{ background: 'var(--spruce)' }} />Practice: rituals and systems recorded</span>
+        <span><b style={{ background: 'var(--gold-bright)' }} />Recognize: recognition and stories</span>
       </div>
     </>
   );

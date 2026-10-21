@@ -197,7 +197,6 @@ for (const b of src.foundations) {
       number: b.n,
       title: b.t,
       description: b.d,
-      category: b.c,
       quick_tip: b.tip,
       coaching_tips: b.coach,
       teaching_points: b.teach,
@@ -208,6 +207,14 @@ for (const b of src.foundations) {
     .select()
     .single());
   behaviorBySeedId[b.id] = row.id;
+
+  // R7: the 6Cs live on behaviors. "c" is one C, "cs" a list; both may be given.
+  const cs = [...new Set([b.c, ...(b.cs ?? [])].filter(Boolean))];
+  if (cs.length) {
+    check(`adding the 6Cs for behavior ${b.n}`, await db.from('behavior_categories').insert(
+      cs.map((category) => ({ behavior_id: row.id, category }))
+    ));
+  }
 
   if (b.v?.length) {
     check(`linking values to behavior ${b.n}`, await db.from('behavior_values').insert(

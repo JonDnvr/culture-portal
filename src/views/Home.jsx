@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { N, Tag } from '../components/ui.jsx';
 import HomeBadges from './HomeBadges.jsx';
 import { cadenceOf, rotationNote, UNIT } from '../lib/gamify.js';
-import { categoriesOf } from '../lib/categories.js';
+import { categoriesOf, inCategory } from '../lib/categories.js';
 
 export default function Home({ ctx }) {
   const { org, behaviors, values, goto, openBehavior, term, showCats, categories } = ctx;
@@ -107,19 +107,19 @@ export default function Home({ ctx }) {
       {showCats && (
         <section>
           <div className="sectionhead">
-            <h2>The 5C categories</h2>
+            <h2>The 6C categories</h2>
             <span className="note">How each {term.one} is sorted</span>
           </div>
           <p className="prose">
-            Our values and {term.many} sort into five categories.{' '}
-            <a className="quietlink" href="https://horizonlinegroup.com/5cs/" target="_blank" rel="noopener noreferrer">
-              Together they cover how we build personal centeredness, inspiration across people, and
-              ensure no part of strong culture is left to chance.
-            </a>
+            Our {term.many} sort into six categories. Together they cover how we build personal
+            centeredness, inspiration across people, and ensure no part of strong culture is left to
+            chance.{' '}
+            <a className="quietlink" href="https://horizonlinegroup.com/5cs/" target="_blank" rel="noopener noreferrer">Centeredness</a>
+            {' '}allows us to stay steady under pressure and choose our response. It is built from all six Cs.
           </p>
           <div className="cgrid">
             {(categories ?? []).map((c) => {
-              const inCat = values.filter((v) => v.category === c.name);
+              const inCat = behaviors.filter((b) => inCategory(b, c.name));
               const open = openCat === c.name;
               return (
                 <div key={c.name} className="ccard">
@@ -127,14 +127,16 @@ export default function Home({ ctx }) {
                   <div className="cq">{c.question}</div>
                   {c.definition && <p>{c.definition}</p>}
                   <button className="cnt" aria-expanded={open} onClick={() => setOpenCat(open ? null : c.name)}>
-                    Values ({inCat.length}) {open ? '▴' : '▾'}
+                    {term.Many} ({inCat.length}) {open ? '▴' : '▾'}
                   </button>
                   {open && (
                     <ul className="vlist">
-                      {inCat.map((v) => (
-                        <li key={v.id}>{v.name}</li>
+                      {inCat.map((b) => (
+                        <li key={b.id}>
+                          <button className="linkbtn" onClick={() => openBehavior(b.id)}><N n={b.number} /> {b.title}</button>
+                        </li>
                       ))}
-                      {!inCat.length && <li className="quiet">No value in this category yet. Set one from Admin, About Us, Values.</li>}
+                      {!inCat.length && <li className="quiet">No {term.one} carries {c.name} yet. Pick it on a {term.one}'s edit form.</li>}
                     </ul>
                   )}
                 </div>

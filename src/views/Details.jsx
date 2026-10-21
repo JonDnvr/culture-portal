@@ -4,6 +4,7 @@ import {
   updateRitual, setRitualBehaviors, setRitualSystems
 } from '../lib/api.js';
 import { Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
+import { categoriesOf } from '../lib/categories.js';
 import { GoldStar } from '../components/badges.jsx';
 import { ShareRecord } from './Connection.jsx';
 import { useToast } from '../components/ui.jsx';
@@ -12,14 +13,16 @@ import { RecordEditor } from './RecordEditor.jsx';
 import { dropRitual, RitualForm, RecordIteration, PlacementForm, dropPlacement } from './Cadence.jsx';
 
 /** Shared header: the behavior a record belongs to, with its description. */
-function BehaviorHeader({ behavior, ctx }) {
-  if (!behavior) return null;
+function BehaviorHeader({ behavior: given, ctx }) {
+  if (!given) return null;
+  // The app's own copy carries values and 6Cs; a record's embedded one may not.
+  const behavior = ctx.behaviors.find((b) => b.id === given.id) ?? given;
   return (
     <div className="recordhead">
       <h2 className="recordbehavior"><BNum n={behavior.number} /> {behavior.title}</h2>
       <div className="tagrow">
         {(behavior.values ?? []).map((v) => <Tag key={v.id} type="value">{v.name}</Tag>)}
-        <Tag type="category">{behavior.category}</Tag>
+        {categoriesOf(behavior).map((c) => <Tag key={c} type="category">{c}</Tag>)}
       </div>
       <p className="recorddesc">{behavior.description}</p>
       <button className="btn ghost small" onClick={() => ctx.openBehavior(behavior.id)}>
