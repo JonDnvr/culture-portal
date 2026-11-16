@@ -120,8 +120,8 @@ Deno.serve(async (req) => {
         const to = await championEmail(admin, orgId);
         if (org && to) {
           const r = receiptEmail(org, { amount: amount - (invoice.tax ?? 0) / 100, paidThrough });
-          await sendBillingEmail([to], r.subject,
-            r.body + (invoice.hosted_invoice_url ? `\n\nStripe receipt and invoice: ${invoice.hosted_invoice_url}` : ''));
+          await sendBillingEmail([to], r.subject, r.body,
+            invoice.hosted_invoice_url ? { label: 'View receipt', url: invoice.hosted_invoice_url } : null);
         }
         break;
       }

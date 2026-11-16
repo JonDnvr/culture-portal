@@ -10,6 +10,7 @@ import { FluencyBadge, fluencyName, Metronome, Nodes, WeekMarks } from '../compo
 import { useBehaviorBadges, FluencyDetail, PracticeDetail, ConnectionDetail } from '../components/badgeDetails.jsx';
 import { termFor } from '../lib/term.js';
 import { categoriesOf } from '../lib/categories.js';
+import { plainText } from '../lib/format.js';
 
 const DEFAULT_TERM = termFor(null);
 
@@ -221,12 +222,12 @@ export default function Behavior({ ctx, id }) {
             ...recent.stories.map((x) => ({
               kind: 'Story', id: x.id, open: 'story', when: x.created_at,
               who: findPerson(ctx.people, { id: x.author_id, name: x.author_name }), whoName: x.author_name,
-              lead: x.author_name, text: x.body, extra: (x.story_attachments ?? []).length
+              lead: x.author_name, text: plainText(x.body), extra: (x.story_attachments ?? []).length
             })),
             ...recent.recognitions.map((x) => ({
               kind: 'Recognition', id: x.id, open: 'recognition', when: x.created_at,
               who: findPerson(ctx.people, { id: x.recipient_user_id, name: x.recipient }), whoName: x.recipient,
-              lead: `${x.author_name} → ${x.recipient}${x.title ? `: ${x.title}` : ''}`, text: x.body,
+              lead: `${x.author_name} → ${x.recipient}${x.title ? `: ${x.title}` : ''}`, text: plainText(x.body),
               extra: (x.attachments ?? []).length
             })),
             ...recent.iterations.map((x) => ({

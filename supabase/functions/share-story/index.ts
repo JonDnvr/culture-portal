@@ -11,10 +11,11 @@
 // the site and the function are updated a minute apart.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { renderRich } from '../_shared/format.js';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
 const FROM = Deno.env.get('STORY_FROM_EMAIL') ?? 'culture@example.com';
-const APP_URL = Deno.env.get('PUBLIC_APP_URL') ?? '';
+const APP_URL = (Deno.env.get('PUBLIC_APP_URL') ?? '').replace(/\/+$/, '');
 const SIGNED_URL_SECONDS = 60 * 60 * 24 * 7;
 
 const cors = {
@@ -46,11 +47,16 @@ async function sign(client: any, files: Attachment[] = []): Promise<Link[]> {
   return out;
 }
 
+// Paragraphs, lists and links in stories, recognition and every note (R7.2).
+const RICH_BODY = { p: 'margin:0 0 12px', ul: 'margin:0 0 12px;padding-left:22px', li: 'margin:0 0 4px', a: 'color:#3F5951' };
+const RICH_NOTE = { p: 'margin:0 0 8px', ul: 'margin:0 0 8px;padding-left:20px', li: 'margin:0 0 2px', a: 'color:#3F5951' };
+
 /** One layout for every kind: header, the behavior, the record, the files. */
 function layout(o: {
   accent: string; orgName: string; kicker: string; title: string; subtitle?: string;
   behavior?: { number: number; title: string; description: string } | null;
   values?: string[]; note?: string | null; body: string; byline: string; links: Link[];
+  rich?: boolean; open?: string;
 }) {
   const pics = o.links.filter((l) => l.kind === 'image');
   const rest = o.links.filter((l) => l.kind !== 'image');
@@ -71,8 +77,10 @@ function layout(o: {
     <p style="margin:4px 0 0;font-size:14px;color:#3E4A46">${esc(o.behavior.description)}</p>
   </div>` : ''}
   <div style="padding:18px 30px 6px">
-    ${o.note ? `<p style="font-size:15px;font-style:italic;color:#3E4A46;margin:0 0 14px">${esc(o.note)}</p>` : ''}
-    <p style="font-size:17px;margin:0 0 12px;white-space:pre-wrap">${esc(o.body)}</p>
+    ${o.note ? `<div style="font-size:15px;font-style:italic;color:#3E4A46;margin:0 0 14px">${renderRich(o.note, RICH_NOTE)}</div>` : ''}
+    ${o.rich
+      ? `<div style="font-size:17px;margin:0 0 12px">${renderRich(o.body, RICH_BODY)}</div>`
+      : `<p style="font-size:17px;margin:0 0 12px;white-space:pre-wrap">${esc(o.body)}</p>`}
     <p style="font-family:Arial,sans-serif;font-size:12px;color:#5F6C67;margin:0">${esc(o.byline)}</p>
   </div>
   ${pics.length ? `<div style="padding:12px 30px 0">${pics.map((l) =>
@@ -86,7 +94,7 @@ function layout(o: {
     <p style="font-family:Arial,sans-serif;font-size:11px;color:#8B9A95;margin:6px 0 0">Links work for seven days.</p>
   </div>` : ''}
   <div style="padding:22px 30px 26px">
-    ${APP_URL ? `<a href="${APP_URL}" style="font-family:Arial,sans-serif;font-size:13px;color:#fff;background:#3F5951;padding:9px 16px;border-radius:4px;text-decoration:none">Open the culture portal</a>` : ''}
+    ${APP_URL ? `<a href="${APP_URL}${o.open ? `/?open=${encodeURIComponent(o.open)}` : ''}" style="font-family:Arial,sans-serif;font-size:13px;color:#fff;background:#3F5951;padding:9px 16px;border-radius:4px;text-decoration:none">${o.open ? 'Open it in the portal' : 'Open the culture portal'}</a>` : ''}
   </div>
 </div>
 </div>`;
@@ -147,7 +155,7 @@ Deno.serve(async (req) => {
       subject = `${org.name}: a story about ${pad(b.number)}. ${b.title}`;
       html = layout({
         accent: org.accent || '#9C7A3C', orgName: org.name, kicker: 'A story',
-        title: `${s.author_name} shared a story`, behavior: b, note, body: s.body,
+        title: `${s.author_name} shared a story`, behavior: b, note, body: s.body, rich: true, open: `story:${id}`,
         byline: fmtDate(s.created_at), links: await sign(asUser, s.story_attachments)
       });
       await asUser.from('story_shares').insert({ story_id: id, sent_by: user.id, recipients: to, note });
@@ -164,7 +172,7 @@ Deno.serve(async (req) => {
       subject = `${org.name}: ${r.author_name} recognized ${r.recipient}`;
       html = layout({
         accent: org.accent || '#9C7A3C', orgName: org.name, kicker: 'Recognition',
-        title: r.recipient, subtitle: r.title ? `★ ${r.title}` : undefined, behavior: b, note, body: r.body,
+        title: r.recipient, subtitle: r.title ? `★ ${r.title}` : undefined, behavior: b, note, body: r.body, rich: true, open: `recognition:${id}`,
         byline: `Recognized by ${r.author_name}, ${fmtDate(r.created_at)}`,
         links: await sign(asUser, r.recognition_attachments)
       });
@@ -186,7 +194,7 @@ Deno.serve(async (req) => {
         accent: org.accent || '#9C7A3C', orgName: org.name, kicker: 'Value award',
         title: t?.name ?? 'Value award',
         subtitle: `Conferred on ${g.team_id ? `the ${g.recipient_name} team` : g.recipient_name}`,
-        values, note, body: g.citation,
+        values, note, body: g.citation, open: 'awards',
         byline: `Conferred by ${g.granted_by_name}, ${fmtDate(g.granted_at)}`,
         links: await sign(asUser, g.award_grant_attachments)
       });

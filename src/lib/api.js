@@ -65,6 +65,7 @@ export const setBotwCadence = (...a) => impl.setBotwCadence(...a);
 export const setEmailOptOut = (...a) => impl.setEmailOptOut(...a);
 export const getMyEmailOptOut = (...a) => impl.getMyEmailOptOut(...a);
 export const listMemberEmails = (...a) => impl.listMemberEmails(...a);
+export const listTeamEmails = (...a) => impl.listTeamEmails(...a);
 
 /* billing */
 export const getBilling = (...a) => impl.getBilling(...a);

@@ -151,7 +151,7 @@ async function sendWelcome(orgName: string, to: string, name: string, role: stri
   <p style="font-family:Arial,sans-serif;font-size:13px;color:#3E4A46">
     <strong>Signing in</strong><br>
     Email: ${to}<br>
-    ${appUrl ? `<a href="${appUrl}">Open the portal</a><br>` : ''}
+    ${appUrl ? `<a href="${appUrl}" style="display:inline-block;margin:8px 0;font-size:14px;color:#fff;background:#3F5951;padding:10px 18px;border-radius:4px;text-decoration:none">Open the portal</a><br>` : ''}
     Change your password after the first sign-in.
   </p>
   <p><strong>What you will find</strong></p>

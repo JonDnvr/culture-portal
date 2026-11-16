@@ -1,5 +1,6 @@
 import React from 'react';
 import { confirmAction, Tag, celebrate } from './ui.jsx';
+import { plainText } from '../lib/format.js';
 import {
   deleteStory, deleteRecognition, deleteIteration, deleteAwardGrant,
   updateStory, updateRecognition, updateIteration, updateAwardGrant
@@ -53,10 +54,15 @@ export async function removeRecord(ctx, kind, row, toast) {
 
 export async function publishRecord(ctx, kind, row, toast) {
   try {
-    await UPDATE[kind](row.id, { isDraft: false });
+    const saved = await UPDATE[kind](row.id, { isDraft: false });
     toast(`${upper(NOUN[kind])} published. Everyone can see it now.`);
     if (kind === 'iteration') celebrate();
     await ctx.refreshActivity();
+    // A draft saved with "Email it to my team" offers the email now (R7.2).
+    // An event, so this file needs nothing from the Recognize page.
+    if ((kind === 'story' || kind === 'recognition') && row.notify_team) {
+      window.dispatchEvent(new CustomEvent('cp-share', { detail: { kind, record: saved ?? row } }));
+    }
     return true;
   } catch (e) { toast(e.message); return false; }
 }
@@ -138,7 +144,7 @@ export function FileEditor({ id, existing = [], removeIds, setRemoveIds, files, 
 
 /** What a draft is, in one line, for the drafts lists. */
 export function draftSummary(ctx, kind, r) {
-  if (kind === 'story') return (r.body ?? '').slice(0, 110) || 'Story';
+  if (kind === 'story') return plainText(r.body ?? '').slice(0, 110) || 'Story';
   if (kind === 'recognition') return `To ${r.recipient || 'someone'}${r.title ? `: ${r.title}` : ''}`;
   if (kind === 'iteration') {
     const src = r.ritual?.name ?? r.system?.name ?? 'Session';

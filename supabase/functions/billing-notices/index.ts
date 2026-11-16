@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       const to = await championEmail(admin, org.id);
       const m = noticeEmail(n.kind, org, today);
       try {
-        if (to) await sendBillingEmail([to], m.subject, m.body);
+        if (to) await sendBillingEmail([to], m.subject, m.body, m.action);
         await admin.from('billing_notices').insert({ org_id: org.id, notice_key: n.key, kind: n.kind, sent_to: to });
         await admin.from('billing_events').insert({ org_id: org.id, kind: 'notice', detail: { kind: n.kind, subject: m.subject } });
         sent.push(`${org.name}: ${n.kind}`);

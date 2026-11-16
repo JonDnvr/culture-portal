@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   createStory, createRecognition, shareStoryByEmail, shareRecognitionByEmail, shareAwardByEmail,
-  updateStory, updateRecognition, listMemberEmails
+  updateStory, updateRecognition, listTeamEmails
 } from '../lib/api.js';
 import { RecordActions, FormButtons, FileEditor, formMode } from '../components/records.jsx';
 import { DraftsPanel, RecordEditor } from './RecordEditor.jsx';
@@ -10,6 +10,8 @@ import { GoldStar, Crest } from '../components/badges.jsx';
 import { Attachments } from './Details.jsx';
 import { useListTools, ListBar, MoreButton, searchable, behaviorWords } from '../components/listTools.jsx';
 import { inCategory, categoriesOfValues } from '../lib/categories.js';
+import { plainText } from '../lib/format.js';
+import { RichTextArea, Rich } from '../components/RichText.jsx';
 
 const PREVIEW = 260;
 
@@ -17,7 +19,7 @@ const byIdExample = (ctx, id) => !!ctx.behaviors.find((b) => b.id === id)?.is_ex
 
 /** First 260 characters, with a flag when there is more to read. */
 function preview(text = '') {
-  const clean = text.trim();
+  const clean = plainText(text).trim();
   return clean.length > PREVIEW
     ? { text: clean.slice(0, PREVIEW).trimEnd() + '…', more: true }
     : { text: clean, more: false };
@@ -137,7 +139,7 @@ export function Stories({ ctx }) {
                 {s.author_name}
               </span>
               <span className="when">{new Date(s.created_at).toLocaleDateString()}</span>
-              <p>{p.text}</p>
+              {p.more ? <p>{p.text}</p> : <Rich text={s.body} />}
               <Attachments files={s.story_attachments ?? []} compact />
               <div className="tagrow">
                 <BehaviorTag behavior={s.behaviors} onClick={() => openBehavior(s.behaviors.id)} />
@@ -165,7 +167,7 @@ export function Stories({ ctx }) {
           onClose={() => setModal(null)} onDone={() => setModal(null)} />
       )}
       {modal?.kind === 'share' && (
-        <ShareStory story={modal.story} orgId={ctx.org.id} ctx={ctx} onClose={() => setModal(null)} toast={toast} />
+        <ShareDialog ctx={ctx} kind="story" record={modal.story} onClose={() => setModal(null)} toast={toast} />
       )}
     </section>
   );
@@ -279,7 +281,7 @@ function Recognition({ ctx }) {
               {r.title && (
                 <p className="rectitle">{r.recipient_user_id && <GoldStar size={16} />} {r.title}</p>
               )}
-              <p>{p.text}</p>
+              {p.more ? <p>{p.text}</p> : <Rich text={r.body} />}
               <Attachments files={r.attachments ?? []} compact />
               <div className="tagrow">
                 <BehaviorTag behavior={r.behaviors} onClick={() => openBehavior(r.behaviors.id)} />
@@ -315,11 +317,7 @@ function Recognition({ ctx }) {
           </>} />
       )}
       {sharing && sharing.kind !== 'award' && (
-        <ShareRecord kind="recognition" id={sharing.id} onClose={() => setSharing(null)} toast={toast}
-          summary={<>
-            <p className="rectitle">{sharing.recipient_user_id && <GoldStar size={16} />} {sharing.title || sharing.recipient}</p>
-            <p className="quiet">{sharing.author_name} recognized {sharing.recipient}. {preview(sharing.body).text}</p>
-          </>} />
+        <ShareDialog ctx={ctx} kind="recognition" record={sharing} onClose={() => setSharing(null)} toast={toast} />
       )}
       {openAward && <AwardDetail award={openAward} onClose={() => setOpenAward(null)} />}
     </section>
@@ -337,8 +335,8 @@ export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) 
   // Recognition starts with no behavior chosen, so nobody posts to the
   // first one on the list by accident.
   const [f, setF] = useState(() => initial
-    ? { behaviorId: initial.behavior_id ?? '', recipientId: initial.recipient_user_id ?? '', title: initial.title ?? '', body: initial.body ?? '', files: [] }
-    : { behaviorId: isRecognition ? '' : behaviors[0]?.id, recipientId: '', title: '', body: '', files: [] });
+    ? { behaviorId: initial.behavior_id ?? '', recipientId: initial.recipient_user_id ?? '', title: initial.title ?? '', body: initial.body ?? '', files: [], notify: !!initial.notify_team }
+    : { behaviorId: isRecognition ? '' : behaviors[0]?.id, recipientId: '', title: '', body: '', files: [], notify: true });
   const [removeIds, setRemoveIds] = useState([]);
   const [busy, setBusy] = useState(false);
   const existing = initial ? (initial.story_attachments ?? initial.attachments ?? []) : [];
@@ -359,26 +357,31 @@ export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) 
     if (!f.body.trim()) return toast('Describe what happened first.');
     setBusy(true);
     const isDraft = mode === 'published' ? undefined : asDraft;
+    // Whether to offer the team email: saved with a draft, asked for once on publishing.
+    const notifyTeam = mode === 'published' ? undefined : f.notify;
+    let saved = null;
     try {
       const who = candidates.find((p) => p.user_id === f.recipientId);
       if (initial && isRecognition) {
-        await updateRecognition(initial.id, {
-          behaviorId: f.behaviorId, title: f.title.trim(), body: f.body.trim(), isDraft,
+        saved = await updateRecognition(initial.id, {
+          behaviorId: f.behaviorId, title: f.title.trim(), body: f.body.trim(), isDraft, notifyTeam,
           ...(f.recipientId ? { recipientUserId: f.recipientId, recipient: who?.display_name ?? initial.recipient } : {}),
           addFiles: f.files, removeFileIds: removeIds
         });
       } else if (initial) {
-        await updateStory(initial.id, {
-          behaviorId: f.behaviorId, body: f.body.trim(), isDraft, addFiles: f.files, removeFileIds: removeIds
+        saved = await updateStory(initial.id, {
+          behaviorId: f.behaviorId, body: f.body.trim(), isDraft, notifyTeam, addFiles: f.files, removeFileIds: removeIds
         });
       } else if (isRecognition) {
-        await createRecognition(org.id, {
+        saved = await createRecognition(org.id, {
           behaviorId: f.behaviorId, recipientUserId: f.recipientId, recipient: who?.display_name ?? '',
-          title: f.title.trim(), body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft
+          title: f.title.trim(), body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft,
+          notifyTeam
         });
       } else {
-        await createStory(org.id, {
-          behaviorId: f.behaviorId, body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft
+        saved = await createStory(org.id, {
+          behaviorId: f.behaviorId, body: f.body.trim(), authorName: org.displayName, files: f.files, isDraft: asDraft,
+          notifyTeam
         });
       }
       const noun = isRecognition ? 'Recognition' : 'Story';
@@ -387,6 +390,8 @@ export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) 
           : isRecognition ? 'Recognition posted.' : mode === 'draft' ? `${noun} published.` : 'Story added.');
       await ctx.refreshActivity();
       onDone();
+      // Published just now (not a later edit), with the box ticked: offer the email.
+      if (!asDraft && mode !== 'published' && f.notify && saved?.id) offerTeamShare(kind, saved);
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
@@ -433,51 +438,127 @@ export function PostForm({ ctx, kind, initial = null, onClose, onDone, toast }) 
         ))}
       </select>
       <label className="fl">{isRecognition ? 'What did they do, and what did it change?' : 'What happened, and who did it?'}</label>
-      <textarea rows={4} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
+      <RichTextArea id={isRecognition ? 'recBody' : 'storyBody'} rows={5} value={f.body}
+        onChange={(body) => setF({ ...f, body })} />
       <FileEditor id={isRecognition ? 'recFiles' : 'storyFiles'} existing={existing} removeIds={removeIds}
         setRemoveIds={setRemoveIds} files={f.files} setFiles={(files) => setF({ ...f, files })} />
+      {mode !== 'published' && (
+        <label className="toggle" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={f.notify} onChange={(e) => setF({ ...f, notify: e.target.checked })} />
+          <span>
+            Email it to my team{mode === 'new' ? '' : ' when it is published'}. After it is posted you can
+            check who it goes to, add a note, and send it.
+          </span>
+        </label>
+      )}
       {mode === 'new' && <p className="meta" style={{ marginTop: 10 }}>Save as draft to finish it later. Only you see a draft.</p>}
     </Modal>
   );
 }
 
-function ShareStory({ story, orgId, ctx, onClose, toast }) {
-  const [to, setTo] = useState('');
+/**
+ * Asks for the team email after a story or recognition is published (R7.2).
+ * Anything can call it; ShareHost, mounted once in the app, shows the pop-up.
+ */
+export function offerTeamShare(kind, record) {
+  window.dispatchEvent(new CustomEvent('cp-share', { detail: { kind, record } }));
+}
 
-  // Prefilled with everyone in the organization; trim the list before sending.
+/** Mounted once in the app shell: opens ShareDialog when offerTeamShare is called. */
+export function ShareHost({ ctx }) {
+  const [open, setOpen] = useState(null);
+  const toast = useToast();
   useEffect(() => {
-    listMemberEmails(orgId).then((emails) => setTo(emails.join(', '))).catch(() => {});
-  }, [orgId]);
+    const on = (e) => setOpen(e.detail);
+    window.addEventListener('cp-share', on);
+    return () => window.removeEventListener('cp-share', on);
+  }, []);
+  if (!open) return null;
+  return <ShareDialog ctx={ctx} kind={open.kind} record={open.record} toast={toast} onClose={() => setOpen(null)} />;
+}
+
+/**
+ * Emails a story or a recognition (R7.2). The addresses start as the
+ * author's own team, without the author; any team, or everyone, can be added,
+ * and any address added or removed. Nothing goes until Send is pressed. People
+ * who opted out of portal email are never listed, and the server skips them too.
+ */
+export function ShareDialog({ ctx, kind, record, onClose, toast }) {
+  const { org, teams, behaviors, term } = ctx;
+  const isStory = kind === 'story';
+  const noun = isStory ? 'Story' : 'Recognition';
+  const [people, setPeople] = useState(null);
+  const [to, setTo] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const behavior = behaviors.find((b) => b.id === record.behavior_id) ?? record.behaviors ?? null;
+
+  useEffect(() => {
+    listTeamEmails(org.id).then((list) => {
+      setPeople(list);
+      const mine = list.find((m) => m.userId === record.author_id)?.teamId;
+      if (mine) setTo(list.filter((m) => m.teamId === mine && m.userId !== record.author_id).map((m) => m.email).join(', '));
+    }).catch(() => setPeople([]));
+  }, [org.id, record.id]);
+
+  const authorTeam = people?.find((m) => m.userId === record.author_id)?.teamId ?? null;
+  const addresses = () => to.split(/[,;\s]+/).filter(Boolean);
+  // Adds a team's addresses (or everyone's) to whatever is already listed.
+  const add = (teamId) => {
+    const have = new Set(addresses().map((a) => a.toLowerCase()));
+    const more = (people ?? []).filter((m) => (teamId === 'all' || m.teamId === teamId) && m.userId !== record.author_id)
+      .map((m) => m.email).filter((e) => !have.has(e.toLowerCase()));
+    setTo([...addresses(), ...more].join(', '));
+  };
 
   async function send() {
-    const recipients = to.split(/[,;\s]+/).filter(Boolean);
+    const recipients = addresses();
     if (!recipients.length) return toast('Add at least one email address.');
     setBusy(true);
     try {
-      const res = await shareStoryByEmail(story.id, recipients, note.trim() || null);
-      toast(`Story sent to ${res.sent} recipient${res.sent === 1 ? '' : 's'}.`);
+      const res = isStory
+        ? await shareStoryByEmail(record.id, recipients, note.trim() || null)
+        : await shareRecognitionByEmail(record.id, recipients, note.trim() || null);
+      toast(`${noun} sent to ${res.sent} ${res.sent === 1 ? 'person' : 'people'}.`);
       onClose();
     } catch (e) { toast(e.message); } finally { setBusy(false); }
   }
 
   return (
-    <Modal title="Share this story" onClose={onClose}
+    <Modal title={`Email this ${noun.toLowerCase()}`} onClose={onClose} wide
       footer={<>
         <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn" onClick={send} disabled={busy}>{busy ? 'Sending…' : 'Send story'}</button>
+        <button className="btn" onClick={send} disabled={busy}>{busy ? 'Sending…' : `Send ${noun}`}</button>
       </>}>
-      {story.behaviors && <div className="tagrow"><BehaviorTag behavior={story.behaviors} /></div>}
-      <p className="quiet">{story.body}</p>
-      <label className="fl">Send to</label>
-      <textarea rows={2} placeholder="Separate addresses with commas" value={to}
+      {!isStory && (
+        <p className="rectitle">{record.recipient_user_id && <GoldStar size={16} />} {record.title || record.recipient}</p>
+      )}
+      {behavior && <div className="tagrow"><BehaviorTag behavior={behavior} /></div>}
+      <Rich className="quiet" text={record.body} />
+
+      <label className="fl" htmlFor="shareTo">Send to</label>
+      <textarea id="shareTo" rows={3} placeholder="Email addresses, separated by commas" value={to}
         onChange={(e) => setTo(e.target.value)} />
-      <p className="meta">Prefilled with everyone in the organization. Remove anyone who should not get it.</p>
-      <label className="fl">Add a note, optional</label>
-      <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+      <p className="meta" style={{ marginTop: 4 }}>
+        {people === null ? 'Finding your team…'
+          : authorTeam ? `Started with ${teams.find((t) => t.id === authorTeam)?.name ?? 'the author'}'s team. Add or remove anyone.`
+            : 'The author is not on a team yet. Add a team, everyone, or type addresses.'}
+      </p>
+      {(people ?? []).length > 0 && (
+        <div className="tagrow">
+          <span className="meta">Add:</span>
+          {teams.map((t) => (
+            <button key={t.id} type="button" className="btn ghost small" onClick={() => add(t.id)}>{t.name}</button>
+          ))}
+          <button type="button" className="btn ghost small" onClick={() => add('all')}>Everyone in {org.name}</button>
+        </div>
+      )}
+
+      <label className="fl" htmlFor="shareNote">Add a note, optional</label>
+      <RichTextArea id="shareNote" rows={3} value={note} onChange={setNote} />
       <p className="meta" style={{ marginTop: 12 }}>
-        The email carries the {ctx?.term?.one ?? 'behavior'}, the story and links to any attachments.
+        The email carries the {term.one}, {isStory ? 'the story' : 'who was recognized and why'}, pictures and
+        links to any other files, and a button to open it in the portal.
       </p>
     </Modal>
   );
@@ -519,7 +600,7 @@ export function ShareRecord({ kind, id, summary, onClose, toast }) {
       <textarea id="shareTo" rows={2} placeholder="Email addresses, separated by commas" value={to}
         onChange={(e) => setTo(e.target.value)} />
       <label className="fl" htmlFor="shareNote">Add a note, optional</label>
-      <textarea id="shareNote" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+      <RichTextArea id="shareNote" rows={3} value={note} onChange={setNote} />
       <p className="meta" style={{ marginTop: 12 }}>
         The email carries everything on the record: who, what, the {noun === 'award' ? 'Values and citation' : 'title and what happened'},
         with pictures shown in the email and links to any other files.

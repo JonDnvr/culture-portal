@@ -25,7 +25,7 @@ import Home from './views/Home.jsx';
 import Clarity from './views/Clarity.jsx';
 import Behavior from './views/Behavior.jsx';
 import Cadence from './views/Cadence.jsx';
-import Connection from './views/Connection.jsx';
+import Connection, { ShareHost } from './views/Connection.jsx';
 import { StoryPage, RecognitionPage, IterationPage, RitualPage, PlacementPage } from './views/Details.jsx';
 import PulseCheck from './views/PulseCheck.jsx';
 import SignIn, { SetNewPassword } from './views/SignIn.jsx';
@@ -76,6 +76,33 @@ class ErrorBoundary extends React.Component {
 
 export default function AppWithBoundary() {
   return <ErrorBoundary><App /></ErrorBoundary>;
+}
+
+/**
+ * Links in emails end in ?open=story:<id>, recognition:<id>, billing or awards
+ * (R7.2). The parameter is read once, kept through sign-in, and acted on as
+ * soon as an organization's data has loaded; then it leaves the address bar.
+ */
+const PENDING_OPEN = (() => {
+  try { return new URLSearchParams(window.location.search).get('open'); } catch { return null; }
+})();
+let openHandled = false;
+
+function OpenLink({ ctx }) {
+  useEffect(() => {
+    if (!PENDING_OPEN || openHandled) return;
+    openHandled = true;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('open');
+      window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+    } catch { /* the address bar is cosmetic */ }
+    const [kind, id] = PENDING_OPEN.split(':');
+    if ((kind === 'story' || kind === 'recognition') && id) ctx.openRecord(kind, id);
+    else if (kind === 'billing') ctx.goto('admin', { tab: 'billing' });
+    else if (kind === 'awards') ctx.goto('wall');
+  }, []);
+  return null;
 }
 
 function App() {
@@ -350,6 +377,8 @@ function App() {
       {passwordOpen && <ChangePasswordDialog onClose={() => setPasswordOpen(false)} />}
       <ConfirmHost />
       <TagActionsHost ctx={ctx} />
+      <ShareHost ctx={ctx} />
+      <OpenLink ctx={ctx} />
     </div>
   );
 }

@@ -2461,3 +2461,9 @@ end $$;
 update categories set
   definition = 'Celebrating people: noticing what''s good, recognizing progress, enjoying the work together, and recharging for lasting significance.'
   where name = 'Cheer';
+
+-- ================================================================ R7.2
+-- Identical to migrations/2026-11-16-r7.2-team-email.sql.
+
+alter table stories      add column if not exists notify_team boolean not null default false;
+alter table recognitions add column if not exists notify_team boolean not null default false;

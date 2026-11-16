@@ -867,6 +867,18 @@ export async function listOutbox() {
   return [];
 }
 
+/**
+ * Everyone in the organization who takes portal email, with their team, for
+ * filling a share from a team (R7.2). People who opted out are left off.
+ */
+export async function listTeamEmails(orgId) {
+  const { data, error } = await supabase.from('memberships')
+    .select('user_id, email, display_name, team_id, email_opt_out, inactive').eq('org_id', orgId);
+  if (error) throw error;
+  return (data ?? []).filter((m) => m.email && !m.email_opt_out && !m.inactive)
+    .map((m) => ({ userId: m.user_id, email: m.email, name: m.display_name, teamId: m.team_id }));
+}
+
 export async function listMemberEmails(orgId) {
   const { data, error } = await supabase.from('memberships').select('email, email_opt_out').eq('org_id', orgId);
   if (error) throw error;
@@ -1080,7 +1092,7 @@ function attachmentKind(file) {
  * Any member can add a story. Files go to the story-media bucket under
  * {org_id}/{story_id}/, which is what the storage policies key on.
  */
-export async function createStory(orgId, { behaviorId, body, authorName, files = [], isDraft = false }) {
+export async function createStory(orgId, { behaviorId, body, authorName, files = [], isDraft = false, notifyTeam = false }) {
   const { data: { user } } = await supabase.auth.getUser();
   const { data: story, error } = await supabase
     .from('stories')
@@ -1090,7 +1102,8 @@ export async function createStory(orgId, { behaviorId, body, authorName, files =
       author_id: user.id,
       author_name: authorName,
       body,
-      is_draft: !!isDraft
+      is_draft: !!isDraft,
+      notify_team: !!notifyTeam
     })
     .select()
     .single();
@@ -1148,7 +1161,7 @@ export async function listRecognitions(orgId, { behaviorId } = {}) {
   return data.map((r) => ({ ...r, attachments: r.recognition_attachments ?? [] }));
 }
 
-export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [], isDraft = false }) {
+export async function createRecognition(orgId, { behaviorId, recipient, recipientUserId = null, title = null, body, authorName, files = [], isDraft = false, notifyTeam = false }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (recipientUserId && recipientUserId === user.id) throw new Error('Recognition goes to someone else.');
   const { data: rec, error } = await supabase.from('recognitions').insert({
@@ -1160,7 +1173,8 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
     recipient_user_id: recipientUserId,
     title: title || null,
     body,
-    is_draft: !!isDraft
+    is_draft: !!isDraft,
+    notify_team: !!notifyTeam
   }).select().single();
   if (error) throw error;
 
@@ -1176,6 +1190,7 @@ export async function createRecognition(orgId, { behaviorId, recipient, recipien
     });
     if (rowErr) throw rowErr;
   }
+  return rec;
 }
 
 /* ------------------------------------------------------------- measurement */
@@ -1474,13 +1489,17 @@ async function deleteRecord(kind, id) {
 
 const draftField = (isDraft) => (isDraft === undefined ? undefined : !!isDraft);
 
-export const updateStory = (id, { behaviorId, body, isDraft, addFiles, removeFileIds }) =>
-  updateRecord('story', id, { behavior_id: behaviorId, body, is_draft: draftField(isDraft) }, { addFiles, removeFileIds });
+export const updateStory = (id, { behaviorId, body, isDraft, notifyTeam, addFiles, removeFileIds }) =>
+  updateRecord('story', id, {
+    behavior_id: behaviorId, body, is_draft: draftField(isDraft),
+    notify_team: notifyTeam === undefined ? undefined : !!notifyTeam
+  }, { addFiles, removeFileIds });
 
-export async function updateRecognition(id, { behaviorId, recipientUserId, recipient, title, body, isDraft, addFiles, removeFileIds }) {
+export async function updateRecognition(id, { behaviorId, recipientUserId, recipient, title, body, isDraft, notifyTeam, addFiles, removeFileIds }) {
   return updateRecord('recognition', id, {
     behavior_id: behaviorId, recipient_user_id: recipientUserId, recipient,
-    title: title === undefined ? undefined : (title || null), body, is_draft: draftField(isDraft)
+    title: title === undefined ? undefined : (title || null), body, is_draft: draftField(isDraft),
+    notify_team: notifyTeam === undefined ? undefined : !!notifyTeam
   }, { addFiles, removeFileIds });
 }
 

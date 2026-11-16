@@ -237,6 +237,21 @@ render images and video inline; the email function signs them for seven days.
 Supabase caps uploads at 50 MB by default. For longer video, raise the limit in
 Project settings, Storage, or hand off to a video host and store the URL.
 
+## Formatted text and team emails (R7.2)
+
+Story and recognition text, and the note on any shared email, take light formatting:
+blank lines for paragraphs, `- ` lines for a list, `**bold**`, `*italic*` and
+`[words](https://…)` links. It is stored as plain text and rendered by one escaping
+renderer, `src/lib/format.js`, which `supabase/functions/_shared/format.js` copies
+exactly (keep the two identical, like `billing.js`).
+
+New stories and recognition have "Email it to my team" ticked. After saving, a pop-up
+opens with the author's team already addressed; nothing goes until Send. A draft keeps
+the choice in `notify_team` and offers the email when it is published; editing a
+published record never sends. Emails link back with `?open=story:<id>`,
+`?open=recognition:<id>`, `?open=awards` or `?open=billing`, which the app follows after
+sign-in. Billing notices and receipts carry one button for the step they ask for.
+
 ## How the sections fit together
 
 | Section | Holds |

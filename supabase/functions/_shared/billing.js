@@ -214,7 +214,13 @@ export function noticeEmail(kind, org, today) {
   const price = money(rateFor(org, org.plan));
   const cycleWord = org.billing_cycle === 'yearly' ? 'year' : 'month';
   const base = kind.replace(/-\d+$/, '');
-  const sign = '\n\nOpen the portal, then Admin, then Plan and billing.\n\nHorizon Line Group';
+  const sign = '\n\nHorizon Line Group';
+  // Each notice carries one button for the step it asks for (R7.2). The
+  // address opens Admin, Plan and billing once the champion is signed in.
+  const ACTION = {
+    trial: 'Add a payment method', 'trial-ended': 'Add a payment method', locked: 'Add a payment method',
+    grace: 'Update your card', expiring: 'Resume your plan', renewal: 'Review your plan'
+  };
   const map = {
     trial: [`${org.name}: your free trial ends ${longDate(s.until)}`,
       `Your 30-day trial of the culture portal ends ${longDate(s.until)}.\n\nAdd a payment method before then so everyone keeps access. You are not charged until the trial ends: ${price} a ${cycleWord}, plus any tax.\n\nIf you do not, access returns to you, the culture champion, alone. Nothing is deleted.`],
@@ -230,7 +236,7 @@ export function noticeEmail(kind, org, today) {
       `The subscription is no longer current, so only the culture champion can sign in. Nothing was deleted.\n\nChoose a plan and add a payment method to bring everyone back.`]
   };
   const [subject, body] = map[base] ?? [`${org.name}: billing notice`, 'There is a change to your plan.'];
-  return { subject, body: body + sign };
+  return { subject, body: body + sign, action: { label: ACTION[base] ?? 'Open Plan and billing', path: '?open=billing' } };
 }
 
 export function receiptEmail(org, { amount, paidThrough }) {

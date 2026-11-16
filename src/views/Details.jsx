@@ -6,7 +6,8 @@ import {
 import { Tag, BNum, BehaviorTag, Avatar, findPerson } from '../components/ui.jsx';
 import { categoriesOf } from '../lib/categories.js';
 import { GoldStar } from '../components/badges.jsx';
-import { ShareRecord } from './Connection.jsx';
+import { ShareDialog } from './Connection.jsx';
+import { Rich } from '../components/RichText.jsx';
 import { useToast } from '../components/ui.jsx';
 import { RecordActions, DraftTag } from '../components/records.jsx';
 import { RecordEditor } from './RecordEditor.jsx';
@@ -126,7 +127,7 @@ export function StoryPage({ ctx, id }) {
         <Avatar person={findPerson(ctx.people, { id: story.author_id, name: story.author_name })} name={story.author_name} size={24} />
         {story.author_name} &nbsp;/&nbsp; {when(story.created_at)}
       </p>
-      <p className="recordbody">{story.body}</p>
+      <Rich className="recordbody" text={story.body} />
       <Attachments files={story.story_attachments ?? []} />
     </article>
   );
@@ -161,11 +162,10 @@ export function RecognitionPage({ ctx, id }) {
         <Avatar person={findPerson(ctx.people, { id: rec.author_id, name: rec.author_name })} name={rec.author_name} size={20} />
         Recognized by {rec.author_name} &nbsp;/&nbsp; {when(rec.created_at)}
       </p>
-      <p className="recordbody">{rec.body}</p>
+      <Rich className="recordbody" text={rec.body} />
       <Attachments files={rec.attachments ?? []} />
       {sharing && (
-        <ShareRecord kind="recognition" id={rec.id} onClose={() => setSharing(false)} toast={toast}
-          summary={<p className="rectitle">{rec.recipient_user_id && <GoldStar size={16} />} {rec.title || rec.recipient}</p>} />
+        <ShareDialog ctx={ctx} kind="recognition" record={rec} onClose={() => setSharing(false)} toast={toast} />
       )}
     </article>
   );
