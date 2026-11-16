@@ -185,7 +185,9 @@ tr.flagged td.name{color:var(--flag)}
 .linkbtn{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
 /* Formatted text (R7.2): the editor's toolbar, and the text as shown. */
 .richbox{border:1px solid var(--line);border-radius:6px;overflow:hidden}
-.richbox textarea{border:0;border-radius:0;width:100%;display:block}
+.richedit{position:relative;background:var(--card);padding:10px 11px;font-family:"Newsreader",Georgia,serif;font-size:16px;line-height:1.55;outline:none;overflow-wrap:anywhere;max-height:60vh;overflow-y:auto;resize:vertical}
+.richbox:focus-within{border-color:var(--spruce-soft)}
+.richedit[data-empty="true"]::before{content:attr(data-placeholder);position:absolute;left:11px;top:10px;color:var(--muted);pointer-events:none}
 .richbar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:4px 6px;border-bottom:1px solid var(--line)}
 .rb{background:none;border:1px solid transparent;border-radius:4px;padding:3px 9px;font:inherit;font-size:13px;color:inherit;cursor:pointer}
 .rb:hover{border-color:var(--line)}
