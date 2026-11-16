@@ -22,8 +22,9 @@ const dayOf = (d) => {
 };
 
 /**
- * What has been earned, for you, your team and the organization. Your team's
- * streak and practice count sit on top, the same block as on the home page.
+ * What has been earned, for you, your team and the organization. The team
+ * and organization tabs also show the home page's streak and practice cards
+ * under Practice.
  */
 export default function TrophyWall({ ctx }) {
   const { org, teams, myTeamId, canLead } = ctx;
@@ -44,9 +45,8 @@ export default function TrophyWall({ ctx }) {
           )}
         </div>
       </div>
-      <p className="lede">What has been earned{team ? `, and where ${team.name}'s streak stands` : ''}.</p>
+      <p className="lede">What has been earned, and where the streaks stand.</p>
       <DraftsPanel ctx={ctx} kind="award" title="Your draft Value awards" />
-      {team && <HomeBadges ctx={ctx} teamOnly />}
 
       <div className="tabs">
         <button className="tab" aria-pressed={scope === 'me'} onClick={() => setScope('me')}>Me</button>
@@ -88,13 +88,14 @@ export default function TrophyWall({ ctx }) {
 
 /* ------------------------------------------------------------------ pieces */
 
-function Section({ title, children }) {
+function Section({ title, children, always = false, after = null }) {
   const items = React.Children.toArray(children).filter(Boolean);
-  if (!items.length) return null;
+  if (!items.length && !always) return null;
   return (
     <section className="wallsection">
       <div className="sectionhead"><h2 className="small">{title}</h2></div>
-      <div className="tgrid">{items}</div>
+      {items.length > 0 && <div className="tgrid">{items}</div>}
+      {after}
     </section>
   );
 }
@@ -238,7 +239,7 @@ function GroupWall({ ctx, team, setModal }) {
         )}
       </Section>
 
-      <Section title="Practice">
+      <Section title="Practice" always after={<HomeBadges ctx={ctx} fixed={team ? 'team' : 'org'} />}>
         {d.streak.seal.tier > 0 && (
           <Trophy art={<Seal size={50} months={d.streak.seal.months} tier={d.streak.seal.tier} />}
             kicker={`${ctx.term.One} of the Week`} title={d.streak.seal.name}

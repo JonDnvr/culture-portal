@@ -590,6 +590,7 @@ html,body{overflow-x:clip;max-width:100%}
 
 /* --- home: badges and streaks --- */
 .homebadges{margin-top:30px}
+.wallsection .homebadges{margin-top:12px}
 .scopebar{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;
   background:var(--card);border:1px solid var(--line);border-radius:6px;padding:9px 13px;margin-bottom:12px}
 .scopelabel{font-family:"Archivo";font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}

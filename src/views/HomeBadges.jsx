@@ -11,16 +11,18 @@ import {
  * sits in the block's own header bar, so it reads as belonging to these
  * badges and not to everything else on the home page.
  *
- * The Awards page shows the same block for the viewer's own team only
- * (teamOnly): no toggle, and no survey card, since the pulse is org-wide.
+ * The Awards page shows the same block under Practice with the scope set by
+ * its own tabs (fixed: 'team' or 'org'): no toggle here, and no survey card,
+ * which Awards shows under Track.
  */
-export default function HomeBadges({ ctx, teamOnly = false }) {
+export default function HomeBadges({ ctx, fixed = null }) {
   const { org, rituals, activity, teams, myTeamId, term, isSuper, openPulse } = ctx;
   const team = teams.find((t) => t.id === myTeamId);
-  const [scopeKind, setScopeKind] = useState(teamOnly ? 'team' : 'org');
+  const [scopeKind, setScopeKind] = useState(fixed ?? 'org');
   const [listOpen, setListOpen] = useState(false);
 
-  const scope = scopeKind === 'team' && team ? { kind: 'team', teamId: team.id } : { kind: 'org' };
+  const teamOnly = !!fixed;
+  const scope = (fixed ?? scopeKind) === 'team' && team ? { kind: 'team', teamId: team.id } : { kind: 'org' };
   const scopeName = scope.kind === 'team' ? team.name : org.name;
 
   const d = useMemo(() => {
