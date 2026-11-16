@@ -10,11 +10,14 @@ import {
  * Badges and streaks for the organization or the viewer's team. The toggle
  * sits in the block's own header bar, so it reads as belonging to these
  * badges and not to everything else on the home page.
+ *
+ * The Awards page shows the same block for the viewer's own team only
+ * (teamOnly): no toggle, and no survey card, since the pulse is org-wide.
  */
-export default function HomeBadges({ ctx }) {
+export default function HomeBadges({ ctx, teamOnly = false }) {
   const { org, rituals, activity, teams, myTeamId, term, isSuper, openPulse } = ctx;
   const team = teams.find((t) => t.id === myTeamId);
-  const [scopeKind, setScopeKind] = useState('org');
+  const [scopeKind, setScopeKind] = useState(teamOnly ? 'team' : 'org');
   const [listOpen, setListOpen] = useState(false);
 
   const scope = scopeKind === 'team' && team ? { kind: 'team', teamId: team.id } : { kind: 'org' };
@@ -43,10 +46,10 @@ export default function HomeBadges({ ctx }) {
     <section className="homebadges">
       <div className="scopebar">
         <div>
-          <div className="scopelabel">Badges and streaks</div>
+          <div className="scopelabel">{teamOnly ? 'Streaks' : 'Badges and streaks'}</div>
           <div className="scopenote">Showing badges for <b>{scopeName}</b></div>
         </div>
-        {team && (
+        {team && !teamOnly && (
           <div className="seg" role="group" aria-label="Show badges for">
             <button aria-pressed={scope.kind === 'org'} onClick={() => setScopeKind('org')}>{org.name}</button>
             <button aria-pressed={scope.kind === 'team'} onClick={() => setScopeKind('team')}>{team.name}</button>
@@ -54,7 +57,7 @@ export default function HomeBadges({ ctx }) {
         )}
       </div>
 
-      <div className="home3">
+      <div className={teamOnly ? 'home2' : 'home3'}>
         <div className="hcard">
           <div className="hlabel">{term.One} of the {cad.kind === 'daily' ? 'Day' : cad.kind === 'monthly' ? 'Month' : 'Week'}</div>
           <div className="hsub">{streak.count} consecutive {plural(streak.count)} with a discussion recorded</div>
@@ -97,7 +100,7 @@ export default function HomeBadges({ ctx }) {
           <span className="more">See what was counted →</span>
         </button>
 
-        <div className="hcard">
+        {!teamOnly && <div className="hcard">
           <div className="hlabel">Survey progress</div>
           <div className="hsub">Round {cairn?.round ?? 1}: complete when {cairn?.pct ?? 80}% of members have rated every {term.one}</div>
           {cairn && cairn.total > 0 ? (
@@ -137,7 +140,7 @@ export default function HomeBadges({ ctx }) {
               )}
             </>
           ) : <div className="quiet" style={{ marginTop: 10 }}>The pulse has not started yet.</div>}
-        </div>
+        </div>}
       </div>
 
       {listOpen && (

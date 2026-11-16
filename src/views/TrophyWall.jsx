@@ -8,6 +8,7 @@ import { useBehaviorBadges, FluencyDetail } from '../components/badgeDetails.jsx
 import { PostForm, ShareRecord } from './Connection.jsx';
 import { RecordActions, FormButtons, FileEditor, formMode, DraftTag } from '../components/records.jsx';
 import { DraftsPanel } from './RecordEditor.jsx';
+import HomeBadges from './HomeBadges.jsx';
 import { Attachments } from './Details.jsx';
 import {
   sessionRitualId, recentWeeks, botwStreak, cadenceOf, fullSet, cairnFor, gapClosed, weeklyEvents
@@ -21,8 +22,8 @@ const dayOf = (d) => {
 };
 
 /**
- * What has been earned, for you, your team and the organization. Streaks and
- * practice counts live on the home page; this wall holds trophies only.
+ * What has been earned, for you, your team and the organization. Your team's
+ * streak and practice count sit on top, the same block as on the home page.
  */
 export default function TrophyWall({ ctx }) {
   const { org, teams, myTeamId, canLead } = ctx;
@@ -43,8 +44,9 @@ export default function TrophyWall({ ctx }) {
           )}
         </div>
       </div>
-      <p className="lede">What has been earned. Streaks and practice counts live on the home page.</p>
+      <p className="lede">What has been earned{team ? `, and where ${team.name}'s streak stands` : ''}.</p>
       <DraftsPanel ctx={ctx} kind="award" title="Your draft Value awards" />
+      {team && <HomeBadges ctx={ctx} teamOnly />}
 
       <div className="tabs">
         <button className="tab" aria-pressed={scope === 'me'} onClick={() => setScope('me')}>Me</button>
